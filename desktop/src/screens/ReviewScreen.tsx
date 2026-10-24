@@ -190,7 +190,7 @@ export default function ReviewScreen() {
   ])
 
   // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS
-  const recordSessionToOutbox = () => {
+  const recordSessionToOutbox = useMemo(() => () => {
     if (!session) return
     const is4x6 = selectedFrameSize === '4x6'
     cloudSyncService.queueSession({
@@ -209,7 +209,7 @@ export default function ReviewScreen() {
       created_at: new Date().toISOString(),
       photos: photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath || ''),
     })
-  }
+  }, [session, selectedFrameSize, printCopies, photos])
 
   // Tự động đếm ngược
   useEffect(() => {

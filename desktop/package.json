@@ -50,22 +50,15 @@
     },
     "files": [
       "dist/**",
-      "dist-electron/**"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/drivers",
-        "to": "resources/drivers",
-        "filter": [
-          "**/*"
-        ]
-      }
+      "dist-electron/**",
+      "electron/fotolism_canon_daemon.exe",
+      "electron/fotolism_canon_capture.exe"
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "dir"
       ],
+      "signAndEditExecutable": false,
       "icon": "public/icon.ico"
     },
     "nsis": {
