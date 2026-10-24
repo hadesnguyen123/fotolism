@@ -215,9 +215,57 @@ npm run build
    * Cắm nguồn máy in ảnh nhiệt (DNP / HiTi), đảm bảo đủ giấy in và mực ribbon.
 2. **Khởi động Fotolism:**
    * Mở ứng dụng Fotolism.
-   * Chạm vào biểu tượng **⚙️ (Bánh răng)** tại màn hình chờ, nhập mã PIN quản trị: `1234`.
+   * Chạm vào biểu tượng **⚙️ (Bánh răng)** tại màn hình chờ, nhập mã PIN quản trị viên (cấu hình động, mặc định xác thực an toàn).
    * Kiểm tra thông số sự kiện, kết nối camera (hiển thị *📸 Máy ảnh Canon EOS - EDSDK Trực Tiếp*).
    * Nhấn nút *"📸 Vào Chế Độ Chụp"* để sẵn sàng đón khách.
 3. **Xử lý sự cố nhanh (Troubleshooting):**
    * *Máy ảnh không nhận lệnh chụp:* Đảm bảo không có ứng dụng Canon EOS Utility chính hãng chạy đè. Nếu máy vào chế độ ngủ (Sleep), chỉ cần bấm nhẹ nửa nút chụp vật lý trên máy ảnh hoặc gạt công tắc nguồn `OFF` $\rightarrow$ `ON` để daemon tự nhận lại phiên làm việc trong 2 giây.
    * *Hết giấy in:* Thay cuộn giấy mới, vào menu Admin bấm *"Kiểm tra máy in"* để in bản test.
+
+---
+
+## 🏛️ 8. PHÂN HỆ KIOSK LOCAL ADMIN (FOTOLISM 3.0)
+
+### 8.1 Mục Tiêu & Nguyên Tắc Thiết Kế
+Kiosk Local Admin phục vụ trực tiếp cho Kỹ thuật viên và Nhân viên vận hành tại chỗ tại từng trạm Kiosk.
+- **Nguyên tắc phân định trách nhiệm:** Local Admin **chỉ quản lý vận hành phần cứng & xử lý sự cố tại máy trạm**. Toàn bộ cấu hình kinh doanh (giá, voucher, layout, khung hình, doanh thu chuỗi) do **Cloud CMS quản lý tập trung**, không xây dựng lại tại máy trạm để tránh phân mảnh dữ liệu.
+- **Triết lý UI/UX:** Phong cách **Warm Minimalism × Modern Editorial × Soft Luxury** (Espresso Brown `#502A1D` + Warm Cream `#FAF6F1`), font chữ Plus Jakarta Sans và Lucide Icons. Tối ưu nút bấm to rõ cho màn hình cảm ứng Kiosk và remote bluetooth.
+
+### 8.2 Cấu Trúc 4 Tab Quản Trị Chuẩn
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               FOTOLISM 3.0 — KIOSK LOCAL ADMIN CONSOLE                 │
+├──────────────┬──────────────┬──────────────┬───────────────────────────┤
+│ 1. TỔNG QUAN │ 2. THIẾT BỊ  │ 3. PHIÊN CHỤP│ 4. HỆ THỐNG               │
+└──────────────┴──────────────┴──────────────┴───────────────────────────┘
+```
+
+1. **Tab 1 — Tổng Quan (Overview):**
+   - **Thẻ trạng thái tức thì:** Camera (DSLR / Canon EDSDK), Máy in nhiệt (DNP/HiTi), Kết nối Internet (Wi-Fi/LAN/4G), Đồng bộ CMS (Trạng thái Heartbeat & số bản ghi chờ sync), Dung lượng ổ đĩa lưu trữ ảnh.
+   - **Trạng thái Kiosk:** `Sẵn sàng đón khách` | `Đang trong phiên chụp` | `Tạm ngưng bảo trì`.
+   - **Bảng cảnh báo sự cố (Warning Center):** Tự động phát hiện và cảnh báo trực quan: mất cáp USB camera, hết giấy in, kẹt lệnh in Spooler, mất mạng Internet.
+
+2. **Tab 2 — Thiết Bị (Hardware):**
+   - **Camera:** Kết nối/ngắt kết nối, xem luồng Live View EVF thời gian thực, nút chụp thử (nảy màn trập Canon EDSDK 24MP và kiểm tra thời gian ghi nhận ảnh), cấu hình khẩu độ, tốc độ màn trập, ISO khi daemon hỗ trợ.
+   - **Printer (Máy in):** Danh sách máy in khả dụng trong Windows, chọn khổ giấy mặc định (2x6 strip kép hoặc 4x6 đơn), nút in bản test chuẩn màu Fotolism 300 DPI, kiểm tra hàng đợi Windows Print Spooler và đếm định mức cuộn giấy.
+   - **Display & Remote:** Cấu hình màn hình chính (Kiosk Touch) và màn hình phụ (Overhead Live View Display), kiểm tra tín hiệu remote bluetooth / bàn phím điều hướng.
+
+3. **Tab 3 — Phiên Chụp (Sessions & Prints):**
+   - Xem danh sách phiên chụp gần đây lưu trong SQLite cục bộ (`SessionDB`).
+   - Xem chi tiết từng phiên: Ảnh gốc (RAW), ảnh hoàn thiện (Composited Strip), trạng thái thanh toán (VietQR/Tiền mặt), thời gian chụp và lịch sử in.
+   - **In lại có kiểm soát:** Cho phép in lại dải ảnh khi xảy ra sự cố kẹt giấy/mất điện, bắt buộc chọn lý do và ghi nhận **Audit Log** để đối soát với Cloud CMS.
+   - **Lọc phiên chưa đồng bộ:** Đánh dấu rõ các phiên đang nằm trong hàng đợi ngoại tuyến (`pending_sync`).
+
+4. **Tab 4 — Hệ Thống (System):**
+   - Cấu hình âm thanh: Âm thanh màn trập (Shutter sound), âm đếm ngược (Countdown beeps), âm thanh hoàn tất.
+   - Thiết lập cục bộ: Chế độ toàn màn hình, độ sáng, khởi động cùng Windows.
+   - **Phiên bản & Daemon:** Hiển thị phiên bản ứng dụng Kiosk Fotolism 3.0 và trạng thái tiến trình `fotolism_canon_daemon.exe` (Port 8899).
+   - **Đồng bộ CMS:** Kiểm tra kết nối Cloud CMS (Ping / Heartbeat), nút *"Đồng bộ lại dữ liệu lỗi"* (Force Sync Outbox).
+   - **Log & Chẩn đoán:** Bảng xem log sự cố cục bộ, chẩn đoán tự động một chạm và nút khởi động lại ứng dụng có xác nhận an toàn.
+
+### 8.3 Cơ Chế Xác Thực & Phân Quyền Bảo Mật
+- **Bảo mật PIN động:** Truy cập Local Admin yêu cầu mã **PIN 6 số** nhập qua bàn phím số Numpad cảm ứng to rõ.
+- **Không hardcode PIN:** Mã PIN được quản lý tập trung từ Cloud CMS, truyền xuống Kiosk và mã hóa hash an toàn trong SQLite cục bộ. Khi mất mạng Internet, Kiosk vẫn xác thực mã PIN đã lưu trong cache.
+- **Audit Logging:** Mọi hành vi nhạy cảm (in lại ảnh, hủy phiên, chuyển chế độ bảo trì, thay đổi cấu hình phần cứng, khởi động lại app) đều được ghi nhật ký bất biến với thời gian, mã định danh Kiosk và đẩy lên Cloud CMS.
+
