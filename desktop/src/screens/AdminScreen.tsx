@@ -18,6 +18,7 @@ import {
   Shield,
   Activity,
 } from 'lucide-react'
+import { cloudSyncService, type CloudSyncStatus, type KioskOutboxSession } from '../services/cloudSyncService'
 import './AdminScreen.css'
 
 export type AdminTab = 'overview' | 'hardware' | 'sessions' | 'system'
@@ -114,49 +115,85 @@ export default function AdminScreen() {
     return saved ? JSON.parse(saved) : DEFAULT_AUDIT_LOGS
   })
 
+  // ── Cloud CMS Realtime Sync Status ──
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(() => cloudSyncService.getStatus())
+
+  useEffect(() => {
+    const unsub = cloudSyncService.subscribe((s) => setSyncStatus(s))
+    return unsub
+  }, [])
+
   // ── Sessions & Reprint State ──
   const [sessionFilter, setSessionFilter] = useState<'ALL' | 'PAID' | 'PENDING_SYNC'>('ALL')
-  const [sessions, setSessions] = useState<KioskSessionRecord[]>([
-    {
-      id: 'SES-98214',
-      startedAt: '14:25 24/10/2026',
-      totalSlots: 4,
-      layoutId: '4_strip_classic',
-      paymentMethod: 'VIETQR',
-      paymentStatus: 'PAID',
-      amount: 50000,
-      printCopies: 2,
-      syncStatus: 'SYNCED',
-      photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
-      reprintCount: 0,
-    },
-    {
-      id: 'SES-98213',
-      startedAt: '14:10 24/10/2026',
-      totalSlots: 4,
-      layoutId: '4_strip_classic',
-      paymentMethod: 'CASH',
-      paymentStatus: 'PAID',
-      amount: 50000,
-      printCopies: 1,
-      syncStatus: 'SYNCED',
-      photos: ['https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80'],
-      reprintCount: 0,
-    },
-    {
-      id: 'SES-98212',
-      startedAt: '13:45 24/10/2026',
-      totalSlots: 6,
-      layoutId: '6_grid_2x3',
-      paymentMethod: 'VIETQR',
-      paymentStatus: 'PAID',
-      amount: 70000,
-      printCopies: 2,
-      syncStatus: 'PENDING_SYNC',
-      photos: ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&q=80'],
-      reprintCount: 1,
-    },
-  ])
+  const [sessions, setSessions] = useState<KioskSessionRecord[]>([])
+
+  // Nạp danh sách phiên chụp từ Outbox cục bộ
+  useEffect(() => {
+    const outbox = cloudSyncService.getOutboxSessions()
+    if (outbox.length > 0) {
+      setSessions(
+        outbox.map((o) => ({
+          id: o.session_code || o.id,
+          startedAt: new Date(o.created_at).toLocaleTimeString('vi-VN') + ' ' + new Date(o.created_at).toLocaleDateString('vi-VN'),
+          totalSlots: o.layout_type === '4x6' ? 6 : 4,
+          layoutId: o.layout_type,
+          paymentMethod: o.payment_method === 'cash' ? 'CASH' : 'VIETQR',
+          paymentStatus: 'PAID',
+          amount: o.total_amount,
+          printCopies: o.copies,
+          syncStatus: o.sync_status,
+          photos: o.photos && o.photos.length > 0 ? o.photos : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
+          reprintCount: o.reprintCount || 0,
+        }))
+      )
+    } else {
+      const demoSeed: KioskOutboxSession[] = [
+        {
+          id: 'SES-98214',
+          session_code: 'JB98214',
+          kiosk_id: 'kiosk_01',
+          layout_type: '2x6',
+          copies: 2,
+          total_amount: 50000,
+          payment_method: 'vietqr',
+          paper_consumed: 2,
+          status: 'completed',
+          created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          sync_status: 'SYNCED',
+          photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
+        },
+        {
+          id: 'SES-98213',
+          session_code: 'JB98213',
+          kiosk_id: 'kiosk_01',
+          layout_type: '2x6',
+          copies: 1,
+          total_amount: 50000,
+          payment_method: 'cash',
+          paper_consumed: 1,
+          status: 'completed',
+          created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+          sync_status: 'SYNCED',
+          photos: ['https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80'],
+        },
+        {
+          id: 'SES-98212',
+          session_code: 'JB98212',
+          kiosk_id: 'kiosk_01',
+          layout_type: '4x6',
+          copies: 2,
+          total_amount: 70000,
+          payment_method: 'vietqr',
+          paper_consumed: 2,
+          status: 'completed',
+          created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+          sync_status: 'PENDING_SYNC',
+          photos: ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&q=80'],
+        },
+      ]
+      cloudSyncService.saveOutboxSessions(demoSeed)
+    }
+  }, [syncStatus.lastSyncTime])
   const [reprintModalSession, setReprintModalSession] = useState<KioskSessionRecord | null>(null)
   const [reprintReason, setReprintReason] = useState<string>('Kẹt giấy máy in')
   const [viewDetailSession, setViewDetailSession] = useState<KioskSessionRecord | null>(null)
@@ -350,12 +387,33 @@ export default function AdminScreen() {
     setIsSyncingOutbox(true)
     setSyncOutboxNotice(null)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-      setSessions((prev) => prev.map((s) => ({ ...s, syncStatus: 'SYNCED' })))
-      setSyncOutboxNotice('✅ Đã đồng bộ toàn bộ 3 phiên chụp và 2 bản ghi Audit Log lên Cloud CMS thành công.')
-      logAudit('ĐỒNG BỘ THỦ CÔNG OUTBOX', 'Kỹ thuật viên bấm cưỡng bức đẩy dữ liệu lên Cloud CMS.', 'SUCCESS')
-    } catch {
-      setSyncOutboxNotice('❌ Lỗi kết nối máy chủ Cloud CMS. Vui lòng kiểm tra đường truyền.')
+      const res = await cloudSyncService.forceSyncNow()
+      setSyncOutboxNotice(res.message)
+      logAudit(
+        'ĐỒNG BỘ CƯỠNG BỨC CMS',
+        res.success ? `Đồng bộ thành công (${res.syncedCount} phiên mới).` : `Lỗi: ${res.message}`,
+        res.success ? 'SUCCESS' : 'FAILED'
+      )
+      // Cập nhật lại danh sách phiên hiển thị trên bảng
+      const currentOutbox = cloudSyncService.getOutboxSessions()
+      setSessions(
+        currentOutbox.map((o) => ({
+          id: o.session_code || o.id,
+          startedAt: new Date(o.created_at).toLocaleTimeString('vi-VN') + ' ' + new Date(o.created_at).toLocaleDateString('vi-VN'),
+          totalSlots: o.layout_type === '4x6' ? 6 : 4,
+          layoutId: o.layout_type,
+          paymentMethod: o.payment_method === 'cash' ? 'CASH' : 'VIETQR',
+          paymentStatus: 'PAID',
+          amount: o.total_amount,
+          printCopies: o.copies,
+          syncStatus: o.sync_status,
+          photos: o.photos && o.photos.length > 0 ? o.photos : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
+          reprintCount: o.reprintCount || 0,
+        }))
+      )
+    } catch (err: any) {
+      setSyncOutboxNotice(`❌ Lỗi kết nối: ${err.message}`)
+      logAudit('ĐỒNG BỘ CƯỠNG BỨC THẤT BẠI', err.message, 'FAILED')
     } finally {
       setIsSyncingOutbox(false)
     }
@@ -616,11 +674,17 @@ export default function AdminScreen() {
                 <div className="pillar-card">
                   <div className="pillar-header">
                     <span className="pillar-icon"><Cloud size={24} /></span>
-                    <span className="pillar-status-badge badge-green">ĐỒNG BỘ</span>
+                    <span className={`pillar-status-badge ${syncStatus.isOnline ? 'badge-green' : 'badge-amber'}`}>
+                      {syncStatus.isOnline ? 'ONLINE' : 'OFFLINE'}
+                    </span>
                   </div>
                   <div className="pillar-title">Kết Nối Cloud CMS</div>
-                  <div className="pillar-main-val">Heartbeat: 45s trước</div>
-                  <div className="pillar-sub-text">Hàng đợi Outbox: 1 phiên chờ sync</div>
+                  <div className="pillar-main-val">
+                    {syncStatus.isOnline ? `Heartbeat: ${syncStatus.lastHeartbeat || 'Vừa xong'}` : 'Chưa Kết Nối'}
+                  </div>
+                  <div className="pillar-sub-text">
+                    Hàng đợi Outbox: {syncStatus.pendingCount} phiên chờ sync
+                  </div>
                 </div>
 
                 {/* 5. Storage */}

@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
+import { cloudSyncService } from './services/cloudSyncService'
 import IdleScreen from './screens/IdleScreen'
 import SelectFrameSizeScreen from './screens/SelectFrameSizeScreen'
 import SelectLayoutScreen from './screens/SelectLayoutScreen'
@@ -17,6 +19,12 @@ export default function App() {
   const isOverhead = typeof window !== 'undefined' && window.location.search.includes('mode=overhead')
   const queryScreen = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('screen') : null
   const screen = queryScreen || storeScreen
+
+  // Khởi động Background Sync Worker liên thông Cloud CMS (Heartbeat + Outbox Sync)
+  useEffect(() => {
+    cloudSyncService.startWorker()
+    return () => cloudSyncService.stopWorker()
+  }, [])
 
   if (isOverhead) {
     return <OverheadScreen />

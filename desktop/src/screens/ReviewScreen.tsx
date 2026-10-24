@@ -14,6 +14,7 @@ import {
 } from '../lib/constants'
 import QRCode from 'qrcode'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { cloudSyncService } from '../services/cloudSyncService'
 import './ReviewScreen.css'
 
 export default function ReviewScreen() {
@@ -188,9 +189,32 @@ export default function ReviewScreen() {
     setGdriveUrl,
   ])
 
+  // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS
+  const recordSessionToOutbox = () => {
+    if (!session) return
+    const is4x6 = selectedFrameSize === '4x6'
+    cloudSyncService.queueSession({
+      id: session.sessionId || `ses_${Date.now()}`,
+      session_code: `JB${Date.now().toString().slice(-6)}`,
+      kiosk_id: 'kiosk_01',
+      branch_id: 'branch_01',
+      layout_type: is4x6 ? '4x6' : '2x6',
+      copies: printCopies,
+      total_amount: session.paidAmount || (is4x6 ? 70000 : 50000),
+      payment_method: (session.paymentMethod?.toLowerCase() === 'cash' ? 'cash' : 'vietqr') as 'vietqr' | 'cash',
+      coupon_code: null,
+      paper_consumed: printCopies,
+      drive_url: session.gdriveUrl || null,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      photos: photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath || ''),
+    })
+  }
+
   // Tự động đếm ngược
   useEffect(() => {
     if (timeLeft <= 0) {
+      recordSessionToOutbox()
       clearSession()
       setScreen('idle')
       return
@@ -201,9 +225,10 @@ export default function ReviewScreen() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft, clearSession, setScreen])
+  }, [timeLeft, clearSession, setScreen, recordSessionToOutbox])
 
   function handleFinish() {
+    recordSessionToOutbox()
     clearSession()
     setScreen('idle')
   }
