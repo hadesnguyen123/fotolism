@@ -65,6 +65,72 @@ const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [
   },
 ]
 
+function getInitialOutboxSessions(): KioskSessionRecord[] {
+  let outbox = cloudSyncService.getOutboxSessions()
+  if (outbox.length === 0) {
+    const demoSeed: KioskOutboxSession[] = [
+      {
+        id: 'SES-98214',
+        session_code: 'JB98214',
+        kiosk_id: 'kiosk_01',
+        layout_type: '2x6',
+        copies: 2,
+        total_amount: 50000,
+        payment_method: 'vietqr',
+        paper_consumed: 2,
+        status: 'completed',
+        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        sync_status: 'SYNCED',
+        photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
+      },
+      {
+        id: 'SES-98213',
+        session_code: 'JB98213',
+        kiosk_id: 'kiosk_01',
+        layout_type: '2x6',
+        copies: 1,
+        total_amount: 50000,
+        payment_method: 'cash',
+        paper_consumed: 1,
+        status: 'completed',
+        created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+        sync_status: 'SYNCED',
+        photos: ['https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80'],
+      },
+      {
+        id: 'SES-98212',
+        session_code: 'JB98212',
+        kiosk_id: 'kiosk_01',
+        layout_type: '4x6',
+        copies: 2,
+        total_amount: 70000,
+        payment_method: 'vietqr',
+        paper_consumed: 2,
+        status: 'completed',
+        created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+        sync_status: 'PENDING_SYNC',
+        photos: ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&q=80'],
+      },
+    ]
+    cloudSyncService.saveOutboxSessions(demoSeed)
+    outbox = demoSeed
+  }
+
+  return outbox.map((o) => ({
+    id: o.session_code || o.id,
+    startedAt: new Date(o.created_at).toLocaleTimeString('vi-VN') + ' ' + new Date(o.created_at).toLocaleDateString('vi-VN'),
+    totalSlots: o.layout_type === '4x6' ? 6 : 4,
+    layoutId: o.layout_type,
+    paymentMethod: o.payment_method === 'cash' ? 'CASH' : 'VIETQR',
+    paymentStatus: 'PAID',
+    amount: o.total_amount,
+    printCopies: o.copies,
+    syncStatus: o.sync_status,
+    photos: o.photos && o.photos.length > 0 ? o.photos : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
+    reprintCount: o.reprintCount || 0,
+  }))
+}
+
 export default function AdminScreen() {
   const {
     setScreen,
@@ -125,73 +191,11 @@ export default function AdminScreen() {
 
   // ── Sessions & Reprint State ──
   const [sessionFilter, setSessionFilter] = useState<'ALL' | 'PAID' | 'PENDING_SYNC'>('ALL')
-  const [sessions, setSessions] = useState<KioskSessionRecord[]>([])
+  const [sessions, setSessions] = useState<KioskSessionRecord[]>(getInitialOutboxSessions)
 
-  // Nạp danh sách phiên chụp từ Outbox cục bộ
   useEffect(() => {
-    const outbox = cloudSyncService.getOutboxSessions()
-    if (outbox.length > 0) {
-      setSessions(
-        outbox.map((o) => ({
-          id: o.session_code || o.id,
-          startedAt: new Date(o.created_at).toLocaleTimeString('vi-VN') + ' ' + new Date(o.created_at).toLocaleDateString('vi-VN'),
-          totalSlots: o.layout_type === '4x6' ? 6 : 4,
-          layoutId: o.layout_type,
-          paymentMethod: o.payment_method === 'cash' ? 'CASH' : 'VIETQR',
-          paymentStatus: 'PAID',
-          amount: o.total_amount,
-          printCopies: o.copies,
-          syncStatus: o.sync_status,
-          photos: o.photos && o.photos.length > 0 ? o.photos : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
-          reprintCount: o.reprintCount || 0,
-        }))
-      )
-    } else {
-      const demoSeed: KioskOutboxSession[] = [
-        {
-          id: 'SES-98214',
-          session_code: 'JB98214',
-          kiosk_id: 'kiosk_01',
-          layout_type: '2x6',
-          copies: 2,
-          total_amount: 50000,
-          payment_method: 'vietqr',
-          paper_consumed: 2,
-          status: 'completed',
-          created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-          sync_status: 'SYNCED',
-          photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'],
-        },
-        {
-          id: 'SES-98213',
-          session_code: 'JB98213',
-          kiosk_id: 'kiosk_01',
-          layout_type: '2x6',
-          copies: 1,
-          total_amount: 50000,
-          payment_method: 'cash',
-          paper_consumed: 1,
-          status: 'completed',
-          created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-          sync_status: 'SYNCED',
-          photos: ['https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80'],
-        },
-        {
-          id: 'SES-98212',
-          session_code: 'JB98212',
-          kiosk_id: 'kiosk_01',
-          layout_type: '4x6',
-          copies: 2,
-          total_amount: 70000,
-          payment_method: 'vietqr',
-          paper_consumed: 2,
-          status: 'completed',
-          created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-          sync_status: 'PENDING_SYNC',
-          photos: ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&q=80'],
-        },
-      ]
-      cloudSyncService.saveOutboxSessions(demoSeed)
+    if (syncStatus.lastSyncTime) {
+      setSessions(getInitialOutboxSessions())
     }
   }, [syncStatus.lastSyncTime])
   const [reprintModalSession, setReprintModalSession] = useState<KioskSessionRecord | null>(null)
