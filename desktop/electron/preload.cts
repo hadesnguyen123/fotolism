@@ -132,6 +132,18 @@ const api = {
       ipcRenderer.invoke('config:set', { key, value }),
   },
 
+  // ── Device Provisioning (device_config.json) ──────────────────────────────
+  device: {
+    getConfig: (): IpcResponse<any> =>
+      ipcRenderer.invoke('device:get-config'),
+
+    saveConfig: (config: any): IpcResponse<any> =>
+      ipcRenderer.invoke('device:save-config', config),
+
+    resetConfig: (): IpcResponse<void> =>
+      ipcRenderer.invoke('device:reset-config'),
+  },
+
   // ── Storage (Downloads folder) ────────────────────────────────────────────
   storage: {
     getDownloadsPath: (): IpcResponse<{ path: string; baseDownloads: string }> =>
@@ -155,6 +167,9 @@ const api = {
       subfolderName: string
       filesCount: number
     }> => ipcRenderer.invoke('storage:upload-drive-session', payload),
+
+    testDriveWebhook: (webhookUrl: string): IpcResponse<{ message: string; statusCode?: number }> =>
+      ipcRenderer.invoke('storage:test-webhook', webhookUrl),
   },
 }
 

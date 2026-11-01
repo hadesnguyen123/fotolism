@@ -42,7 +42,7 @@ export default function OverheadScreen() {
         <div className="overhead-placeholder">
           <div className="placeholder-content">
             <span className="placeholder-icon">📷</span>
-            <h2>FOTOLISM PHOTOBOOTH</h2>
+            <h2>fotolism photobooth</h2>
             <p className="placeholder-sub">
               {cameraState === 'CONNECTING' ? 'Đang kết nối máy ảnh Canon EOS R100...' : 'Máy ảnh đang ở chế độ chờ'}
             </p>
@@ -54,7 +54,7 @@ export default function OverheadScreen() {
       <div className="overhead-header">
         <div className="overhead-brand">
           <span className="brand-dot" />
-          <span className="brand-name">FOTOLISM OVERHEAD</span>
+          <span className="brand-name">fotolism overhead</span>
         </div>
         <div className="overhead-telemetry">
           <span className={`status-badge ${cameraState.toLowerCase()}`}>{cameraState}</span>

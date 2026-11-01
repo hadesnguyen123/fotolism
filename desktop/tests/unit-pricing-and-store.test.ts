@@ -39,13 +39,11 @@ describe('UT-01: Bảng giá, Phụ phí in thêm & Mã ưu đãi (Pricing & Dis
 
     const basePrice = frameSize === '2x6' ? price2x6 : price4x6
     const minCopies = frameSize === '2x6' ? 2 : 1
-    const extraCopies = Math.max(0, copies - minCopies)
-    const extraPricePerUnit =
-      frameSize === '2x6'
-        ? extraCopyPrice2x6 / 2 // mỗi dải phụ thêm
-        : extraCopyPrice4x6     // mỗi postcard phụ thêm
+    const copyStep = frameSize === '2x6' ? 2 : 1
+    const extraBatches = Math.max(0, Math.floor((copies - minCopies) / copyStep))
+    const extraPricePerStep = frameSize === '2x6' ? extraCopyPrice2x6 : extraCopyPrice4x6
 
-    const subTotal = basePrice + extraCopies * extraPricePerUnit
+    const subTotal = basePrice + extraBatches * extraPricePerStep
     let discountAmount = 0
     if (coupon) {
       if (coupon.type === 'percent') {
@@ -57,60 +55,79 @@ describe('UT-01: Bảng giá, Phụ phí in thêm & Mã ưu đãi (Pricing & Dis
     return Math.max(0, subTotal - discountAmount)
   }
 
-  it('Tính chuẩn giá mặc định khổ 2x6: 2 dải in là 50.000đ hoặc 70.000đ theo cấu hình', () => {
-    // Với cấu hình mặc định trong constants (50k):
-    expect(calculateTotal({ frameSize: '2x6', copies: 2 })).toBe(50000)
+  it('Tính chuẩn giá mặc định khổ 2x6: 2 dải in là 70.000đ theo cấu hình bảng giá', () => {
+    // Với cấu hình mặc định trong constants (70k cho 2 dải):
+    expect(calculateTotal({ frameSize: '2x6', copies: 2 })).toBe(70000)
 
     // Với bảng giá sự kiện 70k (2 dải):
     const total70k = calculateTotal({
       frameSize: '2x6',
       copies: 2,
       price2x6: 70000,
-      extraCopyPrice2x6: 20000,
+      extraCopyPrice2x6: 30000,
     })
     expect(total70k).toBe(70000)
   })
 
-  it('Tính phụ phí in thêm chính xác cho khổ 2x6', () => {
-    // Khách in 4 dải (thêm 2 dải phụ, giá 20k/2 dải -> +20k)
+  it('Tính phụ phí in thêm chính xác cho khổ 2x6 (mỗi lần +2 dải là 30k theo quy chuẩn xén đôi máy in)', () => {
+    // Khách in 4 dải (thêm 1 lượt 2 dải phụ, giá 30k -> 70k + 30k = 100k)
     const total4strips = calculateTotal({
       frameSize: '2x6',
       copies: 4,
       price2x6: 70000,
-      extraCopyPrice2x6: 20000,
+      extraCopyPrice2x6: 30000,
     })
-    expect(total4strips).toBe(90000)
+    expect(total4strips).toBe(100000)
 
-    // Khách in 6 dải (+4 dải phụ -> +40k)
+    // Khách in 6 dải (thêm 2 lượt = 4 dải phụ -> 70k + 60k = 130k)
     const total6strips = calculateTotal({
       frameSize: '2x6',
       copies: 6,
       price2x6: 70000,
-      extraCopyPrice2x6: 20000,
+      extraCopyPrice2x6: 30000,
     })
-    expect(total6strips).toBe(110000)
+    expect(total6strips).toBe(130000)
+
+    // Khách in 8 dải (thêm 3 lượt = 6 dải phụ -> 70k + 90k = 160k)
+    const total8strips = calculateTotal({
+      frameSize: '2x6',
+      copies: 8,
+      price2x6: 70000,
+      extraCopyPrice2x6: 30000,
+    })
+    expect(total8strips).toBe(160000)
   })
 
-  it('Tính chuẩn giá và phụ phí cho khổ postcard 4x6 (80k base, +20k/bản)', () => {
-    // 1 postcard chuẩn -> 80.000đ
+  it('Tính chuẩn giá và phụ phí cho khổ postcard 4x6 (1 tấm mặc định 90k, +30k/tấm in thêm)', () => {
+    // 1 postcard 4x6 chuẩn -> 90.000đ
     expect(
       calculateTotal({
         frameSize: '4x6',
         copies: 1,
-        price4x6: 80000,
-        extraCopyPrice4x6: 20000,
+        price4x6: 90000,
+        extraCopyPrice4x6: 30000,
       })
-    ).toBe(80000)
+    ).toBe(90000)
 
-    // 3 postcards -> 80k + 2 * 20k = 120.000đ
+    // 2 postcards -> 90k + 1 * 30k = 120.000đ
+    expect(
+      calculateTotal({
+        frameSize: '4x6',
+        copies: 2,
+        price4x6: 90000,
+        extraCopyPrice4x6: 30000,
+      })
+    ).toBe(120000)
+
+    // 3 postcards -> 90k + 2 * 30k = 150.000đ
     expect(
       calculateTotal({
         frameSize: '4x6',
         copies: 3,
-        price4x6: 80000,
-        extraCopyPrice4x6: 20000,
+        price4x6: 90000,
+        extraCopyPrice4x6: 30000,
       })
-    ).toBe(120000)
+    ).toBe(150000)
   })
 
   it('Áp dụng chính xác các mã giảm giá: GIAM20K, FREE, VIP2026', () => {
@@ -143,7 +160,7 @@ describe('UT-01: Bảng giá, Phụ phí in thêm & Mã ưu đãi (Pricing & Dis
       })
     ).toBe(0)
 
-    // VIP2026 (-20%) trên đơn 100k -> còn 80k
+    // VIP2026 (-20%) trên đơn 100k (80k base 1 tấm + 1 bản thêm 20k) -> còn 80k
     expect(
       calculateTotal({
         frameSize: '4x6',
@@ -301,5 +318,89 @@ describe('UT-03: Kích thước Canvas & Tỷ lệ chuẩn in ấn 300 DPI (Stri
     expect(slotW).toBeLessThan(600)
     expect(slotH).toBeGreaterThan(700)
     expect(slotH).toBeLessThan(850)
+  })
+
+  it('UT-05: Hệ thống hỗ trợ đúng chuẩn 3 tông màu ảnh cốt lõi (Tự nhiên, Cổ điển B&W, Retro 90s) và các gói Selfbooth 5p, 7p, 10p', () => {
+    // Đúng 3 bộ lọc màu theo quy chuẩn thiết kế bất biến của khách hàng
+    expect(COLOR_FILTERS.length).toBe(3)
+    const filterIds = COLOR_FILTERS.map((f) => f.id)
+    expect(filterIds).toEqual(['normal', 'vintage_noir', 'retro_90s'])
+
+    // Cấu hình thời gian Selfbooth
+    const store = useAppStore.getState()
+    store.setSelfboothDurationSeconds(300)
+    expect(useAppStore.getState().eventConfig.selfboothDurationSeconds).toBe(300)
+
+    store.setSelfboothDurationSeconds(420)
+    expect(useAppStore.getState().eventConfig.selfboothDurationSeconds).toBe(420)
+
+    store.setSelfboothDurationSeconds(600)
+    expect(useAppStore.getState().eventConfig.selfboothDurationSeconds).toBe(600)
+  })
+
+  it('UT-06: Điều hướng hỗ trợ màn hình selfbooth-setup và select-layout', () => {
+    const store = useAppStore.getState()
+    store.setScreen('selfbooth-setup')
+    expect(useAppStore.getState().screen).toBe('selfbooth-setup')
+
+    store.setScreen('select-layout')
+    expect(useAppStore.getState().screen).toBe('select-layout')
+  })
+
+  it('UT-07: Khách hàng có thể chọn tự do và chuyển đổi linh hoạt giữa cả 5 layout của poster', () => {
+    // 1. Chọn Strip 3 ảnh
+    const strip3 = ALL_LAYOUTS[3][0]
+    useAppStore.setState({
+      selectedFrameSize: '2x6',
+      selectedLayout: strip3,
+      selectedCategory: 3,
+      selectedCopies: 2,
+    })
+    expect(useAppStore.getState().selectedLayout.id).toBe('3_vertical_strip')
+    expect(useAppStore.getState().selectedFrameSize).toBe('2x6')
+
+    // 2. Chọn Strip 4 ảnh
+    const strip4 = ALL_LAYOUTS[4][0]
+    useAppStore.setState({
+      selectedFrameSize: '2x6',
+      selectedLayout: strip4,
+      selectedCategory: 4,
+      selectedCopies: 2,
+    })
+    expect(useAppStore.getState().selectedLayout.id).toBe('4_strip_classic')
+    expect(useAppStore.getState().selectedFrameSize).toBe('2x6')
+
+    // 3. Chọn Lưới 6 ảnh (2x3)
+    const grid6 = ALL_LAYOUTS[6][0]
+    useAppStore.setState({
+      selectedFrameSize: '4x6',
+      selectedLayout: grid6,
+      selectedCategory: 6,
+      selectedCopies: 2,
+    })
+    expect(useAppStore.getState().selectedLayout.id).toBe('6_grid_2x3')
+    expect(useAppStore.getState().selectedFrameSize).toBe('4x6')
+
+    // 4. Chọn Lưới 4 ảnh (2x2)
+    const grid4 = ALL_LAYOUTS[4].find((l) => l.id === '4_grid_2x2') || ALL_LAYOUTS[4][1]
+    useAppStore.setState({
+      selectedFrameSize: '4x6',
+      selectedLayout: grid4,
+      selectedCategory: 4,
+      selectedCopies: 2,
+    })
+    expect(useAppStore.getState().selectedLayout.id).toBe('4_grid_2x2')
+    expect(useAppStore.getState().selectedFrameSize).toBe('4x6')
+
+    // 5. Chọn Lưới 9 ảnh (3x3)
+    const grid9 = ALL_LAYOUTS[9][0]
+    useAppStore.setState({
+      selectedFrameSize: '4x6',
+      selectedLayout: grid9,
+      selectedCategory: 9,
+      selectedCopies: 2,
+    })
+    expect(useAppStore.getState().selectedLayout.id).toBe('9_grid_3x3')
+    expect(useAppStore.getState().selectedFrameSize).toBe('4x6')
   })
 })

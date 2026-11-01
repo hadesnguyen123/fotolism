@@ -22,7 +22,8 @@ function addResult(subsystem, testName, passed, details) {
 function checkPortsConfig() {
   try {
     const desktopPkg = fs.readFileSync(path.join(ROOT_DIR, 'desktop/package.json'), 'utf-8')
-    const cmsPkg = fs.readFileSync(path.join(ROOT_DIR, 'joybooth-cms/package.json'), 'utf-8')
+    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const cmsPkg = fs.readFileSync(path.join(ROOT_DIR, `${cmsDir}/package.json`), 'utf-8')
 
     const desktopHas5173 = desktopPkg.includes('5173')
     const cmsHas3000 = cmsPkg.includes('3000')
@@ -45,7 +46,8 @@ function checkPortsConfig() {
 // 2. Kiểm tra Database Migration & Schema Supabase
 function checkDatabaseMigration() {
   try {
-    const migrationPath = path.join(ROOT_DIR, 'joybooth-cms/supabase/migrations/001_initial_schema.sql')
+    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const migrationPath = path.join(ROOT_DIR, `${cmsDir}/supabase/migrations/001_initial_schema.sql`)
     if (!fs.existsSync(migrationPath)) {
       addResult('SUPABASE_SCHEMA', 'Kiểm tra migration SQL', false, 'Chưa tìm thấy 001_initial_schema.sql')
       return
@@ -75,8 +77,9 @@ function checkDatabaseMigration() {
 // 3. Kiểm tra tính đúng đắn công thức Đối soát 3 góc (Triple Reconciliation Engine)
 function checkReconciliationModule() {
   try {
-    const enginePath = path.join(ROOT_DIR, 'joybooth-cms/src/lib/reconciliation/engine.ts')
-    const testPath = path.join(ROOT_DIR, 'joybooth-cms/tests/reconciliation.test.ts')
+    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const enginePath = path.join(ROOT_DIR, `${cmsDir}/src/lib/reconciliation/engine.ts`)
+    const testPath = path.join(ROOT_DIR, `${cmsDir}/tests/reconciliation.test.ts`)
 
     const hasEngine = fs.existsSync(enginePath)
     const hasTest = fs.existsSync(testPath)

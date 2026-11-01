@@ -76,5 +76,6 @@ Hướng dẫn chuẩn hóa quy trình kết nối, điều khiển và giám s�
   - Máy ảnh vừa kéo frame EVF nên cổng PTP đang bận. Daemon tạm dừng 60ms, gửi lệnh nhả shutter OFF, sau đó chỉ thử lại 1 lần duy nhất.
 - **Rút cáp USB hoặc tắt nguồn camera**:
   - Daemon chuyển sang trạng thái `DISCONNECTED`. Bộ thăm dò tự động (Auto-Recovery) trong Electron và React polling mỗi 2 giây sẽ tự động kích hoạt kết nối lại ngay khi cắm lại cáp mà không cần khởi động lại phần mềm.
-- **Xung đột ứng dụng**:
-  - Đảm bảo đã tắt hoàn toàn ứng dụng *Canon EOS Utility*, *EOS Webcam Utility*, *Lightroom*, *OBS* hoặc *digiCamControl* để không tranh chấp cổng USB PTP với `fotolism_canon_daemon.exe`.
+- **Xung đột ứng dụng & Thư viện DLL**:
+  - `EDSDK.dll` và `EdsImage.dll` (64-bit) đã được nhúng sẵn cùng file thực thi `fotolism_canon_daemon.exe`. Không cần cài đặt hay bật phần mềm *EOS Webcam Utility Pro* hoặc *digiCamControl*.
+  - Đảm bảo đã tắt/gỡ bỏ hoàn toàn ứng dụng *Canon EOS Utility*, *EOS Webcam Utility*, *Lightroom*, *OBS* hoặc *digiCamControl* để không tranh chấp cổng USB PTP với `fotolism_canon_daemon.exe`.

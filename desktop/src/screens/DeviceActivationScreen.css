@@ -1,0 +1,476 @@
+/* ==========================================================================
+   FOTOLISM 3.0 — DEVICE ACTIVATION SCREEN (WARM MINIMAL LUXURY)
+   ========================================================================== */
+
+.activation-screen-container {
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-surface-warm, #FAF6F0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  color: var(--text-primary, #351C15);
+  user-select: none;
+}
+
+/* Hiệu ứng hào quang nền ấm áp */
+.activation-ambient-glow {
+  position: absolute;
+  width: 650px;
+  height: 650px;
+  background: radial-gradient(circle, rgba(120, 69, 47, 0.12) 0%, rgba(250, 246, 240, 0) 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Khối Card Trung Tâm */
+.activation-card-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 540px;
+  background: #FFFFFF;
+  border-radius: 32px;
+  border: 1.5px solid var(--border-default, #E6D9CF);
+  box-shadow: 0 24px 64px rgba(80, 42, 29, 0.08);
+  padding: 40px 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* Header thương hiệu */
+.activation-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.activation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface-warm, #FFF9F4);
+  border: 1px solid var(--border-default, #E6D9CF);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--brand-secondary, #78452F);
+  margin-bottom: 12px;
+}
+
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E58A32;
+  box-shadow: 0 0 0 3px rgba(229, 138, 50, 0.2);
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+.activation-title {
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--brand-primary, #502A1D);
+  margin: 0 0 8px 0;
+}
+
+.activation-subtitle {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-secondary, #70594F);
+  margin: 0;
+  max-width: 420px;
+}
+
+/* ── Form Stage ── */
+.activation-form-stage {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 6 Ô PIN Digit Boxes */
+.pin-input-boxes {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.pin-digit-box {
+  width: 58px;
+  height: 68px;
+  border-radius: 16px;
+  border: 2px solid var(--border-default, #E6D9CF);
+  background: var(--surface-warm, #FFF9F4);
+  font-size: 2rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--brand-primary, #502A1D);
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  caret-color: var(--brand-primary, #502A1D);
+}
+
+.pin-digit-box:focus,
+.pin-digit-box.focused {
+  border-color: var(--brand-primary, #502A1D);
+  background: #FFFFFF;
+  box-shadow: 0 6px 18px rgba(80, 42, 29, 0.15);
+  transform: translateY(-2px);
+}
+
+.pin-digit-box.filled {
+  border-color: var(--brand-secondary, #78452F);
+  background: #FFFFFF;
+}
+
+/* Error Banner */
+.activation-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #FFF1F0;
+  border: 1px solid #FFA39E;
+  color: #CF1322;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.error-icon {
+  flex-shrink: 0;
+}
+
+/* Bàn Phím Cảm Ứng (Touch Numpad) */
+.touch-numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  margin-bottom: 22px;
+}
+
+.numpad-key {
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--border-default, #E6D9CF);
+  background: #FFFFFF;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--brand-primary, #502A1D);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.numpad-key:hover:not(:disabled) {
+  background: var(--surface-warm, #FFF9F4);
+  border-color: var(--brand-secondary, #78452F);
+  transform: scale(1.03);
+}
+
+.numpad-key:active:not(:disabled) {
+  background: #F0E6DE;
+  transform: scale(0.97);
+}
+
+.numpad-key.action-key {
+  font-size: 1.05rem;
+  color: var(--text-secondary, #70594F);
+  background: var(--surface-warm, #FFF9F4);
+}
+
+.numpad-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Nút Submit Kích Hoạt */
+.activation-submit-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
+  border: none;
+  background: var(--brand-primary, #502A1D);
+  color: #FFFFFF;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(80, 42, 29, 0.22);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-bottom: 18px;
+}
+
+.activation-submit-btn:hover:not(:disabled) {
+  background: #3E1E14;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(80, 42, 29, 0.28);
+}
+
+.activation-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.activation-submit-btn.loading {
+  background: var(--brand-secondary, #78452F);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Demo Chips */
+.quick-demo-chips {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-warm, #FFF9F4);
+  border: 1px dashed var(--border-default, #E6D9CF);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+
+.chips-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary, #70594F);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chips-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.demo-chip-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default, #E6D9CF);
+  background: #FFFFFF;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-primary, #502A1D);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.demo-chip-btn:hover {
+  background: var(--surface-warm, #FFF9F4);
+  border-color: var(--brand-primary, #502A1D);
+}
+
+/* ── Success State ── */
+.activation-success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.success-icon-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #EDFBF4;
+  border: 3px solid #86EFAC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #16A34A;
+  margin-bottom: 18px;
+}
+
+.success-headline {
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #16A34A;
+  margin: 0 0 14px 0;
+}
+
+.success-kiosk-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface-warm, #FFF9F4);
+  border: 1.5px solid var(--border-default, #E6D9CF);
+  border-radius: 18px;
+  padding: 14px 24px;
+  margin-bottom: 16px;
+}
+
+.success-kiosk-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--brand-primary, #502A1D);
+}
+
+.success-branch-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #70594F);
+}
+
+.success-redirect-note {
+  font-size: 0.82rem;
+  color: #8C7B75;
+  margin: 0;
+}
+
+/* ── Card Footer ── */
+.activation-card-footer {
+  width: 100%;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.server-setting-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #70594F);
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.server-setting-toggle:hover {
+  color: var(--brand-primary, #502A1D);
+  background: var(--surface-warm, #FFF9F4);
+}
+
+.server-config-popover {
+  margin-top: 8px;
+  width: 100%;
+  background: var(--surface-warm, #FFF9F4);
+  border: 1px solid var(--border-default, #E6D9CF);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+}
+
+.server-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary, #70594F);
+  margin-bottom: 6px;
+}
+
+.server-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.server-input {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default, #E6D9CF);
+  padding: 0 10px;
+  font-size: 0.82rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.server-input:focus {
+  border-color: var(--brand-primary, #502A1D);
+}
+
+.server-save-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--brand-primary, #502A1D);
+  color: #FFFFFF;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pop {
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-shake {
+  animation: shake 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}

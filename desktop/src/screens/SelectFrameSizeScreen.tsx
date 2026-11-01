@@ -1,6 +1,5 @@
 import { useAppStore, type FrameSize } from '../store/appStore'
 import { DEFAULT_PRICE_2X6, DEFAULT_PRICE_4X6 } from '../lib/constants'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
 import './SelectFrameSizeScreen.css'
 
 export default function SelectFrameSizeScreen() {
@@ -14,28 +13,19 @@ export default function SelectFrameSizeScreen() {
 
   function handleChooseSize(size: FrameSize) {
     selectFrameSize(size)
+  }
+
+  function handleProceed() {
     setScreen('select-layout')
   }
 
   return (
     <div className="size-screen-container" id="select-frame-size-screen">
-      {/* ── Top Header: Single Left Back Arrow + Center Title ── */}
+      {/* ── Top Header ── */}
       <header className="size-screen-header">
-        <button
-          className="screen-back-btn"
-          onClick={() => setScreen('idle')}
-          title="Quay lại"
-          aria-label="Quay lại"
-        >
-          <ArrowLeft size={28} strokeWidth={2} />
-        </button>
-
         <div className="size-header-center">
           <h1 className="size-header-title">Chọn Khổ In</h1>
-          <p className="size-header-subtitle">Chọn định dạng dải ảnh bạn muốn in</p>
         </div>
-
-        <div className="header-placeholder" />
       </header>
 
       {/* ── 2-Option Cards Grid (Tối giản, Sang trọng, Touch-First) ── */}
@@ -66,13 +56,6 @@ export default function SelectFrameSizeScreen() {
               <div className="mockup-strip-slot" />
             </div>
           </div>
-
-          <p className="size-card-desc">Gồm 2 dải in Strip đôi tiện lợi</p>
-
-          <button className="btn-select-size" onClick={() => handleChooseSize('2x6')}>
-            <span>Chọn khổ này</span>
-            <ArrowRight size={20} strokeWidth={2.2} />
-          </button>
         </div>
 
         {/* Option 2: Postcard 4x6 */}
@@ -95,15 +78,29 @@ export default function SelectFrameSizeScreen() {
               <div className="mockup-grid-slot" />
             </div>
           </div>
-
-          <p className="size-card-desc">Gồm 1 bưu thiếp Postcard lớn sắc nét</p>
-
-          <button className="btn-select-size" onClick={() => handleChooseSize('4x6')}>
-            <span>Chọn khổ này</span>
-            <ArrowRight size={20} strokeWidth={2.2} />
-          </button>
         </div>
       </main>
+
+      {/* ── Bottom Bar: Nút Quay Lại (Góc dưới trái) + Nút Tiếp Tục (Góc dưới phải) ── */}
+      <footer className="kiosk-bottom-nav-bar size-bottom-bar">
+        <button
+          className="kiosk-nav-btn btn-nav-back"
+          onClick={() => setScreen('idle')}
+          title="Quay lại"
+          aria-label="Quay lại"
+        >
+          Quay lại
+        </button>
+
+        <button
+          className="kiosk-nav-btn btn-nav-next"
+          onClick={handleProceed}
+          title="Tiếp tục"
+          aria-label="Tiếp tục"
+        >
+          Tiếp tục
+        </button>
+      </footer>
     </div>
   )
 }

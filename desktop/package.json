@@ -1,15 +1,16 @@
 {
   "name": "fotolism-desktop",
-  "productName": "Fotolism",
+  "productName": "fotolism",
   "private": true,
   "version": "0.1.0",
   "description": "AI-Powered Photobooth Software",
   "type": "module",
-  "author": "Fotolism Team",
+  "author": "fotolism team",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev:vite": "vite",
-    "dev:electron": "wait-on -t 30000 tcp:127.0.0.1:5173 && cross-env NODE_ENV=development electron .",
+    "dev:electron": "wait-on -t 30000 tcp:127.0.0.1:5173 && cmd /c \"set ELECTRON_RUN_AS_NODE=&& electron .\"",
+    "dev:ai": "cd ai-service && python main.py",
     "dev": "concurrently -n vite,electron -c cyan,yellow \"npm run dev:vite\" \"npm run dev:electron\"",
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
     "build:mac": "npm run build && electron-builder --mac",
@@ -44,28 +45,21 @@
   },
   "build": {
     "appId": "com.fotolism.desktop",
-    "productName": "Fotolism",
+    "productName": "fotolism",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**",
-      "dist-electron/**"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/drivers",
-        "to": "resources/drivers",
-        "filter": [
-          "**/*"
-        ]
-      }
+      "dist-electron/**",
+      "electron/fotolism_canon_daemon.exe",
+      "electron/fotolism_canon_capture.exe"
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "dir"
       ],
+      "signAndEditExecutable": false,
       "icon": "public/icon.ico"
     },
     "nsis": {

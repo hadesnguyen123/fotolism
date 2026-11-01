@@ -11,7 +11,7 @@ const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? 'http://127.0.0.1:8000'
 
 // ── Hardware & Timeout Constants ──
-const HARDWARE_TIMEOUT_MS = 22000
+const HARDWARE_TIMEOUT_MS = 6000
 const LIVEVIEW_TIMEOUT_MS = 2000
 const DEVICE_QUERY_TIMEOUT_MS = 3000
 const CANON_VENDOR_ID = 'VID_04A9'
@@ -33,7 +33,7 @@ function runAsyncCommand(cmd: string, timeoutMs: number = HARDWARE_TIMEOUT_MS): 
           if (child.pid) {
             exec(`taskkill /F /T /PID ${child.pid} 2>nul`, { windowsHide: true })
           }
-        } catch (_k) {}
+        } catch (_k) { }
         resolve({ stdout: '', stderr: 'Command timed out' })
       }
     }, timeoutMs + 200)
@@ -112,7 +112,7 @@ function createOverheadWindow(displayId?: number) {
   }
 
   if (overheadWindow && !overheadWindow.isDestroyed()) {
-    try { overheadWindow.close() } catch {}
+    try { overheadWindow.close() } catch { }
     overheadWindow = null
   }
 
@@ -195,19 +195,205 @@ ipcMain.handle('ai:generate-qr', async (_event, payload: { sessionId: string; im
   return res.json()
 })
 
-// Print Handlers
-ipcMain.handle('print:send', async (_event, payload: { imagePath: string; copies: number }) => {
-  const res = await fetch(`${AI_SERVICE_URL}/print`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+// Print Handlers & Mutex Lock (Đảm bảo mỗi phiên chỉ in 1 lần, không ghi đè, không chạy đè lệnh in)
+let isPrintSpoolerActive = false
+
+ipcMain.handle('print:send', async (_event, payload: { imagePath: string; copies: number; printerName?: string }) => {
+  if (isPrintSpoolerActive) {
+    console.warn('[Print] BỊ CHẶN: Đang có một lệnh in khác đang xử lý trong Windows Spooler, tuyệt đối không ghi đè!')
+    return { success: false, error: 'Máy in đang bận thực thi lệnh in trước, không được gửi đè lệnh in mới.' }
+  }
+
+  isPrintSpoolerActive = true
+
+  try {
+    const copiesCount = Math.max(1, payload.copies || 1)
+    const targetPrinter = payload.printerName && payload.printerName !== 'Default Windows Printer' && !payload.printerName.includes('SELPHY')
+      ? payload.printerName
+      : 'DS-RX1'
+
+    console.log(`[Print] Bắt đầu gửi lệnh in ${copiesCount} bản tới máy in: "${targetPrinter}"`)
+
+    const jobUniqueId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+
+    // 1. Lưu file ảnh cần in ra thư mục tạm trên ổ cứng với ID duy nhất tuyệt đối (không bao giờ ghi đè)
+    let localTempFile = ''
+    try {
+      const isDataUrl = payload.imagePath.startsWith('data:')
+      if (isDataUrl) {
+        const base64Data = payload.imagePath.replace(/^data:image\/\w+;base64,/, '')
+        localTempFile = path.join(app.getPath('temp'), `fotolism_print_${jobUniqueId}.jpg`)
+        fs.writeFileSync(localTempFile, Buffer.from(base64Data, 'base64'))
+      } else if (fs.existsSync(payload.imagePath)) {
+        localTempFile = payload.imagePath
+      } else {
+        localTempFile = path.join(app.getPath('temp'), `fotolism_print_${jobUniqueId}.jpg`)
+        fs.writeFileSync(localTempFile, Buffer.from(payload.imagePath, 'base64'))
+      }
+    } catch (err: any) {
+      console.error('[Print] Lỗi chuẩn bị file ảnh in:', err)
+      return { success: false, error: `Lỗi chuẩn bị file in: ${err.message}` }
+    }
+
+    // 2. Phương pháp: In trực tiếp qua Windows Spooler (.NET System.Drawing.Printing.PrintDocument)
+    const psPrintSuccess = await new Promise<boolean>((resolve) => {
+      const scriptPath = path.join(app.getPath('temp'), `print_job_${jobUniqueId}.ps1`)
+      const safeImagePath = localTempFile.replace(/'/g, "''")
+      const safePrinter = targetPrinter.replace(/'/g, "''")
+
+      const psContent = `
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -AssemblyName System.Drawing
+  $printer = '${safePrinter}'
+  $file = '${safeImagePath}'
+  $copies = ${copiesCount}
+
+  $doc = New-Object System.Drawing.Printing.PrintDocument
+  $doc.PrinterSettings.PrinterName = $printer
+  $doc.PrinterSettings.Copies = $copies
+  $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+  $doc.OriginAtMargins = $false
+
+  $img = [System.Drawing.Image]::FromFile($file)
+  if ($img.Width -gt $img.Height) {
+    $doc.DefaultPageSettings.Landscape = $true
+  } else {
+    $doc.DefaultPageSettings.Landscape = $false
+  }
+
+  $doc.add_PrintPage({
+    param($s, $ev)
+    $ev.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $ev.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $bounds = $ev.PageBounds
+    $ev.Graphics.DrawImage($img, $bounds.X, $bounds.Y, $bounds.Width, $bounds.Height)
   })
-  return res.json()
+
+  $doc.Print()
+  $img.Dispose()
+  $doc.Dispose()
+  Write-Output "PRINT_OK"
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
+}
+`
+      try {
+        fs.writeFileSync(scriptPath, psContent, 'utf-8')
+        exec(`powershell -ExecutionPolicy Bypass -NoProfile -File "${scriptPath}"`, { timeout: 15000 }, (error, stdout, stderr) => {
+          try { fs.unlinkSync(scriptPath) } catch { }
+          if (!error && stdout.includes('PRINT_OK')) {
+            console.log(`[Print] Lệnh in PowerShell tới "${targetPrinter}" THÀNH CÔNG!`)
+            resolve(true)
+          } else {
+            console.warn(`[Print] PowerShell print warning:`, error || stderr)
+            resolve(false)
+          }
+        })
+      } catch (e) {
+        console.warn('[Print] Không thể tạo file script PowerShell:', e)
+        resolve(false)
+      }
+    })
+
+    const jobId = `print-${Date.now()}`
+
+    if (psPrintSuccess) {
+      try {
+        SessionDB.createPrintJob({
+          id: jobId,
+          session_id: 'direct-print',
+          file_path: localTempFile,
+          copies: copiesCount,
+          status: 'SUCCESS',
+          printer_name: targetPrinter,
+          completed_at: new Date().toISOString(),
+        })
+      } catch { }
+
+      return { success: true, data: { jobId } }
+    }
+
+    // 3. Phương pháp 2: Fallback qua Electron Hidden Window
+    console.log('[Print] Chuyển sang fallback Electron print...')
+    try {
+      const printWindow = new BrowserWindow({
+        show: false,
+        webPreferences: { nodeIntegration: false, contextIsolation: true },
+      })
+
+      const tempHtml = path.join(app.getPath('temp'), `print_page_${jobUniqueId}.html`)
+      const htmlContent = `<!DOCTYPE html><html><head><style>@page{size:4in 6in;margin:0;}*{box-sizing:border-box;}html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#fff;}img{width:100vw;height:100vh;object-fit:fill;display:block;}</style></head><body><img src="${localTempFile.replace(/\\/g, '/')}" /></body></html>`
+      fs.writeFileSync(tempHtml, htmlContent, 'utf-8')
+
+      await printWindow.loadFile(tempHtml)
+      await new Promise((r) => setTimeout(r, 400))
+
+      return await new Promise((resolve) => {
+        printWindow.webContents.print(
+          {
+            silent: true,
+            printBackground: true,
+            landscape: false,
+            copies: copiesCount,
+            margins: { marginType: 'none' },
+            useDefaultPageSize: true,
+            deviceName: targetPrinter,
+          } as any,
+          (success, failureReason) => {
+            printWindow.close()
+            try { fs.unlinkSync(tempHtml) } catch { }
+            if (success) {
+              resolve({ success: true, data: { jobId } })
+            } else {
+              resolve({ success: false, error: failureReason || 'In thất bại qua Windows Spooler' })
+            }
+          }
+        )
+      })
+    } catch (fallbackErr: any) {
+      return { success: false, error: fallbackErr.message || 'Lỗi in thất bại' }
+    }
+  } finally {
+    isPrintSpoolerActive = false
+  }
 })
 
 ipcMain.handle('print:list-printers', async () => {
-  const res = await fetch(`${AI_SERVICE_URL}/print/printers`)
-  return res.json()
+  try {
+    if (mainWindow && mainWindow.webContents) {
+      const printers = await mainWindow.webContents.getPrintersAsync()
+      if (printers && printers.length > 0) {
+        return {
+          success: true,
+          data: {
+            printers: printers.map((p) => ({
+              name: p.name,
+              isDefault: Boolean((p as any).isDefault || (p.options as any)?.['is-default']),
+            })),
+          },
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('getPrintersAsync error:', err)
+  }
+
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/print/printers`)
+    return res.json()
+  } catch {
+    return {
+      success: true,
+      data: {
+        printers: [
+          { name: 'DNP DS-RX1HS', isDefault: true },
+          { name: 'Canon SELPHY CP1500 (Dye-Sub)', isDefault: false },
+        ],
+      },
+    }
+  }
 })
 
 // Camera Basic Handlers
@@ -337,7 +523,7 @@ async function checkCanonDaemon(): Promise<boolean> {
       const data = (await res.json()) as any
       return Boolean(data.connected)
     }
-  } catch {}
+  } catch { }
   return false
 }
 
@@ -380,13 +566,73 @@ async function ensureCanonDaemon(): Promise<boolean> {
 
 function stopCanonDaemon() {
   try {
-    fetch(`${CANON_DAEMON_URL}/quit`, { signal: AbortSignal.timeout(500) }).catch(() => {})
-  } catch {}
+    fetch(`${CANON_DAEMON_URL}/quit`, { signal: AbortSignal.timeout(500) }).catch(() => { })
+  } catch { }
   if (canonDaemonProc && canonDaemonProc.pid) {
     try {
       exec(`taskkill /F /PID ${canonDaemonProc.pid} 2>nul`, { windowsHide: true })
-    } catch {}
+    } catch { }
     canonDaemonProc = null
+  }
+}
+
+// ─── AI SERVICE DAEMON SUPERVISOR (FASTAPI PORT 8000) ──────────────────────
+const AI_SERVICE_PORT = 8000
+let aiServiceProc: ChildProcess | null = null
+
+async function checkAiService(): Promise<boolean> {
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/health`, { signal: AbortSignal.timeout(500) })
+    return res.ok
+  } catch { }
+  return false
+}
+
+async function ensureAiService(): Promise<boolean> {
+  if (await checkAiService()) return true
+
+  const aiScriptPaths = [
+    path.join(__dirname, '../ai-service/main.py'),
+    path.join(app.getAppPath(), 'ai-service/main.py'),
+    path.join(process.cwd(), 'ai-service/main.py'),
+    'F:/JoyBooth/desktop/ai-service/main.py',
+  ]
+  const aiScript = aiScriptPaths.find((p) => fs.existsSync(p))
+  if (!aiScript) {
+    console.warn('[AI Service] main.py not found in desktop/ai-service')
+    return false
+  }
+
+  const aiDir = path.dirname(aiScript)
+  try {
+    console.log(`[AI Service] Spawning local FastAPI backend: ${aiScript}`)
+    aiServiceProc = spawn('python', ['main.py'], {
+      cwd: aiDir,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    aiServiceProc.unref()
+
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 200))
+      if (await checkAiService()) {
+        console.log(`[AI Service] Connected & listening on port ${AI_SERVICE_PORT}`)
+        return true
+      }
+    }
+  } catch (err: any) {
+    console.warn('[AI Service] Spawn error:', err.message)
+  }
+  return false
+}
+
+function stopAiService() {
+  if (aiServiceProc && aiServiceProc.pid) {
+    try {
+      exec(`taskkill /F /T /PID ${aiServiceProc.pid} 2>nul`, { windowsHide: true })
+    } catch { }
+    aiServiceProc = null
   }
 }
 
@@ -403,7 +649,7 @@ ipcMain.handle('camera:canon-diagnostics', async () => {
       const data = await res.json()
       return { success: true, data }
     }
-  } catch {}
+  } catch { }
   return {
     success: true,
     data: {
@@ -442,6 +688,14 @@ ipcMain.handle(
 
       // 1. Chụp qua Canon Daemon Persistent (FR-01, FR-02, FR-03, FR-05)
       const daemonReady = await ensureCanonDaemon()
+      if (!daemonReady) {
+        console.warn('[Canon Daemon] Canon camera not connected or daemon not ready.')
+        return {
+          success: false,
+          error: 'Máy ảnh Canon chưa kết nối hoặc chưa bật nguồn.',
+        }
+      }
+
       if (daemonReady) {
         try {
           console.log(`[Canon Daemon] Posting capture: ID=${captureId}, Session=${sessionId}, Slot=${slotIndex}`)
@@ -520,7 +774,7 @@ ipcMain.handle(
                   retake_count: 0,
                   latency_ms: result.latencyMs || 0,
                 })
-              } catch {}
+              } catch { }
               return { success: false, error: result.error, idempotent: Boolean(result.idempotent) }
             }
           }
@@ -534,146 +788,146 @@ ipcMain.handle(
       const saveDir = join(savePath, '..')
       if (!fs.existsSync(saveDir)) fs.mkdirSync(saveDir, { recursive: true })
 
-    // 2. Fallback: Trực tiếp gọi native Canon EDSDK 64-bit EXE (KHÔNG truyền -noaf vì EOS R100 cần Halfway AF để nhả màn trập)
-    const canonExePaths = [
-      path.join(__dirname, '../electron/fotolism_canon_capture.exe'),
-      path.join(app.getAppPath(), 'electron/fotolism_canon_capture.exe'),
-      'F:/JoyBooth/desktop/electron/fotolism_canon_capture.exe',
-    ]
-    const canonExe = canonExePaths.find((p) => fs.existsSync(p))
+      // 2. Fallback: Trực tiếp gọi native Canon EDSDK 64-bit EXE (KHÔNG truyền -noaf vì EOS R100 cần Halfway AF để nhả màn trập)
+      const canonExePaths = [
+        path.join(__dirname, '../electron/fotolism_canon_capture.exe'),
+        path.join(app.getAppPath(), 'electron/fotolism_canon_capture.exe'),
+        'F:/JoyBooth/desktop/electron/fotolism_canon_capture.exe',
+      ]
+      const canonExe = canonExePaths.find((p) => fs.existsSync(p))
 
-    const canonScriptPaths = [
-      path.join(__dirname, '../electron/canon_edsdk_capture.ps1'),
-      path.join(app.getAppPath(), 'electron/canon_edsdk_capture.ps1'),
-      'F:/JoyBooth/desktop/electron/canon_edsdk_capture.ps1',
-    ]
-    const canonScript = canonScriptPaths.find((p) => fs.existsSync(p))
+      const canonScriptPaths = [
+        path.join(__dirname, '../electron/canon_edsdk_capture.ps1'),
+        path.join(app.getAppPath(), 'electron/canon_edsdk_capture.ps1'),
+        'F:/JoyBooth/desktop/electron/canon_edsdk_capture.ps1',
+      ]
+      const canonScript = canonScriptPaths.find((p) => fs.existsSync(p))
 
-    if (canonExe || canonScript) {
-      try {
-        const captureCmd = canonExe
-          ? `"${canonExe}" -savePath "${savePath}"`
-          : `powershell -NoProfile -ExecutionPolicy Bypass -File "${canonScript}" -savePath "${savePath}"`
-        const { stdout } = await runAsyncCommand(captureCmd, HARDWARE_TIMEOUT_MS)
+      if (canonExe || canonScript) {
+        try {
+          const captureCmd = canonExe
+            ? `"${canonExe}" -savePath "${savePath}"`
+            : `powershell -NoProfile -ExecutionPolicy Bypass -File "${canonScript}" -savePath "${savePath}"`
+          const { stdout } = await runAsyncCommand(captureCmd, HARDWARE_TIMEOUT_MS)
 
-        if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
+          if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
+            const buffer = fs.readFileSync(savePath)
+            const sizeMb = (buffer.length / (1024 * 1024)).toFixed(1)
+            console.log(`[EDSDK Native 64-bit] Shutter triggered successfully! Saved: ${savePath} (${sizeMb} MB)`)
+            return {
+              success: true,
+              data: {
+                savedPath: savePath,
+                dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+                source: 'Canon EOS R100 (Native 64-bit EDSDK)',
+                resolution: '24MP (Full Resolution)',
+                fileSizeMb: sizeMb,
+              },
+            }
+          }
+
+          // Parse JSON output nếu có thông báo lỗi từ script
+          try {
+            const parsed = JSON.parse(stdout || '{}')
+            if (parsed && parsed.error) {
+              console.warn('[EDSDK Native] Error:', parsed.error)
+              return {
+                success: false,
+                error: parsed.error,
+              }
+            }
+          } catch { }
+
+          return {
+            success: false,
+            error: 'Không thể nhận được ảnh từ Canon EDSDK 64-bit.',
+          }
+        } catch (nativeErr: any) {
+          console.warn('[EDSDK Native] Exception:', nativeErr)
+          return {
+            success: false,
+            error: nativeErr?.message || 'Lỗi ngoại lệ khi gọi Canon EDSDK 64-bit.',
+          }
+        }
+      }
+
+      // 3. Fallback dự phòng: Thử qua digiCamControl CLI (EDSDK 32-bit cũ)
+      const digiCamExe = DIGICAM_INSTALL_PATHS.find((p) => fs.existsSync(p))
+      if (digiCamExe) {
+        // Dùng flag /wait 2000 để digiCamControl có đủ 2 giây chuyển file ảnh 24MP qua USB về đĩa trước khi thoát
+        const cmd = `"${digiCamExe}" /capturenoaf /wait 2000 /filename "${savePath}"`
+        const { stdout, stderr } = await runAsyncCommand(cmd, HARDWARE_TIMEOUT_MS)
+        const cliOutput = stdout || stderr || ''
+
+        // Đợi file ghi hoàn tất vào ổ cứng (chống race condition USB buffer)
+        let fileReady = fs.existsSync(savePath) && fs.statSync(savePath).size > 1000
+        if (!fileReady) {
+          for (let poll = 0; poll < 15; poll++) {
+            await new Promise((r) => setTimeout(r, 100))
+            if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
+              fileReady = true
+              break
+            }
+          }
+        }
+
+        if (fileReady) {
           const buffer = fs.readFileSync(savePath)
           const sizeMb = (buffer.length / (1024 * 1024)).toFixed(1)
-          console.log(`[EDSDK Native 64-bit] Shutter triggered successfully! Saved: ${savePath} (${sizeMb} MB)`)
+          console.log(`[EDSDK] Shutter triggered successfully! Saved: ${savePath} (${sizeMb} MB)`)
           return {
             success: true,
             data: {
               savedPath: savePath,
               dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-              source: 'Canon EOS R100 (Native 64-bit EDSDK)',
+              source: 'Canon EOS R100 (digiCamControl EDSDK)',
               resolution: '24MP (Full Resolution)',
               fileSizeMb: sizeMb,
             },
           }
         }
 
-        // Parse JSON output nếu có thông báo lỗi từ script
-        try {
-          const parsed = JSON.parse(stdout || '{}')
-          if (parsed && parsed.error) {
-            console.warn('[EDSDK Native] Error:', parsed.error)
-            return {
-              success: false,
-              error: parsed.error,
-            }
-          }
-        } catch {}
-
-        return {
-          success: false,
-          error: 'Không thể nhận được ảnh từ Canon EDSDK 64-bit.',
-        }
-      } catch (nativeErr: any) {
-        console.warn('[EDSDK Native] Exception:', nativeErr)
-        return {
-          success: false,
-          error: nativeErr?.message || 'Lỗi ngoại lệ khi gọi Canon EDSDK 64-bit.',
-        }
-      }
-    }
-
-    // 3. Fallback dự phòng: Thử qua digiCamControl CLI (EDSDK 32-bit cũ)
-    const digiCamExe = DIGICAM_INSTALL_PATHS.find((p) => fs.existsSync(p))
-    if (digiCamExe) {
-      // Dùng flag /wait 2000 để digiCamControl có đủ 2 giây chuyển file ảnh 24MP qua USB về đĩa trước khi thoát
-      const cmd = `"${digiCamExe}" /capturenoaf /wait 2000 /filename "${savePath}"`
-      const { stdout, stderr } = await runAsyncCommand(cmd, HARDWARE_TIMEOUT_MS)
-      const cliOutput = stdout || stderr || ''
-
-      // Đợi file ghi hoàn tất vào ổ cứng (chống race condition USB buffer)
-      let fileReady = fs.existsSync(savePath) && fs.statSync(savePath).size > 1000
-      if (!fileReady) {
-        for (let poll = 0; poll < 15; poll++) {
-          await new Promise((r) => setTimeout(r, 100))
-          if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
-            fileReady = true
-            break
+        if (cliOutput.includes('No connected device was found')) {
+          return {
+            success: false,
+            error:
+              'Chưa phát hiện máy ảnh Canon EOS R100 qua cổng USB! Hãy bật máy ảnh (ON), bấm nhẹ nút chụp để đánh thức nếu đang ngủ (sleep) hoặc cắm lại cáp USB.',
           }
         }
-      }
 
-      if (fileReady) {
-        const buffer = fs.readFileSync(savePath)
-        const sizeMb = (buffer.length / (1024 * 1024)).toFixed(1)
-        console.log(`[EDSDK] Shutter triggered successfully! Saved: ${savePath} (${sizeMb} MB)`)
-        return {
-          success: true,
-          data: {
-            savedPath: savePath,
-            dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-            source: 'Canon EOS R100 (digiCamControl EDSDK)',
-            resolution: '24MP (Full Resolution)',
-            fileSizeMb: sizeMb,
-          },
-        }
-      }
-
-      if (cliOutput.includes('No connected device was found')) {
         return {
           success: false,
-          error:
-            'Chưa phát hiện máy ảnh Canon EOS R100 qua cổng USB! Hãy bật máy ảnh (ON), bấm nhẹ nút chụp để đánh thức nếu đang ngủ (sleep) hoặc cắm lại cáp USB.',
+          error: `Không thể chụp ảnh từ máy ảnh Canon: ${cliOutput.trim() || 'Máy ảnh không phản hồi lệnh chụp.'}`,
         }
+      }
+
+      // 3. Thử qua gPhoto2 CLI (nếu có cài trên Windows)
+      try {
+        await runAsyncCommand(`gphoto2 --capture-image-and-download --filename "${savePath}"`, HARDWARE_TIMEOUT_MS)
+        if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
+          const buffer = fs.readFileSync(savePath)
+          return {
+            success: true,
+            data: {
+              savedPath: savePath,
+              dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+              source: 'gphoto2',
+              resolution: 'full-24mp',
+            },
+          }
+        }
+      } catch (_gErr) {
+        /* ignore */
       }
 
       return {
         success: false,
-        error: `Không thể chụp ảnh từ máy ảnh Canon: ${cliOutput.trim() || 'Máy ảnh không phản hồi lệnh chụp.'}`,
+        error: 'EDSDK chưa được cài đặt. Vui lòng cài digiCamControl từ resources/drivers/digiCamControl.',
       }
+    } catch (err: any) {
+      return { success: false, error: err.message }
     }
-
-    // 3. Thử qua gPhoto2 CLI (nếu có cài trên Windows)
-    try {
-      await runAsyncCommand(`gphoto2 --capture-image-and-download --filename "${savePath}"`, HARDWARE_TIMEOUT_MS)
-      if (fs.existsSync(savePath) && fs.statSync(savePath).size > 1000) {
-        const buffer = fs.readFileSync(savePath)
-        return {
-          success: true,
-          data: {
-            savedPath: savePath,
-            dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-            source: 'gphoto2',
-            resolution: 'full-24mp',
-          },
-        }
-      }
-    } catch (_gErr) {
-      /* ignore */
-    }
-
-    return {
-      success: false,
-      error: 'EDSDK chưa được cài đặt. Vui lòng cài digiCamControl từ resources/drivers/digiCamControl.',
-    }
-  } catch (err: any) {
-    return { success: false, error: err.message }
-  }
-})
+  })
 
 // EDSDK: Lấy 1 frame Live View chất lượng cao
 ipcMain.handle('camera:edsdk-liveview-frame', async () => {
@@ -746,7 +1000,7 @@ ipcMain.handle('overhead:toggle', (_event, payload: { enabled: boolean; displayI
     if (payload.enabled) {
       createOverheadWindow(payload.displayId)
     } else if (overheadWindow && !overheadWindow.isDestroyed()) {
-      try { overheadWindow.close() } catch {}
+      try { overheadWindow.close() } catch { }
       overheadWindow = null
     }
     return { success: true, data: { active: Boolean(overheadWindow && !overheadWindow.isDestroyed()) } }
@@ -772,6 +1026,74 @@ ipcMain.handle('config:set', async (_event, payload: { key: string; value: unkno
     body: JSON.stringify(payload),
   })
   return res.json()
+})
+
+// ─── Device Provisioning & Configuration Handlers ───────────────────────────
+const DEVICE_CONFIG_FILENAME = 'device_config.json'
+
+function getDeviceConfigPath(): string {
+  const fotolismDir = getFotolismDir()
+  if (fs.existsSync(fotolismDir)) {
+    return join(fotolismDir, DEVICE_CONFIG_FILENAME)
+  }
+  return join(app.getPath('userData'), DEVICE_CONFIG_FILENAME)
+}
+
+ipcMain.handle('device:get-config', async () => {
+  try {
+    const primaryPath = join(getFotolismDir(), DEVICE_CONFIG_FILENAME)
+    const fallbackPath = join(app.getPath('userData'), DEVICE_CONFIG_FILENAME)
+
+    const targetPath = fs.existsSync(primaryPath)
+      ? primaryPath
+      : fs.existsSync(fallbackPath)
+        ? fallbackPath
+        : null
+
+    if (targetPath) {
+      const content = fs.readFileSync(targetPath, 'utf-8')
+      const parsed = JSON.parse(content)
+      return { success: true, data: parsed }
+    }
+    return { success: true, data: null }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('device:save-config', async (_event, config) => {
+  try {
+    const dir = getFotolismDir()
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    const primaryPath = join(dir, DEVICE_CONFIG_FILENAME)
+    fs.writeFileSync(primaryPath, JSON.stringify(config, null, 2), 'utf-8')
+
+    try {
+      const userDataDir = app.getPath('userData')
+      if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true })
+      fs.writeFileSync(join(userDataDir, DEVICE_CONFIG_FILENAME), JSON.stringify(config, null, 2), 'utf-8')
+    } catch { }
+
+    return { success: true, data: config }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('device:reset-config', async () => {
+  try {
+    const p1 = join(getFotolismDir(), DEVICE_CONFIG_FILENAME)
+    if (fs.existsSync(p1)) fs.unlinkSync(p1)
+
+    try {
+      const p2 = join(app.getPath('userData'), DEVICE_CONFIG_FILENAME)
+      if (fs.existsSync(p2)) fs.unlinkSync(p2)
+    } catch { }
+
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
 })
 
 // ─── Storage Handlers (Fotolism_image folder) ─────────────────────────────────
@@ -847,25 +1169,81 @@ ipcMain.handle(
       let cloudFolderUrl = `https://drive.google.com/drive/folders/${payload.parentFolderId}`
       let cloudFolderId = payload.parentFolderId
 
-      if (payload.webhookUrl && payload.webhookUrl.trim().startsWith('http')) {
+      const effectiveWebhook = (payload.webhookUrl && payload.webhookUrl.trim().startsWith('http'))
+        ? payload.webhookUrl.trim()
+        : 'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
+
+      if (effectiveWebhook) {
         try {
-          const res = await fetch(payload.webhookUrl.trim(), {
+          const filesForWebhook = payload.files.map((f) => {
+            let dataUrl = f.dataUrl
+            if (!dataUrl.startsWith('data:')) {
+              try {
+                const mimeType = f.name.endsWith('.webm') ? 'video/webm' : 'image/jpeg'
+                if (fs.existsSync(dataUrl)) {
+                  const buf = fs.readFileSync(dataUrl)
+                  dataUrl = `data:${mimeType};base64,${buf.toString('base64')}`
+                } else {
+                  const targetFilePath = join(localSessionDir, f.name)
+                  if (fs.existsSync(targetFilePath)) {
+                    const buf = fs.readFileSync(targetFilePath)
+                    dataUrl = `data:${mimeType};base64,${buf.toString('base64')}`
+                  }
+                }
+              } catch (readErr) {
+                console.warn('Failed to read file for webhook base64:', f.name, readErr)
+              }
+            }
+            return { name: f.name, dataUrl }
+          })
+
+          const validFilesForWebhook = filesForWebhook.filter(
+            (f) => f.dataUrl && f.dataUrl.startsWith('data:')
+          )
+
+          console.log(
+            `[Google Drive Webhook] Uploading ${validFilesForWebhook.length}/${filesForWebhook.length} valid files to Webhook: ${effectiveWebhook}`
+          )
+
+          const res = await fetch(effectiveWebhook, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
               action: 'create_session_folder',
               parentFolderId: payload.parentFolderId,
               folderName: payload.subfolderName,
-              files: payload.files.map((f) => ({ name: f.name, dataUrl: f.dataUrl })),
+              files: validFilesForWebhook,
             }),
+            redirect: 'follow',
           })
-          const resJson: any = await res.json()
-          if (resJson && resJson.success && resJson.folderUrl) {
-            cloudFolderUrl = resJson.folderUrl
-            cloudFolderId = resJson.folderId || cloudFolderId
+
+          if (!res.ok) {
+            const errText = await res.text()
+            console.error(`[Google Drive Webhook] Server returned HTTP ${res.status}:`, errText.slice(0, 200))
+            return {
+              success: false,
+              error: `Webhook phản hồi lỗi HTTP ${res.status}. Vui lòng kiểm tra quyền truy cập trên Google Apps Script.`,
+            }
           }
+
+          const resJson: any = await res.json()
+          if (!resJson || !resJson.success || !resJson.folderUrl) {
+            console.error('[Google Drive Webhook] Invalid response from script:', resJson)
+            return {
+              success: false,
+              error: resJson?.error || 'Không nhận được đường link thư mục từ Google Drive Webhook.',
+            }
+          }
+
+          cloudFolderUrl = resJson.folderUrl
+          cloudFolderId = resJson.folderId || cloudFolderId
+          console.log(`[Google Drive Webhook] Upload SUCCESS! Cloud Folder URL: ${cloudFolderUrl}`)
         } catch (netErr: any) {
-          console.warn('Google Drive Webhook upload error:', netErr.message)
+          console.error('[Google Drive Webhook] Network / Upload error:', netErr.message)
+          return {
+            success: false,
+            error: `Lỗi kết nối Webhook: ${netErr.message}`,
+          }
         }
       }
 
@@ -886,6 +1264,63 @@ ipcMain.handle(
   }
 )
 
+ipcMain.handle('storage:test-webhook', async (_event, webhookUrl: string) => {
+  try {
+    if (!webhookUrl || !webhookUrl.trim().startsWith('http')) {
+      return { success: false, error: 'URL Webhook không hợp lệ.' }
+    }
+    const res = await fetch(webhookUrl.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'test_connection',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        success: false,
+        statusCode: res.status,
+        error: `Lỗi HTTP ${res.status}: Webhook đang bị chặn quyền truy cập. Trong Google Apps Script > Quản lý bản triển khai > Chỉnh sửa > Hãy chọn 'Người có quyền truy cập: Bất kỳ ai' (Anyone).`,
+      }
+    }
+
+    const text = await res.text()
+    let json: any = null
+    try {
+      json = JSON.parse(text)
+    } catch { }
+
+    if (json && json.success) {
+      return {
+        success: true,
+        statusCode: res.status,
+        message: 'Kết nối Webhook thành công! Google Drive đã sẵn sàng nhận ảnh.',
+      }
+    }
+
+    if (res.ok) {
+      return {
+        success: true,
+        statusCode: res.status,
+        message: 'Webhook phản hồi 200 OK. Đã xác nhận quyền "Bất kỳ ai" thành công!',
+      }
+    }
+
+    return {
+      success: false,
+      statusCode: res.status,
+      error: `Webhook phản hồi mã lỗi HTTP ${res.status}. Vui lòng kiểm tra mã Apps Script.`,
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Lỗi kết nối Webhook: ${err.message}`,
+    }
+  }
+})
+
 // ─── App Lifecycle & Single Instance Lock ──────────────────────────────────
 const gotTheLock = app.requestSingleInstanceLock()
 
@@ -901,8 +1336,9 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     createWindow()
-    // Khởi động Canon Daemon Persistent trong nền ngay khi mở ứng dụng
+    // Khởi động Canon Daemon Persistent và AI Service trong nền ngay khi mở ứng dụng
     ensureCanonDaemon().catch((err) => console.warn('[Canon Daemon] Init failed:', err))
+    ensureAiService().catch((err) => console.warn('[AI Service] Init failed:', err))
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -911,10 +1347,12 @@ if (!gotTheLock) {
 
   app.on('will-quit', () => {
     stopCanonDaemon()
+    stopAiService()
   })
 
   app.on('window-all-closed', () => {
     stopCanonDaemon()
+    stopAiService()
     if (process.platform !== 'darwin') app.quit()
   })
 }
