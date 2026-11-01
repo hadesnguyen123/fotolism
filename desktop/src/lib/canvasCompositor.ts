@@ -150,23 +150,82 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
     ctx.restore()
   }
 
-  // 5. Vẽ Footer Branding & Ngày tháng
-  ctx.save()
-  ctx.fillStyle = opts.theme.textColor || '#2D2426'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
+  // 5. Vẽ Lớp Khung Đồ Họa PNG Trong Suốt (Frame Overlay) nếu có
+  if (opts.theme.overlayUrl) {
+    try {
+      const overlayImg = await loadImage(opts.theme.overlayUrl)
+      ctx.drawImage(overlayImg, 0, 0, width, height)
+    } catch (err) {
+      console.warn('Could not load frame overlay image:', err)
+    }
+  }
 
-  // Tiêu đề sự kiện (Font Cute bo tròn)
-  ctx.font = '800 28px "Baloo 2", "Quicksand", sans-serif'
-  ctx.letterSpacing = '1px'
-  ctx.fillText((opts.eventName || DEFAULT_EVENT_NAME).toUpperCase(), width / 2, height - 85)
+  // 6. Vẽ Footer Branding & Ngày tháng (nếu không dùng khung ẩn footer)
+  if (!opts.theme.hideFooter) {
+    ctx.save()
+    ctx.fillStyle = opts.theme.textColor || '#2D2426'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
 
-  // Ngày tháng & Bộ lọc
-  ctx.font = '700 16px "Quicksand", sans-serif'
-  ctx.letterSpacing = '0.5px'
-  ctx.globalAlpha = 0.85
-  ctx.fillText(`${opts.eventDate}  •  ${opts.filter.name}`, width / 2, height - 48)
-  ctx.restore()
+    // Tiêu đề sự kiện (Font Cute bo tròn)
+    ctx.font = '800 28px "Baloo 2", "Quicksand", sans-serif'
+    ctx.letterSpacing = '1px'
+    ctx.fillText(opts.eventName || DEFAULT_EVENT_NAME, width / 2, height - 85)
+
+    // Ngày tháng & Bộ lọc
+    ctx.font = '700 16px "Quicksand", sans-serif'
+    ctx.letterSpacing = '0.5px'
+    ctx.globalAlpha = 0.85
+    ctx.fillText(`${opts.eventDate}  •  ${opts.filter.name}`, width / 2, height - 48)
+    ctx.restore()
+  }
 
   return canvas.toDataURL('image/jpeg', 0.96)
+}
+
+/**
+ * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6:
+ * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau đúng chuẩn Photobooth Template.
+ * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200): Giữ nguyên.
+ */
+export async function preparePrintImageForDNP(sourceDataUrl: string): Promise<string> {
+  const img = await loadImage(sourceDataUrl)
+  const srcW = img.naturalWidth || img.width
+  const srcH = img.naturalHeight || img.height
+
+  // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, ví dụ 600x1800)
+  // Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 bản in khổ 4x6 (1200 x 1800 px)
+  if (srcW < srcH && srcH / srcW >= 2.5) {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1200
+    canvas.height = 1800
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return sourceDataUrl
+
+    // Nền trắng
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, 1200, 1800)
+
+    // Dải 1: Bên trái (x: 0 -> 600 px)
+    ctx.drawImage(img, 0, 0, 600, 1800)
+
+    // Dải 2: Bên phải (x: 600 -> 1200 px)
+    ctx.drawImage(img, 600, 0, 600, 1800)
+
+    // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
+    ctx.save()
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
+    ctx.lineWidth = 1
+    ctx.setLineDash([8, 8])
+    ctx.beginPath()
+    ctx.moveTo(600, 0)
+    ctx.lineTo(600, 1800)
+    ctx.stroke()
+    ctx.restore()
+
+    return canvas.toDataURL('image/jpeg', 0.98)
+  }
+
+  // Trường hợp 2: Ảnh đã là khổ 4x6 (1200x1800 hoặc 1800x1200)
+  return sourceDataUrl
 }

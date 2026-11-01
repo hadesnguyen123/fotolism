@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useAppStore, COLOR_FILTERS, BEAUTY_PRESETS, type CapturedPhoto } from '../store/appStore'
+import { useAppStore, COLOR_FILTERS, type CapturedPhoto } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
 import {
   FILE_PREFIX_SHOT,
   FILE_PREFIX_SELF,
   FILE_PREFIX_TIMELAPSE,
   SESSION_FOLDER_PREFIX,
+  DEFAULT_GDRIVE_FOLDER_ID,
+  DEFAULT_GDRIVE_WEBHOOK_URL,
+  DEFAULT_SELFBOOTH_DURATION_SECONDS,
 } from '../lib/constants'
 import { BeautyCameraView, type BeautyCameraHandle } from '../components/BeautyCameraView'
-import { Sparkles, Lightbulb, Camera, Settings, X, ArrowRight, ArrowLeft, Palette, FlipHorizontal } from 'lucide-react'
+import { beautyEngine, type BeautyConfigSnapshot } from '../services/beautyEngine'
+import { Camera, ArrowRight, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
@@ -45,37 +49,28 @@ export default function CaptureScreen() {
     selectedFilter,
     selectFilter,
     selectedBeautyPreset,
-    applyBeautyPreset,
     ringLightEnabled,
-    setRingLightEnabled,
     ringLightLevel,
-    setRingLightLevel,
     mirrorCamera,
-    setMirrorCamera,
-    availableCameras,
-    selectedCameraId,
     setCameras,
     selectCamera,
     eventConfig,
     setTimelapseUrl,
     setGdriveUrl,
+    setIsSyncingDrive,
+    setDriveSyncDone,
+    setDriveSyncError,
+    setCloudFolderUrl,
     slimFace,
-    setSlimFace,
+    vLine,
+    bigEyes,
     whiteningTone,
-    setWhiteningTone,
     brightnessAdjust,
     contrastAdjust,
     saturationAdjust,
     skinSmoothing,
     rosyTone,
     glowClarity,
-    setBrightnessAdjust,
-    setContrastAdjust,
-    setSaturationAdjust,
-    setSkinSmoothing,
-    setRosyTone,
-    setGlowClarity,
-    resetAdjustments,
     getBeautyFilterCss,
   } = useAppStore()
 
@@ -87,14 +82,14 @@ export default function CaptureScreen() {
   const recordedChunksRef = useRef<Blob[]>([])
   const timelapseCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const timelapseTimerRef = useRef<number | null>(null)
+  const timelapsePromiseRef = useRef<Promise<string | null> | null>(null)
   const [isTimelapseRecording, setIsTimelapseRecording] = useState<boolean>(false)
 
   const totalShots = selectedLayout.photosCount || 4
   const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
-  const selfboothDuration = eventConfig.selfboothDurationSeconds || 60
 
   const [hasCamera, setHasCamera] = useState<boolean>(false)
-  const [activeFlyout, setActiveFlyout] = useState<'filter' | 'beauty' | 'lighting' | null>(null)
+  const [activeFlyout, setActiveFlyout] = useState<'filter' | null>(null)
 
   // ── Trạng thái chung khi chụp ──
   const [isSessionActive, setIsSessionActive] = useState<boolean>(false)
@@ -128,14 +123,11 @@ export default function CaptureScreen() {
     }).catch(console.warn)
   }, [sessionId, totalShots, selectedLayout?.id, selectedCopies])
 
-  // ── Chế độ SELFBOOTH (Chụp tự do theo thời gian & Chọn ảnh vào khung) ──
+  // ── Chế độ SELFBOOTH (Chụp tự do không giới hạn & Bấm remote 2s) ──
   const [isSelfboothRunning, setIsSelfboothRunning] = useState<boolean>(false)
-  const [selfboothTimeLeft, setSelfboothTimeLeft] = useState<number>(selfboothDuration)
   const [selfboothLibrary, setSelfboothLibrary] = useState<CapturedPhoto[]>([])
-  const [isPhotoPickerOpen, setIsPhotoPickerOpen] = useState<boolean>(false)
-  const [pickedSlots, setPickedSlots] = useState<(CapturedPhoto | null)[]>(Array(totalShots).fill(null))
-  const [activeSlotToPick, setActiveSlotToPick] = useState<number>(0)
   const [isCanonDaemonActive, setIsCanonDaemonActive] = useState<boolean>(false)
+  const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false)
 
   // Khởi động Camera thiết bị
   const startCamera = useCallback(async (deviceId?: string) => {
@@ -299,22 +291,12 @@ export default function CaptureScreen() {
     }
   }, [setCameras, selectCamera])
 
-  // Chuyển đổi nhanh 1-chạm giữa các camera khả dụng (Laptop Camera <-> Canon EOS)
-  const handleCycleCamera = useCallback(() => {
-    if (availableCameras.length <= 1) return
-    const currentIndex = availableCameras.findIndex((c) => c.id === selectedCameraId)
-    const nextIndex = (currentIndex + 1) % availableCameras.length
-    const nextCam = availableCameras[nextIndex]
-    selectCamera(nextCam.id)
-    startCamera(nextCam.id)
-  }, [availableCameras, selectedCameraId, selectCamera, startCamera])
-
   useEffect(() => {
-    // Reset bộ lọc về Tự nhiên khi bắt đầu chụp để ảnh gốc luôn sạch
-    selectFilter(COLOR_FILTERS[0])
-    // Gương mặc định là lật theo chuẩn Photobooth
-    setMirrorCamera(true)
-  }, [selectFilter, setMirrorCamera])
+    // Chỉ reset bộ lọc khi ở chế độ Photobooth, Selfbooth đã chọn màu ở bước trước
+    if (!isSelfboothMode) {
+      selectFilter(COLOR_FILTERS[0])
+    }
+  }, [isSelfboothMode, selectFilter])
 
   useEffect(() => {
     const initialId = useAppStore.getState().selectedCameraId
@@ -354,23 +336,74 @@ export default function CaptureScreen() {
 
   const finishSelfboothRef = useRef<() => void>(() => { })
 
-  // Đếm ngược thời gian phiên Selfbooth
+  // Tự động kích hoạt phiên Selfbooth khi vào màn hình (không giới hạn thời gian)
   useEffect(() => {
-    if (!isSelfboothMode || !isSelfboothRunning || isPhotoPickerOpen) return
+    if (isSelfboothMode) {
+      setIsSelfboothRunning(true)
+      setIsSessionActive(true)
+      startTimelapse()
+    }
+  }, [isSelfboothMode])
 
+  // Tự động kích hoạt ghi hình Timelapse cho cả Photobooth ngay khi camera sẵn sàng
+  useEffect(() => {
+    if (hasCamera && eventConfig.timelapseEnabled) {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        startTimelapse()
+      }
+    }
+  }, [hasCamera, eventConfig.timelapseEnabled])
+
+  // Đồng hồ đếm ngược thời gian chụp Selfbooth (05:00 -> 00:00). Hết giờ tự động out ra review
+  const totalDuration = eventConfig.selfboothDurationSeconds || DEFAULT_SELFBOOTH_DURATION_SECONDS
+  const [selfboothSecondsLeft, setSelfboothSecondsLeft] = useState<number>(totalDuration)
+  const isAutoFinishingRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    if (!isSelfboothMode || !isSelfboothRunning) return
     const timer = setInterval(() => {
-      setSelfboothTimeLeft((prev) => {
+      setSelfboothSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          finishSelfboothRef.current()
+          if (!isAutoFinishingRef.current) {
+            isAutoFinishingRef.current = true
+            finishSelfboothRef.current()
+          }
           return 0
         }
         return prev - 1
       })
     }, 1000)
-
     return () => clearInterval(timer)
-  }, [isSelfboothMode, isSelfboothRunning, isPhotoPickerOpen])
+  }, [isSelfboothMode, isSelfboothRunning])
+
+  // Định dạng thời gian trôi qua dạng mm:ss
+  function formatElapsedTime(sec: number): string {
+    const mins = Math.floor(sec / 60)
+    const secs = sec % 60
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+
+  // Lắng nghe phím Remote (Bluetooth / USB Clicker) trong chế độ Selfbooth
+  useEffect(() => {
+    if (!isSelfboothMode) return
+
+    const handleRemoteKeyDown = (e: KeyboardEvent) => {
+      // Bỏ qua nếu đang gõ text vào input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (isCapturingShot) return
+
+      // Remote clickers phổ biến gửi: Space, Enter, PageDown, PageUp, ArrowDown, ArrowRight, 'b', 'B', 'f', 'F'
+      const triggerKeys = [' ', 'Space', 'Enter', 'PageDown', 'PageUp', 'ArrowRight', 'ArrowDown', 'b', 'B', 'f', 'F']
+      if (triggerKeys.includes(e.key) || triggerKeys.includes(e.code)) {
+        e.preventDefault()
+        handleTakeSelfboothShot()
+      }
+    }
+
+    window.addEventListener('keydown', handleRemoteKeyDown)
+    return () => window.removeEventListener('keydown', handleRemoteKeyDown)
+  }, [isSelfboothMode, isCapturingShot, isSelfboothRunning, handleTakeSelfboothShot])
 
   // Chụp 1 khung hình từ video sang DataURL với bảo đảm không bao giờ trả về ảnh đen
   function grabVideoFrame(): string {
@@ -403,16 +436,6 @@ export default function CaptureScreen() {
           ctx.scale(-1, 1)
         }
 
-        if (slimFace > 0) {
-          const scaleXFactor = 1 - (slimFace / 100) * 0.055
-          const scaleYFactor = 1 + (slimFace / 100) * 0.015
-          const cx = w / 2
-          const cy = h / 2
-          ctx.translate(cx, cy)
-          ctx.scale(scaleXFactor, scaleYFactor)
-          ctx.translate(-cx, -cy)
-        }
-
         ctx.drawImage(video, 0, 0, w, h)
         const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.98)
         if (fallbackDataUrl && fallbackDataUrl.length > 1000) {
@@ -420,10 +443,37 @@ export default function CaptureScreen() {
         }
       }
     }
+
+    // 3. Fallback an toàn tuyệt đối: Sinh ảnh nền chuẩn 1920x1080 chất lượng cao để đảm bảo luôn có ảnh tải lên Drive
+    try {
+      const fallbackCanvas = document.createElement('canvas')
+      fallbackCanvas.width = 1920
+      fallbackCanvas.height = 1080
+      const fbCtx = fallbackCanvas.getContext('2d')
+      if (fbCtx) {
+        const grad = fbCtx.createLinearGradient(0, 0, 1920, 1080)
+        grad.addColorStop(0, '#fdfaf8')
+        grad.addColorStop(1, '#f7ebe6')
+        fbCtx.fillStyle = grad
+        fbCtx.fillRect(0, 0, 1920, 1080)
+
+        fbCtx.fillStyle = '#502a1d'
+        fbCtx.font = 'bold 54px sans-serif'
+        fbCtx.textAlign = 'center'
+        fbCtx.fillText('fotolism photobooth', 960, 520)
+
+        fbCtx.fillStyle = '#8c7368'
+        fbCtx.font = '28px sans-serif'
+        fbCtx.fillText(new Date().toLocaleString('vi-VN'), 960, 590)
+
+        return fallbackCanvas.toDataURL('image/jpeg', 0.95)
+      }
+    } catch { }
+
     return ''
   }
 
-  // Khởi động quay Timelapse
+  // Khởi động quay Timelapse hậu trường trong nền (Universal Beauty Canvas)
   function startTimelapse() {
     if (!eventConfig.timelapseEnabled) return
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') return
@@ -431,48 +481,45 @@ export default function CaptureScreen() {
     try {
       recordedChunksRef.current = []
 
-      // 1. Thu thập luồng MediaStream để ghi hình:
-      // - Nếu có stream webcam trực tiếp (currentStreamRef.current), dùng trực tiếp
-      // - Nếu đang dùng Canon Daemon MJPEG hoặc không có stream trực tiếp: dùng canvas.captureStream(20)
+      // 1. Khởi tạo Universal Recording Canvas chuẩn tỉ lệ 16:9 (960x540)
+      // Tối ưu kích thước video gọn nhẹ (~1.5-2.5MB), sắc nét, tải lên Drive cực nhanh
+      if (!timelapseCanvasRef.current) {
+        const c = document.createElement('canvas')
+        c.width = 960
+        c.height = 540
+        timelapseCanvasRef.current = c
+      }
+      const canvas = timelapseCanvasRef.current
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      if (timelapseTimerRef.current) {
+        clearInterval(timelapseTimerRef.current)
+      }
+
+      // 2. Chụp khung hình định kỳ (15 FPS) từ WebGL Beauty Camera / Video
+      // Đảm bảo video timelapse thu lại đúng visual người dùng thấy (có beauty, lật gương)
+      timelapseTimerRef.current = window.setInterval(() => {
+        const glCanvas = beautyCameraRef.current?.getCanvasElement()
+        const img = beautyCameraRef.current?.getImageElement()
+        const video = beautyCameraRef.current?.getVideoElement() || videoRef.current
+
+        try {
+          if (glCanvas && glCanvas.width > 0) {
+            ctx.drawImage(glCanvas, 0, 0, canvas.width, canvas.height)
+          } else if (img && img.naturalWidth > 0) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          } else if (video && video.videoWidth > 0) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          }
+        } catch { }
+      }, 66)
+
       let streamToRecord: MediaStream | null = null
-
-      if (currentStreamRef.current && currentStreamRef.current.active && currentStreamRef.current.getVideoTracks().length > 0) {
+      if (typeof canvas.captureStream === 'function') {
+        streamToRecord = canvas.captureStream(15)
+      } else if (currentStreamRef.current && currentStreamRef.current.active) {
         streamToRecord = currentStreamRef.current
-      } else {
-        // Universal Canvas Stream: dùng cho Canon EDSDK MJPEG hoặc khi không có MediaStream trực tiếp
-        if (!timelapseCanvasRef.current) {
-          const c = document.createElement('canvas')
-          c.width = 960
-          c.height = 540
-          timelapseCanvasRef.current = c
-        }
-        const canvas = timelapseCanvasRef.current
-        const ctx = canvas.getContext('2d')
-
-        if (ctx) {
-          if (timelapseTimerRef.current) {
-            clearInterval(timelapseTimerRef.current)
-          }
-
-          // Vẽ khung hình định kỳ vào recording canvas ở tốc độ 20 FPS
-          timelapseTimerRef.current = window.setInterval(() => {
-            const img = beautyCameraRef.current?.getImageElement()
-            const glCanvas = beautyCameraRef.current?.getCanvasElement()
-            const video = beautyCameraRef.current?.getVideoElement() || videoRef.current
-
-            if (img && img.naturalWidth > 0) {
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-            } else if (glCanvas && glCanvas.width > 0) {
-              ctx.drawImage(glCanvas, 0, 0, canvas.width, canvas.height)
-            } else if (video && video.videoWidth > 0) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-            }
-          }, 50)
-
-          if (typeof canvas.captureStream === 'function') {
-            streamToRecord = canvas.captureStream(20)
-          }
-        }
       }
 
       if (!streamToRecord) {
@@ -483,60 +530,95 @@ export default function CaptureScreen() {
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
         ? 'video/webm;codecs=vp8'
         : 'video/webm'
-      const recorder = new MediaRecorder(streamToRecord, { mimeType })
+      const recorder = new MediaRecorder(streamToRecord, {
+        mimeType,
+        videoBitsPerSecond: 1_200_000,
+      })
+
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data)
         }
       }
-      recorder.start(250)
+
+      recorder.start(500)
       mediaRecorderRef.current = recorder
       setIsTimelapseRecording(true)
-      console.log('🎬 [Timelapse] Đã bắt đầu ghi hình video hậu trường!')
+      console.log('🎬 [Timelapse] Đã bắt đầu ghi hình video hậu trường (15 FPS, 960x540)!')
     } catch (err) {
       console.warn('Failed to start MediaRecorder for timelapse:', err)
     }
   }
 
-  // Dừng quay Timelapse
-  async function stopTimelapse() {
+  // Dừng quay Timelapse và xử lý ngầm video (non-blocking capture flow)
+  async function stopTimelapse(): Promise<string | null> {
     if (timelapseTimerRef.current) {
       clearInterval(timelapseTimerRef.current)
       timelapseTimerRef.current = null
     }
 
+    if (timelapsePromiseRef.current) {
+      return timelapsePromiseRef.current
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      await new Promise<void>((resolve) => {
-        if (!mediaRecorderRef.current) return resolve()
+      const promise = new Promise<string | null>((resolve) => {
+        if (!mediaRecorderRef.current) {
+          setIsTimelapseRecording(false)
+          return resolve(null)
+        }
         mediaRecorderRef.current.onstop = () => {
           setIsTimelapseRecording(false)
           try {
             if (recordedChunksRef.current.length > 0) {
               const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
               const videoUrl = URL.createObjectURL(blob)
-              setTimelapseUrl(videoUrl)
               console.log(`🎬 [Timelapse] Hoàn tất ghi video! Kích thước: ${(blob.size / 1024).toFixed(1)} KB`)
 
+              // Chuyển đổi ngầm sang Base64 dataUrl để lưu cục bộ và đẩy lên Google Drive
               const reader = new FileReader()
               reader.onloadend = () => {
                 const dataUrl = reader.result as string
                 if (dataUrl && dataUrl.startsWith('data:')) {
+                  // Cập nhật cả link blob xem trực tiếp và link dataUrl base64 để tải lên Drive
+                  setTimelapseUrl(videoUrl, dataUrl)
                   const fileName = `${FILE_PREFIX_TIMELAPSE}_${Date.now()}.webm`
                   const api = isBrowser ? mockApi : fotolismApi
                   api.storage.savePhoto(dataUrl, fileName).catch((err) => console.warn('Save timelapse error:', err))
+                  resolve(dataUrl)
+                } else {
+                  setTimelapseUrl(videoUrl, null)
+                  resolve(null)
                 }
               }
+              reader.onerror = () => {
+                setTimelapseUrl(videoUrl, null)
+                resolve(null)
+              }
               reader.readAsDataURL(blob)
+              return
             }
           } catch (err) {
             console.warn('Error creating timelapse blob:', err)
           }
-          resolve()
+          resolve(null)
         }
-        mediaRecorderRef.current.stop()
+
+        try {
+          mediaRecorderRef.current.stop()
+        } catch {
+          setIsTimelapseRecording(false)
+          resolve(null)
+        }
+      }).finally(() => {
+        timelapsePromiseRef.current = null
       })
+
+      timelapsePromiseRef.current = promise
+      return promise
     } else {
       setIsTimelapseRecording(false)
+      return null
     }
   }
 
@@ -562,8 +644,8 @@ export default function CaptureScreen() {
     setIsCapturingShot(true)
 
     try {
-      // Khởi động timelapse nếu là bức ảnh đầu tiên
-      if (filledSlotsCount === 0) {
+      // Khởi động timelapse nếu chưa ghi hoặc cần tiếp tục ghi hình
+      if (eventConfig.timelapseEnabled && !isTimelapseRecording) {
         startTimelapse()
       }
 
@@ -612,51 +694,85 @@ export default function CaptureScreen() {
       setRetakeSlotIndex(null)
 
       // 4. Kích hoạt hiệu ứng bay vào ô thumbnail ngay lập tức (Tổng delay < 0.4s!)
-      setSnapshotFlyer({ photoUrl: photoPath, slotIndex: targetIndex, isEdsdk: false })
-      setJustCapturedSlot(targetIndex)
+      // 5. Khóa Beauty Snapshot tại thời điểm chụp để bảo đảm 100% WYSIWYG (Preview thế nào, ảnh chụp thế ấy)
+      const beautySnapshot: BeautyConfigSnapshot = {
+        slimFace,
+        vLine,
+        bigEyes,
+        skinSmoothing,
+        whiteningTone,
+        rosyTone,
+        glowClarity,
+        brightnessAdjust,
+        contrastAdjust,
+        saturationAdjust,
+        mirror: mirrorCamera,
+        presetId: selectedBeautyPreset,
+        timestamp: Date.now(),
+      }
 
-      // 5. Lưu ảnh vào đĩa trong nền bất đồng bộ (không chặn giao diện người dùng)
+      // Lưu ảnh preview/fallback vào đĩa trong nền bất đồng bộ (không chặn giao diện người dùng)
       if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
         api.storage.savePhoto(photoDataUrl, fileName).catch((err) => console.warn('Save photo error:', err))
       }
 
       // 6. PHƯƠNG ÁN 2: KÍCH HOẠT MÁY ẢNH CANON EOS THẬT (24MP FULL EXIF) - FOTOLISM 2.2 IDEMPOTENCY
-      const captureId = `cap_${sessionId}_slot${targetIndex}_${Date.now()}`
-      await api.camera.edsdkCapture({
-        captureId,
-        sessionId,
-        slotIndex: targetIndex,
-        savePath: canonSavePath,
-        shotIndex: targetIndex,
-      })
-        .then((res) => {
-          if (res && res.success && res.data && res.data.dataUrl) {
-            const canonData = res.data
-            console.log(`[Method 2] Canon EOS 24MP captured: ${canonData.savedPath}`)
-            setSlots((prev) => {
-              const next = [...prev]
-              if (next[targetIndex]) {
-                next[targetIndex] = {
-                  ...next[targetIndex]!,
-                  rawPath: canonData.savedPath,
-                  enhancedPath: canonData.dataUrl,
-                  compositedPath: canonData.dataUrl,
-                }
-              }
-              return next
-            })
-            setSnapshotFlyer((prev) =>
-              prev && prev.slotIndex === targetIndex ? { ...prev, photoUrl: canonData.dataUrl, isEdsdk: true } : prev
-            )
-          }
+      // CHỈ kích hoạt máy ảnh Canon khi Canon Daemon đang active (tránh treo giao diện khi dùng webcam)
+      // Chạy hoàn toàn bất đồng bộ trong nền (Non-blocking), không cản trở luồng chụp và chuyển ô
+      if (isCanonDaemonActive) {
+        const captureId = `cap_${sessionId}_slot${targetIndex}_${Date.now()}`
+        api.camera.edsdkCapture({
+          captureId,
+          sessionId,
+          slotIndex: targetIndex,
+          savePath: canonSavePath,
+          shotIndex: targetIndex,
         })
-        .catch((err) => {
-          console.warn('[Method 2] Canon hardware capture fallback:', err)
-        })
-        .finally(() => {
-          setTimeout(() => setCameraFreezeFrame(null), 300)
-        })
+          .then(async (res) => {
+            if (res && res.success && res.data && res.data.dataUrl) {
+              const canonData = res.data
+              console.log(`[Method 2] Canon EOS 24MP captured: ${canonData.savedPath}`)
 
+              // ── AI BEAUTY ENGINE: HIGH-QUALITY MODE (WYSIWYG GUARANTEE) ──
+              // Xử lý ảnh chụp chất lượng cao bằng cùng quy tắc biến dạng, làm mịn và lật gương như Preview
+              let finalPhotoUrl = canonData.dataUrl
+              try {
+                const hqResult = await beautyEngine.processHighQualityPhoto(canonData.dataUrl, beautySnapshot)
+                if (hqResult && hqResult.success && hqResult.dataUrl) {
+                  finalPhotoUrl = hqResult.dataUrl
+                  const beautyFileName = `beauty_${fileName}`
+                  api.storage.savePhoto(finalPhotoUrl, beautyFileName).catch((err) =>
+                    console.warn('Save beauty photo error:', err)
+                  )
+                }
+              } catch (hqErr) {
+                console.warn('[BeautyEngine HQ] Processing fallback:', hqErr)
+              }
+
+              setSlots((prev) => {
+                const next = [...prev]
+                if (next[targetIndex]) {
+                  next[targetIndex] = {
+                    ...next[targetIndex]!,
+                    rawPath: canonData.savedPath,
+                    enhancedPath: finalPhotoUrl,
+                    compositedPath: finalPhotoUrl,
+                  }
+                }
+                return next
+              })
+              setSnapshotFlyer((prev) =>
+                prev && prev.slotIndex === targetIndex ? { ...prev, photoUrl: finalPhotoUrl, isEdsdk: true } : prev
+              )
+            }
+          })
+          .catch((err) => {
+            console.warn('[Method 2] Canon hardware capture fallback:', err)
+          })
+      }
+
+      // Xóa khung đóng băng camera ngay sau hiệu ứng chớp flash dứt khoát (< 350ms)
+      setTimeout(() => setCameraFreezeFrame(null), 350)
       setTimeout(() => setSnapshotFlyer(null), 850)
       setTimeout(() => setJustCapturedSlot(null), 1400)
 
@@ -665,7 +781,7 @@ export default function CaptureScreen() {
       // Dừng timelapse nhưng KHÔNG tự động chuyển màn hình ngay!
       // Giữ nguyên để khách xem lại, xóa ảnh không đẹp hoặc bấm Tiếp tục.
       if (nextSlots.every(Boolean)) {
-        await stopTimelapse()
+        stopTimelapse().catch((err) => console.warn('Stop timelapse background error:', err))
         if (eventConfig.gdriveEnabled) {
           const folderLink =
             eventConfig.gdriveFolderUrl ||
@@ -700,9 +816,16 @@ export default function CaptureScreen() {
   }
 
   // Khách hài lòng và bấm xác nhận tiếp tục sang bước chọn theme
-  function handleProceedPhotobooth() {
+  async function handleProceedPhotobooth() {
     const validPhotos = slots.filter((s): s is CapturedPhoto => s !== null)
     if (validPhotos.length < totalShots) return
+
+    // Đảm bảo dừng timelapse và đợi hoàn tất xuất video trước khi chuyển màn hình
+    if (timelapsePromiseRef.current) {
+      await timelapsePromiseRef.current
+    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      await stopTimelapse()
+    }
 
     setSessionPhotos(validPhotos)
     setIsSessionActive(false)
@@ -713,18 +836,14 @@ export default function CaptureScreen() {
   // XỬ LÝ CHẾ ĐỘ SELFBOOTH (Chụp tự do không giới hạn thời gian & Chọn ảnh)
   // ══════════════════════════════════════════════════════════════════════════════
 
-  // Bắt đầu phiên chụp Selfbooth
-  function handleStartSelfbooth() {
-    setIsSelfboothRunning(true)
-    setIsSessionActive(true)
-    setSelfboothTimeLeft(selfboothDuration)
-    setSelfboothLibrary([])
-    startTimelapse()
-  }
-
-  // Bấm chụp 1 ảnh trong phiên Selfbooth (chụp tự do liên tục)
+  // Bấm chụp 1 ảnh trong phiên Selfbooth (chụp tự do liên tục bằng remote hoặc nút bấm)
   async function handleTakeSelfboothShot() {
-    if (isCapturingShot || !isSelfboothRunning) return
+    if (isCapturingShot) return
+    if (!isSelfboothRunning) {
+      setIsSelfboothRunning(true)
+      setIsSessionActive(true)
+      startTimelapse()
+    }
 
     setIsCapturingShot(true)
 
@@ -772,36 +891,39 @@ export default function CaptureScreen() {
       }
 
       // PHƯƠNG ÁN 2 cho Selfbooth: Chụp ảnh thật từ cảm biến máy ảnh Canon (Fotolism 2.2 Idempotency)
-      const captureId = `cap_${sessionId}_self${photoNum}_${Date.now()}`
-      await selfApi.camera.edsdkCapture({
-        captureId,
-        sessionId,
-        slotIndex: photoNum,
-        savePath: canonSelfPath,
-        shotIndex: photoNum,
-      })
-        .then((res) => {
-          if (res && res.success && res.data && res.data.dataUrl) {
-            const canonData = res.data
-            console.log(`[Method 2 Selfbooth] Canon 24MP captured: ${canonData.savedPath}`)
-            setSelfboothLibrary((prev) =>
-              prev.map((p) =>
-                p.id === newPhoto.id
-                  ? {
-                    ...p,
-                    rawPath: canonData.savedPath,
-                    enhancedPath: canonData.dataUrl,
-                    compositedPath: canonData.dataUrl,
-                  }
-                  : p
+      // CHỈ kích hoạt máy ảnh Canon khi Canon Daemon đang active (tránh đứng màn hình khi dùng webcam)
+      if (isCanonDaemonActive) {
+        const captureId = `cap_${sessionId}_self${photoNum}_${Date.now()}`
+        selfApi.camera.edsdkCapture({
+          captureId,
+          sessionId,
+          slotIndex: photoNum,
+          savePath: canonSelfPath,
+          shotIndex: photoNum,
+        })
+          .then((res) => {
+            if (res && res.success && res.data && res.data.dataUrl) {
+              const canonData = res.data
+              console.log(`[Method 2 Selfbooth] Canon 24MP captured: ${canonData.savedPath}`)
+              setSelfboothLibrary((prev) =>
+                prev.map((p) =>
+                  p.id === newPhoto.id
+                    ? {
+                      ...p,
+                      rawPath: canonData.savedPath,
+                      enhancedPath: canonData.dataUrl,
+                      compositedPath: canonData.dataUrl,
+                    }
+                    : p
+                )
               )
-            )
-          }
-        })
-        .catch((err) => console.warn('[Method 2] Selfbooth Canon capture fallback:', err))
-        .finally(() => {
-          setTimeout(() => setCameraFreezeFrame(null), 300)
-        })
+            }
+          })
+          .catch((err) => console.warn('[Method 2] Selfbooth Canon capture fallback:', err))
+      }
+
+      // Xóa khung đóng băng camera ngay sau hiệu ứng chớp flash dứt khoát (< 350ms)
+      setTimeout(() => setCameraFreezeFrame(null), 350)
 
       // Hiệu ứng bay lên ngay lập tức (< 0.4s)
       setSnapshotFlyer({ photoUrl: photoPath, slotIndex: 0, isEdsdk: false })
@@ -815,84 +937,127 @@ export default function CaptureScreen() {
     }
   }
 
-  // Kết thúc phiên chụp Selfbooth (Hết giờ hoặc bấm "Xong Sớm")
-  async function handleFinishSelfboothSession() {
+  // Kết thúc phiên chụp Selfbooth: Lưu toàn bộ ảnh và chuyển thẳng sang màn hình quét QR lấy ảnh
+  async function handleFinishSelfboothToReview() {
     setIsSelfboothRunning(false)
-    await stopTimelapse()
 
-    if (eventConfig.gdriveEnabled) {
-      const folderLink =
-        eventConfig.gdriveFolderUrl ||
-        `https://drive.google.com/drive/folders/${eventConfig.gdriveFolderId || `${SESSION_FOLDER_PREFIX}_Demo`}`
-      setGdriveUrl(folderLink)
+    // Nếu khách chưa kịp chụp ảnh nào trước khi hết giờ, tự động bắt 1 ảnh từ camera để không bị rỗng
+    let finalPhotos = [...selfboothLibrary]
+    if (finalPhotos.length === 0) {
+      const snap = grabVideoFrame()
+      if (snap) {
+        const dummy: CapturedPhoto = {
+          id: `selfbooth_${Date.now()}_1`,
+          rawPath: snap,
+          enhancedPath: snap,
+          compositedPath: snap,
+          timestamp: Date.now(),
+        }
+        finalPhotos = [dummy]
+        setSelfboothLibrary(finalPhotos)
+      }
     }
 
-    // Tự động điền trước các ảnh gần nhất vào pickedSlots
-    setSelfboothLibrary((currentLibrary) => {
-      const initialPicked: (CapturedPhoto | null)[] = Array(totalShots).fill(null)
-      for (let i = 0; i < totalShots; i++) {
-        if (i < currentLibrary.length) {
-          // Lấy các ảnh mới chụp
-          initialPicked[i] = currentLibrary[currentLibrary.length - totalShots + i] || currentLibrary[i]
-        }
-      }
-      setPickedSlots(initialPicked)
-      return currentLibrary
-    })
+    const timelapseDataUrl = await stopTimelapse()
 
-    setIsPhotoPickerOpen(true)
+    // 1. Lưu toàn bộ ảnh khách đã chụp vào session store
+    setSessionPhotos(finalPhotos)
+    setIsSessionActive(false)
+
+    // 2. KHỞI ĐỘNG ĐẨY ẢNH LÊN GOOGLE DRIVE NGAY LẬP TỨC TRONG NỀN
+    // Tạo thư mục phiên chụp riêng trên Google Drive và đẩy toàn bộ ảnh + video timelapse lên ngay
+    if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
+      setIsSyncingDrive(true)
+      setDriveSyncDone(false)
+      setDriveSyncError(null)
+
+      const filesToUpload: Array<{ name: string; dataUrl: string }> = []
+      selfboothLibrary.forEach((p, idx) => {
+        const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
+        if (dataUrl && dataUrl.trim().length > 0) {
+          filesToUpload.push({
+            name: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
+            dataUrl,
+          })
+        }
+      })
+
+      // Đính kèm video timelapse hậu trường nếu có
+      if (timelapseDataUrl && timelapseDataUrl.startsWith('data:')) {
+        filesToUpload.push({
+          name: `${FILE_PREFIX_TIMELAPSE}.webm`,
+          dataUrl: timelapseDataUrl,
+        })
+      }
+
+      const now = new Date()
+      const pad = (n: number) => (n < 10 ? '0' : '') + n
+      const timeStamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}h${pad(now.getMinutes())}`
+      const subfolderName = `Fotolism_${timeStamp}_${sessionId.slice(-6)}`
+
+      const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
+      console.log('[CaptureScreen] Selfbooth finished! Uploading to Drive in background:', effectiveWebhookUrl, 'files:', filesToUpload.length)
+
+      const api = isBrowser ? mockApi : fotolismApi
+      api.storage.uploadDriveSession({
+        parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
+        subfolderName,
+        files: filesToUpload,
+        webhookUrl: effectiveWebhookUrl,
+      }).then(async (res) => {
+        if (res.success && res.data?.cloudFolderUrl && !res.data.cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)) {
+          console.log('[CaptureScreen] Background Drive upload SUCCESS! Subfolder:', res.data.cloudFolderUrl)
+          setCloudFolderUrl(res.data.cloudFolderUrl)
+          setGdriveUrl(res.data.cloudFolderUrl)
+          setIsSyncingDrive(false)
+          setDriveSyncDone(true)
+        } else {
+          console.warn('[CaptureScreen] Background IPC upload returned fallback/error, trying direct fetch...')
+          try {
+            const validDataFiles = filesToUpload.filter((f) => f.dataUrl && f.dataUrl.startsWith('data:'))
+            const directRes = await fetch(effectiveWebhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'create_session_folder',
+                parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
+                folderName: subfolderName,
+                files: validDataFiles,
+              }),
+              redirect: 'follow',
+            })
+            const directJson = await directRes.json()
+            if (directJson && directJson.success && directJson.folderUrl) {
+              console.log('[CaptureScreen] Background direct fetch upload SUCCESS:', directJson.folderUrl)
+              setCloudFolderUrl(directJson.folderUrl)
+              setGdriveUrl(directJson.folderUrl)
+              setIsSyncingDrive(false)
+              setDriveSyncDone(true)
+              return
+            }
+          } catch (directErr) {
+            console.warn('[CaptureScreen] Background direct fetch failed:', directErr)
+          }
+
+          setIsSyncingDrive(false)
+          setDriveSyncDone(false)
+          setDriveSyncError(res.error || 'Chưa thể tạo thư mục Google Drive.')
+        }
+      }).catch((err) => {
+        console.error('[CaptureScreen] Background Drive upload exception:', err)
+        setIsSyncingDrive(false)
+        setDriveSyncDone(false)
+        setDriveSyncError(err.message || 'Lỗi kết nối tải ảnh lên Drive.')
+      })
+    }
+
+    // Tự động out ra màn hình quét mã QR lấy ảnh (Requirement 4)
+    setScreen('review')
   }
 
   useEffect(() => {
-    finishSelfboothRef.current = handleFinishSelfboothSession
+    finishSelfboothRef.current = handleFinishSelfboothToReview
   })
-
-  // Chọn ảnh từ gallery gán vào slot trong Photo Picker
-  function handleAssignPhotoToSlot(photo: CapturedPhoto) {
-    const nextPicked = [...pickedSlots]
-
-    // Nếu ảnh này đã có ở một slot khác, tháo ra
-    const existingIndex = nextPicked.findIndex((p) => p?.id === photo.id)
-    if (existingIndex !== -1) {
-      nextPicked[existingIndex] = null
-    }
-
-    // Gán vào ô đang active
-    nextPicked[activeSlotToPick] = photo
-    setPickedSlots(nextPicked)
-
-    // Tự động chuyển active slot sang ô trống tiếp theo (nếu có)
-    const nextEmptySlot = nextPicked.findIndex((s) => s === null)
-    if (nextEmptySlot !== -1) {
-      setActiveSlotToPick(nextEmptySlot)
-    }
-  }
-
-  // Bỏ chọn ảnh khỏi slot
-  function handleRemovePickedSlot(index: number) {
-    const nextPicked = [...pickedSlots]
-    nextPicked[index] = null
-    setPickedSlots(nextPicked)
-    setActiveSlotToPick(index)
-  }
-
-  // Xác nhận ảnh đã chọn trong Selfbooth & Tiếp tục
-  function handleConfirmSelfboothSelection() {
-    const validPhotos = pickedSlots.filter((p): p is CapturedPhoto => p !== null)
-    if (validPhotos.length < totalShots) return
-
-    setSessionPhotos(validPhotos)
-    setIsPhotoPickerOpen(false)
-    setIsSessionActive(false)
-    setScreen('select-theme')
-  }
-
-  // Định dạng thời gian Selfbooth mm:ss
-  function formatTime(seconds: number): string {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
 
   // Hủy buổi chụp và làm mới (chỉ được phép chụp lại từ đầu 1 lần)
   function handleResetShootSession() {
@@ -902,24 +1067,16 @@ export default function CaptureScreen() {
     setIsSessionActive(false)
     setIsCapturingShot(false)
     setIsSelfboothRunning(false)
-    setIsPhotoPickerOpen(false)
     setSlots(Array(totalShots).fill(null))
     setRetakeSlotIndex(null)
     setSelfboothLibrary([])
-    setSelfboothTimeLeft(selfboothDuration)
+    setSelfboothSecondsLeft(totalDuration)
+    setShowFinishConfirm(false)
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
+      try {
+        mediaRecorderRef.current.stop()
+      } catch { }
     }
-  }
-
-  // Quay lại màn hình trước đó
-  function handleGoBack() {
-    if (isSessionActive || isSelfboothRunning) {
-      const confirmLeave = window.confirm('Bạn có chắc muốn thoát phiên chụp để quay lại bước trước?')
-      if (!confirmLeave) return
-      handleResetShootSession()
-    }
-    setScreen('select-layout')
   }
 
   return (
@@ -927,22 +1084,20 @@ export default function CaptureScreen() {
       {/* Screen Flash Animation */}
       {showFlash && <div className="screen-flash" />}
 
-      {/* Focus Dim Backdrop: Làm tối xung quanh khi đang chụp */}
-      {isSessionActive && !isPhotoPickerOpen && <div className="focus-dim-backdrop" />}
+      {/* Focus Dim Backdrop: Làm tối xung quanh khi đang chụp photobooth */}
+      {isSessionActive && !isSelfboothMode && <div className="focus-dim-backdrop" />}
 
-      {/* ── Top Bar: Back Button + Timer / Countdown + Utility Icon Buttons ── */}
+      {/* ── Top Bar: Timer / Countdown (Đã xóa hoàn toàn nút quay lại, x thoát và cài đặt) ── */}
       <header className="capture-top-bar">
         <div className="capture-top-left">
-          <button
-            className="utility-icon-btn back-utility-btn"
-            onClick={handleGoBack}
-            title="Quay lại chọn bố cục"
-            aria-label="Quay lại"
-          >
-            <ArrowLeft size={24} strokeWidth={2.2} />
-          </button>
-
-          {!isSelfboothMode ? (
+          {isSelfboothMode ? (
+            /* Đồng hồ đếm ngược Selfbooth góc trái (05:00 -> 00:00) */
+            <div className={`selfbooth-elapsed-timer-badge ${selfboothSecondsLeft < 30 ? 'warning' : ''}`}>
+              <Clock size={18} className={selfboothSecondsLeft < 30 ? 'pulse-warning' : ''} />
+              <span className="selfbooth-timer-label">Còn lại:</span>
+              <span className="selfbooth-timer-digits">{formatElapsedTime(selfboothSecondsLeft)}</span>
+            </div>
+          ) : (
             <div className="countdown-capsule-group">
               {[5, 3].map((sec) => (
                 <button
@@ -955,100 +1110,34 @@ export default function CaptureScreen() {
                 </button>
               ))}
             </div>
-          ) : (
-            /* Selfbooth Session Timer Badge */
-            <div className={`selfbooth-session-timer-badge ${selfboothTimeLeft <= 10 && isSelfboothRunning ? 'timer-warning' : ''}`}>
-              <span className="timer-icon">{isSelfboothRunning ? '⏱️' : '⏳'}</span>
-              <span className="timer-label">Selfbooth:</span>
-              <strong className="timer-digits">{formatTime(selfboothTimeLeft)}</strong>
-              <span className="timer-photos-count">({selfboothLibrary.length} ảnh)</span>
-            </div>
           )}
         </div>
 
-        {/* Right utility options — Lật gương, Đổi Camera, Cài đặt, Thoát */}
-        <div className="top-utility-actions">
-          <button
-            className={`utility-icon-btn ${mirrorCamera ? 'active-utility' : ''}`}
-            onClick={() => setMirrorCamera(!mirrorCamera)}
-            title={mirrorCamera ? 'Đang bật lật gương camera (Bấm để tắt)' : 'Lật gương camera (Mirror)'}
-            aria-label="Lật gương camera"
-          >
-            <FlipHorizontal size={24} strokeWidth={2} />
-          </button>
-
-          <button
-            className="utility-icon-btn"
-            onClick={handleCycleCamera}
-            title="Đổi Camera (Laptop / Canon R100)"
-            aria-label="Đổi camera"
-          >
-            <Camera size={24} strokeWidth={1.8} />
-          </button>
-
-          <button
-            className="utility-icon-btn"
-            onClick={() => setScreen('admin')}
-            title="Cài đặt quản trị"
-            aria-label="Cài đặt"
-          >
-            <Settings size={24} strokeWidth={1.8} />
-          </button>
-
-          <button
-            className="utility-icon-btn"
-            onClick={() => {
-              if (isSessionActive || isSelfboothRunning) {
-                if (!window.confirm('Bạn có chắc muốn thoát phiên chụp về màn hình chờ?')) return
-                handleResetShootSession()
-              }
-              setScreen('idle')
-            }}
-            title="Thoát về màn hình chờ"
-            aria-label="Thoát"
-          >
-            <X size={24} strokeWidth={2} />
-          </button>
-        </div>
+        {/* Right utility options: Trống hoàn toàn — một khi vào màn chụp chỉ có thể chụp và kết thúc */}
+        <div className="top-utility-actions" />
       </header>
 
-      {/* ── Main Stage Area: 1/12 Dock + 9/12 Live View + 2/12 Vertical Slots ── */}
-      <div className="capture-main-stage">
-        {/* ── CỘT 1/12: Bộ lọc màu + Làm đẹp da + Đèn sáng studio ── */}
-        <aside className={`dock-grid-col-1 left-sidebar-dock ${isSessionActive && !isPhotoboothFull ? 'locked-dimmed' : ''}`}>
-          <button
-            className={`dock-btn ${activeFlyout === 'filter' ? 'active' : ''}`}
-            onClick={() => setActiveFlyout(activeFlyout === 'filter' ? null : 'filter')}
-            title="Bộ lọc màu ảnh"
-            aria-label="Bộ lọc màu"
-          >
-            <Palette size={28} strokeWidth={1.8} />
-          </button>
-
-          <button
-            className={`dock-btn ${activeFlyout === 'beauty' ? 'active' : ''}`}
-            onClick={() => setActiveFlyout(activeFlyout === 'beauty' ? null : 'beauty')}
-            title="Làm đẹp da chuẩn K-Beauty"
-            aria-label="Làm đẹp da"
-          >
-            <Sparkles size={28} strokeWidth={1.8} />
-          </button>
-
-          <button
-            className={`dock-btn ${activeFlyout === 'lighting' ? 'active' : ''}`}
-            onClick={() => setActiveFlyout(activeFlyout === 'lighting' ? null : 'lighting')}
-            title="Đèn sáng studio"
-            aria-label="Đèn sáng studio"
-          >
-            <Lightbulb size={28} strokeWidth={1.8} />
-          </button>
-        </aside>
+      {/* ── Main Stage Area: 1/12 Dock + 9/12 Live View + 2/12 Vertical Slots (hoặc Full trong Selfbooth) ── */}
+      <div className={`capture-main-stage ${isSelfboothMode ? 'selfbooth-stage' : ''}`}>
+        {/* ── CỘT 1/12: Bộ lọc màu nhanh (Chỉ hiển thị trong Photobooth) ── */}
+        {!isSelfboothMode && (
+          <aside className={`dock-grid-col-1 left-sidebar-dock ${isSessionActive && !isPhotoboothFull ? 'locked-dimmed' : ''}`}>
+            <button
+              className={`dock-btn ${activeFlyout === 'filter' ? 'active' : ''}`}
+              onClick={() => setActiveFlyout(activeFlyout === 'filter' ? null : 'filter')}
+              title="Bộ lọc màu ảnh"
+              aria-label="Bộ lọc màu"
+            >
+              <Palette size={28} strokeWidth={1.8} />
+            </button>
+          </aside>
+        )}
 
         {/* ── Flyout Panel 1: Bộ Lọc Màu (Color Filter) ── */}
         {activeFlyout === 'filter' && (
           <div className="flyout-panel animate-pop">
             <div className="flyout-header">
-              <span className="flyout-title">🎨 Bộ Lọc Màu Ảnh</span>
+              <span className="flyout-title">Bộ Lọc Màu</span>
               <button className="flyout-close-btn" onClick={() => setActiveFlyout(null)}>
                 ✕
               </button>
@@ -1056,7 +1145,6 @@ export default function CaptureScreen() {
 
             <div className="flyout-content">
               <div className="filter-presets-container">
-                <div className="filter-presets-title">📸 BỘ LỌC CHUẨN STUDIO</div>
                 <div className="filter-presets-list">
                   {COLOR_FILTERS.map((filter) => {
                     const isSelected = selectedFilter?.id === filter.id
@@ -1075,7 +1163,6 @@ export default function CaptureScreen() {
                         />
                         <div className="filter-card-info">
                           <span className="filter-card-name">{filter.name}</span>
-                          <span className="filter-card-tag">{filter.tag}</span>
                         </div>
                         {isSelected && <span className="filter-card-check">✓</span>}
                       </button>
@@ -1087,369 +1174,126 @@ export default function CaptureScreen() {
           </div>
         )}
 
-        {/* ── Flyout Panel 2: Làm đẹp & Chỉnh sáng ── */}
-        {activeFlyout === 'beauty' && (
-          <div className="flyout-panel animate-pop">
-            <div className="flyout-header">
-              <span className="flyout-title">✨ Làm Đẹp Chuẩn K-Beauty</span>
-              <button className="flyout-close-btn" onClick={() => setActiveFlyout(null)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="flyout-content">
-              <div className="beauty-presets-container">
-                <div className="beauty-presets-title">🌸 PRESET LÀM ĐẸP (1-CHẠM)</div>
-                <div className="beauty-presets-grid">
-                  {BEAUTY_PRESETS.map((preset) => {
-                    const isActive = selectedBeautyPreset === preset.id
-                    return (
-                      <button
-                        key={preset.id}
-                        className={`beauty-preset-pill ${isActive ? 'active' : ''}`}
-                        onClick={() => applyBeautyPreset(preset.id)}
-                        title={preset.description}
-                      >
-                        <span className="preset-icon">{preset.icon}</span>
-                        <span>{preset.name}</span>
-                        {isActive && <span className="preset-check">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="beauty-section-box">
-                <div className="beauty-section-header">
-                  <span>🌸 Thon Gọn & Làn Da Hàn Quốc</span>
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Thon Gọn Mặt (V-Line / Mặt nhỏ)</span>
-                    <span className="beauty-val-badge">{slimFace}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={slimFace}
-                    onChange={(e) => setSlimFace(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Làm Mịn Da (Skin Blur)</span>
-                    <span className="beauty-val-badge">{skinSmoothing}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={skinSmoothing}
-                    onChange={(e) => setSkinSmoothing(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Nâng Tone Trắng Sáng (Whitening)</span>
-                    <span className="beauty-val-badge">{whiteningTone}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={whiteningTone}
-                    onChange={(e) => setWhiteningTone(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Trắng Hồng Tự Nhiên</span>
-                    <span className="beauty-val-badge">{rosyTone}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={rosyTone}
-                    onChange={(e) => setRosyTone(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Sáng Nét Chi Tiết</span>
-                    <span className="beauty-val-badge">{glowClarity}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={glowClarity}
-                    onChange={(e) => setGlowClarity(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-              </div>
-
-              <div className="beauty-section-box">
-                <div className="beauty-section-header">
-                  <span>🎛️ Tinh Chỉnh Ánh Sáng</span>
-                  {(brightnessAdjust !== 100 || contrastAdjust !== 100 || saturationAdjust !== 100 || skinSmoothing !== 0 || rosyTone !== 0 || glowClarity !== 0) && (
-                    <button
-                      className="btn btn-ghost"
-                      style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--color-pink-primary)' }}
-                      onClick={resetAdjustments}
-                    >
-                      Đặt lại
-                    </button>
-                  )}
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Độ Sáng (Brightness)</span>
-                    <span className="beauty-val-badge">{brightnessAdjust}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="80"
-                    max="130"
-                    value={brightnessAdjust}
-                    onChange={(e) => setBrightnessAdjust(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Độ Tương Phản (Contrast)</span>
-                    <span className="beauty-val-badge">{contrastAdjust}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="80"
-                    max="130"
-                    value={contrastAdjust}
-                    onChange={(e) => setContrastAdjust(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-
-                <div className="beauty-slider-row">
-                  <div className="beauty-slider-label">
-                    <span>Độ Bão Hòa (Saturation)</span>
-                    <span className="beauty-val-badge">{saturationAdjust}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="70"
-                    max="150"
-                    value={saturationAdjust}
-                    onChange={(e) => setSaturationAdjust(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Flyout Panel 3: Phát sáng (Ring Light) ── */}
-        {activeFlyout === 'lighting' && (
-          <div className="flyout-panel animate-pop">
-            <div className="flyout-header">
-              <span className="flyout-title">💡 Đèn Phát Sáng (Ring Light)</span>
-              <button className="flyout-close-btn" onClick={() => setActiveFlyout(null)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="flyout-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Đèn sáng Photobooth:</span>
-                <button
-                  className={`btn ${ringLightEnabled ? 'btn-primary' : 'btn-pill-white'}`}
-                  style={{ padding: '6px 18px', fontSize: '0.88rem' }}
-                  onClick={() => setRingLightEnabled(!ringLightEnabled)}
-                >
-                  {ringLightEnabled ? 'Đang Bật' : 'Tắt'}
-                </button>
-              </div>
-
-              {ringLightEnabled && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666', marginBottom: 6 }}>
-                    <span>Cường độ ánh sáng</span>
-                    <span style={{ fontWeight: 700, color: 'var(--color-pink-primary)' }}>{ringLightLevel}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="40"
-                    max="100"
-                    value={ringLightLevel}
-                    onChange={(e) => setRingLightLevel(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--color-pink-primary)' }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── CỘT LIVE VIEW: Chiếm 9/12 (75%) ── */}
-        <div className="liveview-grid-col-9">
+        {/* ── CỘT LIVE VIEW: Chiếm 9/12 trong Photobooth hoặc Chiếm trọn màn hình trong Selfbooth ── */}
+        <div className={isSelfboothMode ? 'liveview-selfbooth-full' : 'liveview-grid-col-9'}>
           <div className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''}`}>
-          {hasCamera ? (
-            <>
-              <BeautyCameraView
-                ref={beautyCameraRef}
-                stream={isCanonDaemonActive ? null : activeMediaStream}
-                mjpegUrl={isCanonDaemonActive && !(typeof window !== 'undefined' && window.location.search.includes('noLiveStream=1')) ? 'http://127.0.0.1:8899/liveview' : undefined}
-                mirrorCamera={mirrorCamera}
-                slimFace={slimFace}
-                skinSmoothing={skinSmoothing}
-                whiteningTone={whiteningTone}
-                rosyTone={rosyTone}
-                glowClarity={glowClarity}
-                brightnessAdjust={brightnessAdjust}
-                contrastAdjust={contrastAdjust}
-                saturationAdjust={saturationAdjust}
-                style={{
-                  filter: selectedFilter?.cssFilter && selectedFilter.cssFilter !== 'none' ? selectedFilter.cssFilter : undefined,
-                }}
-                className="camera-preview-element"
-              />
-              {cameraFreezeFrame && (
-                <img
-                  src={cameraFreezeFrame}
-                  alt="Capture Freeze"
+            {hasCamera ? (
+              <>
+                <BeautyCameraView
+                  ref={beautyCameraRef}
+                  stream={isCanonDaemonActive ? null : activeMediaStream}
+                  mjpegUrl={isCanonDaemonActive && !(typeof window !== 'undefined' && window.location.search.includes('noLiveStream=1')) ? 'http://127.0.0.1:8899/liveview' : undefined}
+                  mirrorCamera={mirrorCamera}
+                  slimFace={slimFace}
+                  vLine={vLine}
+                  bigEyes={bigEyes}
+                  skinSmoothing={skinSmoothing}
+                  whiteningTone={whiteningTone}
+                  rosyTone={rosyTone}
+                  glowClarity={glowClarity}
+                  brightnessAdjust={brightnessAdjust}
+                  contrastAdjust={contrastAdjust}
+                  saturationAdjust={saturationAdjust}
+                  style={{
+                    filter: selectedFilter?.cssFilter && selectedFilter.cssFilter !== 'none' ? selectedFilter.cssFilter : undefined,
+                  }}
+                  className="camera-preview-element"
+                />
+                {cameraFreezeFrame && (
+                  <img
+                    src={cameraFreezeFrame}
+                    alt="Capture Freeze"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      zIndex: 2,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
+                {/* Thẻ video nguồn dự phòng cấp thấp luôn phát stream camera */}
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  autoPlay
                   style={{
                     position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    zIndex: 2,
+                    top: 0,
+                    left: 0,
+                    width: 1,
+                    height: 1,
+                    opacity: 0.01,
                     pointerEvents: 'none',
+                    zIndex: -999,
                   }}
                 />
-              )}
-              {/* Thẻ video nguồn dự phòng cấp thấp luôn phát stream camera */}
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                autoPlay
+              </>
+            ) : (
+              <div className="camera-connecting-wrapper">
+                <Loader2 size={46} className="camera-connecting-spin" strokeWidth={2.4} />
+                <p className="camera-connecting-text">Đang kết nối</p>
+              </div>
+            )}
+
+            {/* Ring Light Overlay effect */}
+            {ringLightEnabled && (
+              <div
+                className="ring-light-overlay"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: 1,
-                  height: 1,
-                  opacity: 0.01,
-                  pointerEvents: 'none',
-                  zIndex: -999,
+                  borderWidth: `${Math.round(16 + (ringLightLevel / 100) * 20)}px`,
+                  opacity: ringLightLevel / 100,
                 }}
               />
-            </>
-          ) : (
-            <div style={{ color: '#fff', textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              <div style={{ fontSize: '3.2rem', animation: 'pulse 1.8s infinite' }}>📷</div>
-              <p style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--color-pink-primary)' }}>
-                Luồng hình ảnh trực tiếp chưa hiển thị
-              </p>
-              <p style={{ fontSize: '0.92rem', color: '#ccc', maxWidth: 520, margin: 0, lineHeight: 1.5 }}>
-                Đang kết nối luồng máy ảnh Canon EOS R100. Hãy bật ON công tắc máy ảnh, kiểm tra cáp USB hoặc bấm chọn camera bên dưới:
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10, justifyContent: 'center' }}>
-                {availableCameras.map((cam) => (
-                  <button
-                    key={cam.id}
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 18px', fontSize: '0.9rem' }}
-                    onClick={() => {
-                      selectCamera(cam.id)
-                      startCamera(cam.id)
-                    }}
-                  >
-                    {/eos|canon/i.test(cam.name) ? '📸 Dùng Canon EOS (Ưu tiên)' : '💻 Dùng ' + cam.name}
-                  </button>
-                ))}
-                <button
-                  className="btn btn-primary"
-                  style={{ padding: '8px 20px', fontSize: '0.9rem' }}
-                  onClick={() => startCamera(selectedCameraId || undefined)}
-                >
-                  ⚡ Thử lại luồng
-                </button>
+            )}
+
+            {/* Timelapse Recording Indicator */}
+            {eventConfig.timelapseEnabled && (isTimelapseRecording || isSessionActive) && (
+              <div className="timelapse-recording-badge">
+                <span className="rec-dot" />
+                <span>REC TIMELAPSE ({eventConfig.timelapseSpeed || 2.5}x)</span>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Ring Light Overlay effect */}
-          {ringLightEnabled && (
-            <div
-              className="ring-light-overlay"
-              style={{
-                borderWidth: `${Math.round(16 + (ringLightLevel / 100) * 20)}px`,
-                opacity: ringLightLevel / 100,
-              }}
-            />
-          )}
+            {/* Countdown digits overlay */}
+            {isCapturingShot && currentCountdown > 0 && (
+              <div className="multi-shot-countdown-overlay">
+                <div className="countdown-digits-translucent">{currentCountdown}</div>
+              </div>
+            )}
 
-          {/* Timelapse Recording Indicator */}
-          {eventConfig.timelapseEnabled && (isTimelapseRecording || isSessionActive) && (
-            <div className="timelapse-recording-badge">
-              <span className="rec-dot" />
-              <span>REC TIMELAPSE ({eventConfig.timelapseSpeed || 2.5}x)</span>
-            </div>
-          )}
-
-          {/* Countdown digits overlay */}
-          {isCapturingShot && currentCountdown > 0 && (
-            <div className="multi-shot-countdown-overlay">
-              <div className="countdown-digits-translucent">{currentCountdown}</div>
-            </div>
-          )}
-
-          {/* Flying Snap Effect Animation */}
-          {snapshotFlyer && (
-            <div className="snapshot-flying-overlay">
-              <div className="snapshot-card-animate">
-                <img src={snapshotFlyer.photoUrl} alt="Just Captured" />
-                <div
-                  className="snapshot-card-badge"
-                  style={
-                    snapshotFlyer.isEdsdk
-                      ? { background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', color: '#ffffff', fontWeight: 800 }
-                      : undefined
-                  }
-                >
-                  {isSelfboothMode
-                    ? snapshotFlyer.isEdsdk
-                      ? `📸 Canon R100 (24MP) • Đã lưu ảnh ${selfboothLibrary.length}`
-                      : `✨ Đã thêm vào bộ sưu tập (${selfboothLibrary.length} ảnh)`
-                    : snapshotFlyer.isEdsdk
-                      ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
-                      : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
+            {/* Flying Snap Effect Animation */}
+            {snapshotFlyer && (
+              <div className="snapshot-flying-overlay">
+                <div className="snapshot-card-animate">
+                  <img src={snapshotFlyer.photoUrl} alt="Just Captured" />
+                  <div
+                    className="snapshot-card-badge"
+                    style={
+                      snapshotFlyer.isEdsdk
+                        ? { background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', color: '#ffffff', fontWeight: 800 }
+                        : undefined
+                    }
+                  >
+                    {isSelfboothMode
+                      ? snapshotFlyer.isEdsdk
+                        ? `📸 Canon R100 (24MP) • Đã lưu ảnh ${selfboothLibrary.length}`
+                        : `✨ Đã thêm vào bộ sưu tập (${selfboothLibrary.length} ảnh)`
+                      : snapshotFlyer.isEdsdk
+                        ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
+                        : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
           </div>
         </div>
 
-        {/* ── CỘT DẢI Ô DỌC: Chiếm 2/12 (approx 16.67%) - Giữ design cũ ── */}
-        {!isSelfboothMode ? (
+        {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth. Xóa hoàn toàn khung bên phải trong Selfbooth ── */}
+        {!isSelfboothMode && (
           <aside className="slots-grid-col-2 right-slots-dock">
             <div className="live-slots-deck vertical-slots-deck">
               <div className="live-slots-list">
@@ -1521,42 +1365,6 @@ export default function CaptureScreen() {
               </div>
             </div>
           </aside>
-        ) : (
-          <aside className="slots-grid-col-2 right-slots-dock">
-            <div className="live-slots-deck vertical-slots-deck selfbooth-slots-deck">
-              <div className="selfbooth-slots-header">
-                <span className="selfbooth-dock-title">KHO ẢNH CHỤP</span>
-                <span className="selfbooth-dock-sub">Chọn {totalShots} ảnh đẹp nhất</span>
-              </div>
-
-              <div className="live-slots-list selfbooth-library-stream">
-                {selfboothLibrary.length === 0 ? (
-                  Array.from({ length: Math.min(totalShots, 4) }).map((_, index) => (
-                    <div key={index} className="live-slot-thumb empty selfbooth-empty-slot">
-                      <div className="slot-empty-content">
-                        <span className="slot-empty-plus">+</span>
-                        <span className="slot-empty-label">Ô {index + 1}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  selfboothLibrary.slice(-6).map((photo, pIdx) => {
-                    const realIndex = selfboothLibrary.indexOf(photo) + 1
-                    return (
-                      <div key={photo.id || pIdx} className="live-slot-thumb filled selfbooth-thumb-preview">
-                        <img src={photo.compositedPath || photo.rawPath} alt={`Photo ${realIndex}`} />
-                        <span className="slot-index-badge">#{realIndex}</span>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              <div className="live-slots-counter selfbooth-counter">
-                {selfboothLibrary.length} ảnh
-              </div>
-            </div>
-          </aside>
         )}
       </div>
 
@@ -1623,184 +1431,40 @@ export default function CaptureScreen() {
             <div className="shutter-col-2" />
           </div>
         ) : (
-          /* ── SELFBOOTH MODE CONTROLS ── */
-          <div className="bottom-deck-12col">
-            <div className="shutter-col-1" />
-            <div className="shutter-col-9">
-              <div className="selfbooth-bottom-controls">
-                {!isSelfboothRunning ? (
-                  <div className="selfbooth-start-box">
-                    <button
-                      className="start-capture-btn-pink selfbooth-start-btn"
-                      onClick={handleStartSelfbooth}
-                    >
-                      <Camera size={24} strokeWidth={2} />
-                      <span>Bắt Đầu Phiên Selfbooth ({Math.round(selfboothDuration / 60)} Phút)</span>
-                    </button>
-                    <p className="selfbooth-start-desc">
-                      Thỏa sức tạo dáng và bấm chụp không giới hạn số ảnh. Khi hết giờ, bạn sẽ tự tay chọn ra {totalShots} ảnh đẹp nhất!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="selfbooth-running-box">
-                    <div className="selfbooth-stat-bar">
-                      <div className="selfbooth-stat-item">
-                        <span>⏱️ Còn lại:</span>
-                        <strong className={selfboothTimeLeft <= 10 ? 'text-danger' : ''}>
-                          {formatTime(selfboothTimeLeft)}
-                        </strong>
-                      </div>
-                      <div className="selfbooth-stat-item">
-                        <span>📸 Đã chụp:</span>
-                        <strong>{selfboothLibrary.length} tấm</strong>
-                      </div>
-                    </div>
-
-                    <div className="selfbooth-actions-row">
-                      <button
-                        className="start-capture-btn-pink selfbooth-shutter-btn"
-                        disabled={isCapturingShot}
-                        onClick={handleTakeSelfboothShot}
-                      >
-                        <Camera size={24} strokeWidth={2} />
-                        <span>{isCapturingShot ? 'Đang chụp...' : 'Bấm Chụp Ảnh (Pose!)'}</span>
-                      </button>
-
-                      {selfboothLibrary.length >= totalShots && (
-                        <button
-                          className="selfbooth-finish-early-btn"
-                          onClick={handleFinishSelfboothSession}
-                        >
-                          <span>Chọn {totalShots} Ảnh</span>
-                          <ArrowRight size={20} strokeWidth={2.2} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="shutter-col-2" />
+          /* ── SELFBOOTH MODE CONTROLS: CHỈ DUY NHẤT 1 NÚT KẾT THÚC CÓ POPUP CONFIRM ── */
+          <div className="selfbooth-bottom-single-deck">
+            <button
+              className="btn-selfbooth-finish-main"
+              onClick={() => setShowFinishConfirm(true)}
+              id="selfbooth-finish-button"
+            >
+              <span>KẾT THÚC</span>
+              <ArrowRight size={22} strokeWidth={2.4} />
+            </button>
           </div>
         )}
       </footer>
 
-      {/* ════════════════════════════════════════════════════════════════════════
-          MODAL CHỌN ẢNH VÀO KHUNG CHO CHẾ ĐỘ SELFBOOTH (Photo Picker Modal)
-      ════════════════════════════════════════════════════════════════════════ */}
-      {isPhotoPickerOpen && (
-        <div className="photo-picker-modal-backdrop">
-          <div className="photo-picker-modal-card animate-pop">
-            <div className="photo-picker-header">
-              <div>
-                <h2 className="photo-picker-title">
-                  🌸 CHỌN {totalShots} ẢNH ĐẸP NHẤT VÀO KHUNG
-                </h2>
-                <p className="photo-picker-subtitle">
-                  Bạn đã chụp được {selfboothLibrary.length} tấm ảnh! Hãy chạm vào ảnh bạn thích để đưa vào các ô bên dưới.
-                </p>
-              </div>
-              <div className="photo-picker-badge">
-                {pickedSlots.filter(Boolean).length}/{totalShots} Ảnh Đã Chọn
-              </div>
-            </div>
-
-            {/* Hàng 1: Các ô slot của khung hình */}
-            <div className="picker-target-slots-row">
-              {Array.from({ length: totalShots }).map((_, idx) => {
-                const picked = pickedSlots[idx]
-                const isActive = activeSlotToPick === idx
-
-                return (
-                  <div
-                    key={idx}
-                    className={`picker-slot-card ${picked ? 'filled' : 'empty'} ${isActive ? 'active-target' : ''}`}
-                    onClick={() => setActiveSlotToPick(idx)}
-                  >
-                    {picked ? (
-                      <>
-                        <img src={picked.compositedPath || picked.rawPath} alt={`Slot ${idx + 1}`} />
-                        <span className="picker-slot-number">Ô {idx + 1}</span>
-                        <button
-                          className="picker-slot-remove-btn"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemovePickedSlot(idx)
-                          }}
-                          title="Bỏ ảnh này ra"
-                        >
-                          ✕
-                        </button>
-                      </>
-                    ) : (
-                      <div className="picker-slot-empty">
-                        <span style={{ fontSize: '1.8rem', color: '#94a3b8' }}>+</span>
-                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#64748b' }}>
-                          Ô {idx + 1} {isActive ? '(Đang chọn)' : ''}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Hàng 2: Lưới tất cả ảnh đã chụp trong phiên Selfbooth */}
-            <div className="picker-library-section">
-              <div className="picker-library-label">
-                <span>📸 Kho Ảnh Đã Chụp Trong Phiên ({selfboothLibrary.length} ảnh):</span>
-                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                  Chạm vào ảnh để gán vào ô đang sáng viền hồng
-                </span>
-              </div>
-
-              <div className="picker-library-grid">
-                {selfboothLibrary.map((photo, pIdx) => {
-                  const assignedSlot = pickedSlots.findIndex((s) => s?.id === photo.id)
-                  const isAssigned = assignedSlot !== -1
-
-                  return (
-                    <div
-                      key={photo.id}
-                      className={`picker-library-item ${isAssigned ? 'assigned' : ''}`}
-                      onClick={() => handleAssignPhotoToSlot(photo)}
-                    >
-                      <img src={photo.compositedPath || photo.rawPath} alt={`Photo ${pIdx + 1}`} />
-                      <span className="library-photo-num">#{pIdx + 1}</span>
-                      {isAssigned && (
-                        <div className="assigned-badge">
-                          ✓ Ô {assignedSlot + 1}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Footer Modal: Nút Xác Nhận & Nút Chụp Thêm */}
-            <div className="photo-picker-footer">
+      {/* ── POPUP CONFIRM KẾT THÚC BUỔI CHỤP SELFBOOTH ── */}
+      {showFinishConfirm && (
+        <div className="selfbooth-confirm-overlay" onClick={() => setShowFinishConfirm(false)}>
+          <div className="selfbooth-confirm-modal animate-pop" onClick={(e) => e.stopPropagation()}>
+            <h3 className="selfbooth-confirm-title">Xác nhận kết thúc?</h3>
+            <div className="selfbooth-confirm-btn-group">
               <button
-                className="btn btn-ghost"
+                className="btn-selfbooth-modal-cancel"
+                onClick={() => setShowFinishConfirm(false)}
+              >
+                Không
+              </button>
+              <button
+                className="btn-selfbooth-modal-confirm"
                 onClick={() => {
-                  setIsPhotoPickerOpen(false)
-                  setIsSelfboothRunning(true)
+                  setShowFinishConfirm(false)
+                  handleFinishSelfboothToReview()
                 }}
               >
-                ↩ Chụp Thêm Ảnh
-              </button>
-
-              <button
-                className="start-capture-btn-pink picker-confirm-btn"
-                disabled={pickedSlots.filter(Boolean).length < totalShots}
-                onClick={handleConfirmSelfboothSelection}
-              >
-                <span>🎉</span>
-                <span>
-                  {pickedSlots.filter(Boolean).length < totalShots
-                    ? `Hãy chọn đủ ${totalShots} ảnh (${pickedSlots.filter(Boolean).length}/${totalShots})`
-                    : 'Xác Nhận & Tiếp Tục Chọn Theme ➔'}
-                </span>
+                Có
               </button>
             </div>
           </div>

@@ -10,11 +10,11 @@
     "build:win": "npm --prefix desktop run build:win",
     "start": "npm --prefix desktop start",
     "preview": "npm --prefix desktop run preview",
-    "cms": "pnpm --prefix joybooth-cms dev",
-    "cms:build": "pnpm --prefix joybooth-cms build",
-    "cms:test": "pnpm --prefix joybooth-cms test",
+    "cms": "npm --prefix fotolism run dev",
+    "cms:build": "npm --prefix fotolism run build",
+    "cms:test": "npm --prefix fotolism test",
     "verify": "node .agents/skills/joybooth-system-verifier/scripts/verify-all.mjs",
-    "test": "npm --prefix desktop test && pnpm --prefix joybooth-cms test",
-    "ai": "cd ai-service && python main.py"
+    "test": "npm --prefix desktop test && npm --prefix fotolism test",
+    "ai": "cd desktop/ai-service && python main.py"
   }
 }

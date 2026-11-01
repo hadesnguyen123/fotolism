@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, BEAUTY_PRESETS } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import {
   SAVE_ROOT_DIR,
@@ -17,7 +17,15 @@ import {
   FileText,
   Shield,
   Activity,
+  Sparkles,
+  Lightbulb,
+  FlipHorizontal,
+  Copy,
+  Loader2,
+  XCircle,
+  ExternalLink,
 } from 'lucide-react'
+import { GOOGLE_APPS_SCRIPT_SAMPLE } from '../lib/gdriveWebhookScript'
 import { cloudSyncService, type CloudSyncStatus, type KioskOutboxSession } from '../services/cloudSyncService'
 import './AdminScreen.css'
 
@@ -51,7 +59,7 @@ const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [
     id: 'log-001',
     timestamp: new Date(Date.now() - 3600000 * 2).toLocaleTimeString('vi-VN') + ' ' + new Date().toLocaleDateString('vi-VN'),
     action: 'KHỞI ĐỘNG HỆ THỐNG',
-    detail: 'Kiosk Fotolism 3.0 khởi động thành công, Canon Daemon 8899 kết nối PTP.',
+    detail: 'Kiosk fotolism 3.0 khởi động thành công, Canon Daemon 8899 kết nối PTP.',
     operator: 'SYSTEM',
     status: 'SUCCESS',
   },
@@ -136,6 +144,29 @@ export default function AdminScreen() {
     setScreen,
     eventConfig,
     setEventConfig,
+    deviceConfig,
+    resetDeviceConfig,
+    mirrorCamera,
+    setMirrorCamera,
+    ringLightEnabled,
+    ringLightLevel,
+    setRingLightEnabled,
+    setRingLightLevel,
+    selectedBeautyPreset,
+    applyBeautyPreset,
+    slimFace,
+    setSlimFace,
+    vLine,
+    setVLine,
+    bigEyes,
+    setBigEyes,
+    skinSmoothing,
+    setSkinSmoothing,
+    whiteningTone,
+    setWhiteningTone,
+    rosyTone,
+    setRosyTone,
+    resetAdjustments,
   } = useAppStore()
 
   // ── PIN Lock State (6 chữ số cảm ứng) ──
@@ -201,6 +232,53 @@ export default function AdminScreen() {
   const [reprintModalSession, setReprintModalSession] = useState<KioskSessionRecord | null>(null)
   const [reprintReason, setReprintReason] = useState<string>('Kẹt giấy máy in')
   const [viewDetailSession, setViewDetailSession] = useState<KioskSessionRecord | null>(null)
+
+  // ── Webhook Testing & Script Copying ──
+  const [testingWebhook, setTestingWebhook] = useState<boolean>(false)
+  const [webhookTestResult, setWebhookTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [copiedScript, setCopiedScript] = useState<boolean>(false)
+
+  const handleTestWebhook = async () => {
+    if (!eventConfig.gdriveWebhookUrl) {
+      setWebhookTestResult({
+        success: false,
+        message: 'Vui lòng dán Webhook URL trước khi kiểm tra.',
+      })
+      return
+    }
+
+    setTestingWebhook(true)
+    setWebhookTestResult(null)
+
+    try {
+      const api = isBrowser ? mockApi : fotolismApi
+      const res = await api.storage.testDriveWebhook(eventConfig.gdriveWebhookUrl.trim())
+      if (res.success) {
+        setWebhookTestResult({
+          success: true,
+          message: res.data?.message || '✅ Kết nối Webhook thành công! Google Drive đã sẵn sàng nhận ảnh.',
+        })
+      } else {
+        setWebhookTestResult({
+          success: false,
+          message: res.error || '❌ Webhook phản hồi lỗi. Hãy kiểm tra quyền truy cập.',
+        })
+      }
+    } catch (err: any) {
+      setWebhookTestResult({
+        success: false,
+        message: `Lỗi kết nối Webhook: ${err.message || 'Không thể liên lạc'}`,
+      })
+    } finally {
+      setTestingWebhook(false)
+    }
+  }
+
+  const handleCopyScript = () => {
+    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_SAMPLE)
+    setCopiedScript(true)
+    setTimeout(() => setCopiedScript(false), 2500)
+  }
 
   // ── System Diagnostics & Sound ──
   const [isDiagnosticRunning, setIsDiagnosticRunning] = useState<boolean>(false)
@@ -423,6 +501,14 @@ export default function AdminScreen() {
     }
   }
 
+  // ── Hủy Ghép Nối Thiết Bị Kiosk (Reset Device Activation) ──
+  const handleResetDeviceActivation = async () => {
+    if (window.confirm('Bạn có chắc chắn muốn hủy ghép nối Kiosk này? Sau khi hủy, ứng dụng sẽ quay về màn hình nhập mã kích hoạt 6 chữ số.')) {
+      logAudit('HỦY GHÉP NỐI KIOSK', 'Quản trị viên đã xóa device_config.json để kích hoạt lại', 'WARNING')
+      await resetDeviceConfig()
+    }
+  }
+
   // ── Chẩn Đoán Lỗi Tự Động ──
   const handleRunDiagnostics = async () => {
     setIsDiagnosticRunning(true)
@@ -469,9 +555,6 @@ export default function AdminScreen() {
               <Shield size={36} strokeWidth={2} />
             </div>
             <h2 className="pin-pad-title">XÁC THỰC QUẢN TRỊ KIOSK</h2>
-            <p className="pin-pad-sub">
-              Nhập mã PIN 6 số dành riêng cho Kỹ thuật viên & Quản trị cơ sở
-            </p>
 
             <div className="pin-display">
               {[0, 1, 2, 3, 4, 5].map((idx) => (
@@ -500,13 +583,12 @@ export default function AdminScreen() {
             </div>
 
             <button
-              className="screen-back-btn"
-              style={{ marginTop: 14 }}
+              className="pin-pad-back-btn"
               onClick={() => setScreen('idle')}
               title="Quay lại màn hình chính"
             >
-              <ArrowLeft size={24} strokeWidth={2.2} />
-              <span>Quay Lại Kiosk</span>
+              <ArrowLeft size={20} strokeWidth={2.2} />
+              <span>Quay lại</span>
             </button>
           </div>
         </div>
@@ -523,7 +605,7 @@ export default function AdminScreen() {
       <header className="admin-header">
         <div className="admin-title">
           <span className="brand-dot-pulse" />
-          <span>FOTOLISM 3.0</span>
+          <span>fotolism 3.0</span>
           <span className="admin-badge">LOCAL ADMIN</span>
           <span className="kiosk-id-tag">KIOSK #01 • CHI NHÁNH A</span>
         </div>
@@ -605,7 +687,7 @@ export default function AdminScreen() {
           </div>
 
           <div className="sidebar-footer-info">
-            <span style={{ fontSize: '0.72rem', color: '#888' }}>Fotolism Kiosk v3.0</span>
+            <span style={{ fontSize: '0.72rem', color: '#888' }}>fotolism Kiosk v3.0</span>
             <span style={{ fontSize: '0.68rem', color: '#aaa' }}>EDSDK Daemon Port 8899</span>
           </div>
         </nav>
@@ -798,6 +880,204 @@ export default function AdminScreen() {
                       <li>EDSDK Daemon: <b>{daemonStatus?.running ? 'Port 8899 (Running)' : 'Standby'}</b></li>
                       {diagnostics && <li>Chẩn đoán: <b>{diagnostics.connected ? 'Kết nối tốt' : 'Sẵn sàng'}</b></li>}
                     </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Cụm 1.5: Gương Máy Ảnh, Đèn Trợ Sáng & AI Làm Đẹp K-Beauty ── */}
+              <div className="hardware-section-card">
+                <div className="section-card-header">
+                  <div>
+                    <h3 className="section-title">✨ Gương Máy Ảnh, Đèn Trợ Sáng & AI Làm Đẹp (K-Beauty)</h3>
+                    <p className="section-sub">Cài đặt cố định cho Kiosk: lật gương camera, đèn viền màn hình và tinh chỉnh làm đẹp da</p>
+                  </div>
+                  <button
+                    className="btn btn-pill-white"
+                    onClick={() => {
+                      resetAdjustments()
+                      setMirrorCamera(true)
+                      setRingLightEnabled(false)
+                    }}
+                    title="Khôi phục thông số mặc định"
+                  >
+                    🔄 Khôi Phục Mặc Định
+                  </button>
+                </div>
+
+                <div className="admin-form-grid" style={{ marginBottom: 20 }}>
+                  {/* 1. Lật Gương Camera (Mirror Camera) */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FlipHorizontal size={16} />
+                      <span>Chế Độ Lật Gương Camera (Mirror Camera)</span>
+                    </label>
+                    <select
+                      className="form-input"
+                      value={mirrorCamera ? 'yes' : 'no'}
+                      onChange={(e) => setMirrorCamera(e.target.value === 'yes')}
+                    >
+                      <option value="yes">🟢 Bật Lật Gương (Khuyên dùng — Chuẩn Photobooth soi gương)</option>
+                      <option value="no">⚪ Tắt Lật Gương (Góc nhìn thực tế từ ống kính máy ảnh)</option>
+                    </select>
+                    <span className="form-caption">
+                      Khi bật, Live View và ảnh chụp sẽ lật ngang để khách thấy chính mình như soi gương thực tế.
+                    </span>
+                  </div>
+
+                  {/* 2. Đèn Phát Sáng Viền Màn Hình (Ring Light) */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Lightbulb size={16} />
+                      <span>Đèn Phát Sáng Viền Màn Hình (Studio Ring Light)</span>
+                    </label>
+                    <select
+                      className="form-input"
+                      value={ringLightEnabled ? 'yes' : 'no'}
+                      onChange={(e) => setRingLightEnabled(e.target.value === 'yes')}
+                    >
+                      <option value="yes">🟢 Bật Đèn Viền Phát Sáng (Trợ sáng khuôn mặt)</option>
+                      <option value="no">⚪ Tắt Đèn Viền Phát Sáng</option>
+                    </select>
+                    <span className="form-caption">
+                      Tạo viền ánh sáng trắng kem xung quanh màn hình cảm ứng để đánh sáng đều da mặt khi chụp.
+                    </span>
+                  </div>
+
+                  {/* Độ sáng đèn nếu bật */}
+                  {ringLightEnabled && (
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <label className="form-label" style={{ margin: 0 }}>Cường Độ Sáng Viền Màn Hình:</label>
+                        <span style={{ fontWeight: 800, color: '#502A1D' }}>{ringLightLevel}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="20"
+                        max="100"
+                        step="5"
+                        value={ringLightLevel}
+                        onChange={(e) => setRingLightLevel(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. AI Làm Đẹp K-Beauty Presets */}
+                <div className="admin-beauty-subcard">
+                  <h4 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 800, color: '#351C15', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Sparkles size={18} color="#502A1D" />
+                    <span>Cấu Hình AI Làm Đẹp Mặc Định (K-Beauty Face Engine)</span>
+                  </h4>
+
+                  <div className="admin-preset-btn-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                    {BEAUTY_PRESETS.map((preset) => {
+                      const isAct = selectedBeautyPreset === preset.id
+                      return (
+                        <button
+                          key={preset.id}
+                          className={`btn ${isAct ? 'btn-primary' : 'btn-pill-white'}`}
+                          style={{ padding: '8px 18px', fontWeight: 700 }}
+                          onClick={() => applyBeautyPreset(preset.id)}
+                        >
+                          <span>{preset.icon} {preset.name}</span>
+                          {isAct && <span> ✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Sliders Tinh Chỉnh */}
+                  <div className="admin-form-grid" style={{ gap: '14px 20px' }}>
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>🌸 Thon Gọn Má:</span>
+                        <b>{slimFace}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={slimFace}
+                        onChange={(e) => setSlimFace(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>✨ Cằm V-Line:</span>
+                        <b>{vLine}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={vLine}
+                        onChange={(e) => setVLine(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>👀 Mắt To Tự Nhiên:</span>
+                        <b>{bigEyes}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={bigEyes}
+                        onChange={(e) => setBigEyes(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>🧖‍♀️ Mịn Da K-Beauty:</span>
+                        <b>{skinSmoothing}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={skinSmoothing}
+                        onChange={(e) => setSkinSmoothing(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>❄️ Trắng Sáng Da:</span>
+                        <b>{whiteningTone}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={whiteningTone}
+                        onChange={(e) => setWhiteningTone(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#502A1D' }}>🍑 Má Hồng Hào:</span>
+                        <b>{rosyTone}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={rosyTone}
+                        onChange={(e) => setRosyTone(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: 'var(--brand-primary, #502A1D)' }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1131,11 +1411,197 @@ export default function AdminScreen() {
                 <div className="admin-form-grid">
                   <div className="form-group">
                     <label className="form-label">Phiên Bản Ứng Dụng</label>
-                    <input type="text" className="form-input" value="Fotolism 3.0.0 (Kiosk Client Edition)" readOnly />
+                    <input type="text" className="form-input" value="fotolism 3.0.0 (Kiosk Client Edition)" readOnly />
                   </div>
                   <div className="form-group">
                     <label className="form-label">C# Hardware Daemon</label>
                     <input type="text" className="form-input" value="fotolism_canon_daemon.exe (Port 8899 - RUNNING)" readOnly />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cụm 2.2: Cấu Hình Google Drive & Trả Ảnh Tự Động (QR Delivery) */}
+              <div className="hardware-section-card">
+                <div className="section-card-header">
+                  <div>
+                    <h3 className="section-title">☁️ Cấu Hình Google Drive & Trả Ảnh QR</h3>
+                    <p className="section-sub">Tự động đẩy ảnh phiên chụp lên Google Drive và tạo mã QR cho khách tải về</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                      className="btn btn-pill-white"
+                      onClick={handleCopyScript}
+                      title="Sao chép toàn bộ mã nguồn Google Apps Script mẫu chuẩn"
+                      style={{ fontSize: '0.84rem', padding: '6px 14px' }}
+                    >
+                      <Copy size={15} style={{ marginRight: 6 }} />
+                      {copiedScript ? 'Đã sao chép Script!' : 'Mã Script Mẫu'}
+                    </button>
+                    {eventConfig.gdriveFolderUrl && (
+                      <button
+                        className="btn btn-pill-white"
+                        onClick={() => {
+                          if (eventConfig.gdriveFolderUrl) {
+                            window.open(eventConfig.gdriveFolderUrl, '_blank')
+                          }
+                        }}
+                        title="Mở thư mục Google Drive để kiểm tra"
+                        style={{ fontSize: '0.84rem', padding: '6px 14px' }}
+                      >
+                        <ExternalLink size={15} style={{ marginRight: 6 }} />
+                        Mở Drive
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="admin-form-grid" style={{ marginTop: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">Kích Hoạt Google Drive Delivery</label>
+                    <select
+                      className="form-input"
+                      value={eventConfig.gdriveEnabled ? 'yes' : 'no'}
+                      onChange={(e) => setEventConfig({ gdriveEnabled: e.target.value === 'yes' })}
+                    >
+                      <option value="yes">🟢 Bật (Khách quét QR mở Google Drive tải ảnh)</option>
+                      <option value="no">⚪ Tắt</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Mã Thư Mục Google Drive (Folder ID)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="VD: 1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU"
+                      value={eventConfig.gdriveFolderId || ''}
+                      onChange={(e) => {
+                        const id = e.target.value.trim()
+                        setEventConfig({
+                          gdriveFolderId: id,
+                          gdriveFolderUrl: id ? `https://drive.google.com/drive/folders/${id}` : '',
+                        })
+                      }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <label className="form-label">Đường Dẫn Thư Mục (Folder URL)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      value={eventConfig.gdriveFolderUrl || ''}
+                      onChange={(e) => setEventConfig({ gdriveFolderUrl: e.target.value.trim() })}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>
+                        Google Apps Script Webhook URL (Tạo thư mục con tự động)
+                      </label>
+                      <button
+                        className="btn btn-primary"
+                        style={{
+                          fontSize: '0.82rem',
+                          padding: '4px 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          borderRadius: 8,
+                          height: 32,
+                        }}
+                        disabled={testingWebhook || !eventConfig.gdriveWebhookUrl}
+                        onClick={handleTestWebhook}
+                      >
+                        {testingWebhook ? (
+                          <>
+                            <Loader2 size={14} className="spin-inline" />
+                            Đang kiểm tra...
+                          </>
+                        ) : (
+                          '🧪 Kiểm Tra Webhook'
+                        )}
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                      value={eventConfig.gdriveWebhookUrl || ''}
+                      onChange={(e) => setEventConfig({ gdriveWebhookUrl: e.target.value.trim() })}
+                    />
+                    {webhookTestResult && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          fontSize: '0.86rem',
+                          lineHeight: 1.5,
+                          fontWeight: 600,
+                          background: webhookTestResult.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                          border: `1.5px solid ${webhookTestResult.success ? '#22c55e' : '#ef4444'}`,
+                          color: webhookTestResult.success ? '#15803d' : '#b91c1c',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 8,
+                        }}
+                      >
+                        {webhookTestResult.success ? (
+                          <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                        ) : (
+                          <XCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                        )}
+                        <span>{webhookTestResult.message}</span>
+                      </div>
+                    )}
+                    <span style={{ fontSize: '0.82rem', color: '#70594F', marginTop: 6, display: 'block' }}>
+                      💡 Khi có Webhook, mỗi lượt chụp sẽ tự động tạo một thư mục con riêng biệt trên Google Drive và cấp quyền xem cho khách quét mã QR.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cụm 2.5: Định Danh Thiết Bị & Ghép Nối Cloud CMS */}
+              <div className="hardware-section-card">
+                <div className="section-card-header">
+                  <div>
+                    <h3 className="section-title">🔑 Định Danh Thiết Bị & Ghép Nối Cloud CMS</h3>
+                    <p className="section-sub">Thông tin thiết bị Kiosk, chi nhánh quản lý và Device Token (M2M)</p>
+                  </div>
+                  <button
+                    className="btn btn-pill-white"
+                    style={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem', padding: '8px 16px' }}
+                    onClick={handleResetDeviceActivation}
+                    title="Xóa device_config.json và chuyển về màn hình kích hoạt"
+                  >
+                    🔄 Hủy Ghép Nối & Kích Hoạt Lại
+                  </button>
+                </div>
+
+                <div className="admin-form-grid" style={{ marginTop: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">Tên Kiosk</label>
+                    <input type="text" className="form-input" value={deviceConfig?.kiosk_name || deviceConfig?.kiosk_id || 'Chưa định danh'} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Chi Nhánh Quản Lý</label>
+                    <input type="text" className="form-input" value={deviceConfig?.branch_name || deviceConfig?.branch_id || 'Chưa liên kết chi nhánh'} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Mã Định Danh (Kiosk ID)</label>
+                    <input type="text" className="form-input" value={deviceConfig?.kiosk_id || 'kiosk_01'} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Device Token (Bearer)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={deviceConfig?.device_token ? `${deviceConfig.device_token.slice(0, 16)}••••••••••••` : 'Chưa có Token'}
+                      readOnly
+                    />
                   </div>
                 </div>
               </div>

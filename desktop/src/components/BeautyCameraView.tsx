@@ -1,5 +1,6 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { getFaceLandmarker, extractFaceData, type FaceDetectionData } from '../lib/faceDetector'
+import { BEAUTY_VERTEX_SHADER, BEAUTY_FRAGMENT_SHADER } from '../services/beautyEngine'
 
 export interface BeautyCameraHandle {
   captureFrame: () => string
@@ -12,7 +13,9 @@ interface BeautyCameraViewProps {
   stream?: MediaStream | null
   mjpegUrl?: string
   mirrorCamera: boolean
-  slimFace: number // 0 - 100 (Thon gọn mặt V-line)
+  slimFace: number // 0 - 100 (Thon gọn má)
+  vLine?: number // 0 - 100 (Cằm V-Line)
+  bigEyes?: number // 0 - 100 (Phóng to mắt)
   skinSmoothing: number // 0 - 100 (Làm mịn da Bilateral)
   whiteningTone: number // 0 - 100 (Nâng tone trắng sáng)
   rosyTone: number // 0 - 100 (Trắng hồng tự nhiên)
@@ -24,178 +27,45 @@ interface BeautyCameraViewProps {
   style?: React.CSSProperties
 }
 
-const VERTEX_SHADER_SRC = `
-attribute vec2 a_position;
-attribute vec2 a_texCoord;
-varying vec2 v_texCoord;
+/**
+ * Làm mượt tọa độ khuôn mặt giữa các frame để chống rung (Temporal EMA Smoothing)
+ */
+function smoothFaces(
+  prevFaces: FaceDetectionData[],
+  newFaces: FaceDetectionData[]
+): FaceDetectionData[] {
+  if (prevFaces.length === 0 || newFaces.length === 0) return newFaces
 
-void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
-    v_texCoord = a_texCoord;
+  const alpha = 0.65 // 65% mới + 35% cũ
+  return newFaces.map((nf, idx) => {
+    const pf = prevFaces[idx]
+    if (!pf) return nf
+
+    // Nếu khoảng cách nhảy quá xa (> 20% khung hình), xem như khuôn mặt mới không làm mượt
+    const dist = Math.hypot(nf.centerX - pf.centerX, nf.centerY - pf.centerY)
+    if (dist > 0.20) return nf
+
+    return {
+      centerX: pf.centerX * (1 - alpha) + nf.centerX * alpha,
+      centerY: pf.centerY * (1 - alpha) + nf.centerY * alpha,
+      width: pf.width * (1 - alpha) + nf.width * alpha,
+      height: pf.height * (1 - alpha) + nf.height * alpha,
+      chinX: pf.chinX * (1 - alpha) + nf.chinX * alpha,
+      chinY: pf.chinY * (1 - alpha) + nf.chinY * alpha,
+      leftJawX: pf.leftJawX * (1 - alpha) + nf.leftJawX * alpha,
+      leftJawY: pf.leftJawY * (1 - alpha) + nf.leftJawY * alpha,
+      rightJawX: pf.rightJawX * (1 - alpha) + nf.rightJawX * alpha,
+      rightJawY: pf.rightJawY * (1 - alpha) + nf.rightJawY * alpha,
+      noseX: pf.noseX * (1 - alpha) + nf.noseX * alpha,
+      noseY: pf.noseY * (1 - alpha) + nf.noseY * alpha,
+      leftEyeX: pf.leftEyeX * (1 - alpha) + nf.leftEyeX * alpha,
+      leftEyeY: pf.leftEyeY * (1 - alpha) + nf.leftEyeY * alpha,
+      rightEyeX: pf.rightEyeX * (1 - alpha) + nf.rightEyeX * alpha,
+      rightEyeY: pf.rightEyeY * (1 - alpha) + nf.rightEyeY * alpha,
+      eyeDistance: pf.eyeDistance * (1 - alpha) + nf.eyeDistance * alpha,
+    }
+  })
 }
-`
-
-const FRAGMENT_SHADER_SRC = `
-precision mediump float;
-uniform sampler2D u_image;
-uniform vec2 u_resolution;
-uniform float u_slimFace;
-uniform float u_skinSmooth;
-uniform float u_whitening;
-uniform float u_rosyTone;
-uniform float u_clarity;
-uniform bool u_mirror;
-
-// ── Nhận diện khuôn mặt động MediaPipe ──
-uniform int u_numFaces;
-uniform vec4 u_faceBounds[4]; // (centerX, centerY, width, height)
-uniform vec4 u_faceVLine[4];  // (chinX, chinY, noseX, noseY)
-uniform vec4 u_faceJaw[4];    // (leftJawX, leftJawY, rightJawX, rightJawY)
-
-varying vec2 v_texCoord;
-
-void main() {
-    vec2 uv = v_texCoord;
-    if (u_mirror) {
-        uv.x = 1.0 - uv.x;
-    }
-
-    // ── 1. Thon Gọn Mặt V-Line Theo Tọa Độ Khuôn Mặt Thật (MediaPipe Tracking) ──
-    if (u_slimFace > 0.0) {
-        if (u_numFaces > 0) {
-            for (int i = 0; i < 4; i++) {
-                if (i >= u_numFaces) break;
-
-                vec4 bounds = u_faceBounds[i];
-                vec4 vline = u_faceVLine[i];
-                float chinY = vline.y;
-                float noseY = vline.w;
-                float centerX = bounds.x;
-                float faceW = bounds.z;
-                float faceH = bounds.w;
-
-                // Kiểm tra pixel có nằm trong vùng hàm dưới của khuôn mặt này không
-                float dy = uv.y - noseY;
-                float jawRange = max(chinY - noseY, 0.05);
-
-                if (dy > 0.0 && uv.y < chinY + faceH * 0.08) {
-                    float yNorm = dy / jawRange; // 0 ở chóp mũi, 1 ở đáy cằm
-                    // Trọng số bóp hàm: cao nhất quanh góc xương hàm và gò má (0.35 - 0.85)
-                    float yWeight = smoothstep(0.05, 0.45, yNorm) * smoothstep(1.08, 0.82, yNorm);
-
-                    float dx = uv.x - centerX;
-                    float halfJawW = max(faceW * 0.52, 0.04);
-                    float xNorm = abs(dx) / halfJawW;
-
-                    if (xNorm < 1.0) {
-                        // Warp co nhẹ nhàng về trục giữa khuôn mặt
-                        float xWeight = smoothstep(1.0, 0.15, xNorm);
-                        float warpFactor = (u_slimFace * 0.15) * yWeight * xWeight;
-                        uv.x += dx * warpFactor;
-                    }
-                }
-            }
-        } else {
-            // Dự phòng V-line trung tâm khi MediaPipe chưa trả kết quả
-            float dx = uv.x - 0.5;
-            float dy = uv.y - 0.56;
-            if (dy > -0.15 && dy < 0.28 && abs(dx) < 0.35) {
-                float yNorm = (dy + 0.15) / 0.43;
-                float yWeight = smoothstep(0.05, 0.45, yNorm) * smoothstep(1.02, 0.76, yNorm);
-                float xNorm = abs(dx) / 0.35;
-                float xWeight = smoothstep(1.0, 0.15, xNorm);
-                float warpFactor = (u_slimFace * 0.12) * yWeight * xWeight;
-                uv.x += dx * warpFactor;
-            }
-        }
-    }
-
-    vec3 centerColor = texture2D(u_image, uv).rgb;
-
-    // ── Kiểm tra mặt nạ da người (Skin Chrominance + Face Proximity) ──
-    float isSkin = 0.0;
-    // Chuyển sang không gian YCbCr để phát hiện màu da người
-    float Cb = -0.168736 * centerColor.r - 0.331264 * centerColor.g + 0.5 * centerColor.b + 0.5;
-    float Cr = 0.5 * centerColor.r - 0.418688 * centerColor.g - 0.081312 * centerColor.b + 0.5;
-    bool colorIsSkin = (Cb >= 0.24 && Cb <= 0.60 && Cr >= 0.46 && Cr <= 0.78);
-
-    if (u_numFaces > 0) {
-        for (int i = 0; i < 4; i++) {
-            if (i >= u_numFaces) break;
-            vec4 bounds = u_faceBounds[i];
-            vec2 fCenter = vec2(bounds.x, bounds.y);
-            float fRad = max(bounds.z, bounds.w) * 0.65;
-            float dFace = distance(uv, fCenter);
-            if (dFace < fRad) {
-                float prox = smoothstep(fRad, fRad * 0.8, dFace);
-                if (colorIsSkin) {
-                    isSkin = max(isSkin, prox);
-                } else {
-                    isSkin = max(isSkin, prox * 0.5);
-                }
-            }
-        }
-    } else {
-        if (colorIsSkin) {
-            isSkin = 1.0;
-        } else {
-            isSkin = 0.6; // Đảm bảo làm mịn da luôn phát huy tác dụng
-        }
-    }
-
-    // ── 2. Làm Mịn Da Bilateral Filter (Tập trung trên da người) ──
-    vec3 smoothedColor = centerColor;
-    if (u_skinSmooth > 0.05 && isSkin > 0.05) {
-        vec3 sumColor = vec3(0.0);
-        float sumWeight = 0.0;
-        vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y);
-        float radius = 1.0 + u_skinSmooth * 4.5;
-
-        for (float x = -3.0; x <= 3.0; x += 1.0) {
-            for (float y = -3.0; y <= 3.0; y += 1.0) {
-                vec2 offset = vec2(x, y) * stepUV * (radius / 3.0);
-                vec3 sampleColor = texture2D(u_image, uv + offset).rgb;
-
-                float distSpatial = dot(vec2(x, y), vec2(x, y));
-                float wSpatial = exp(-distSpatial / 9.0);
-
-                float diff = distance(centerColor, sampleColor);
-                float wRange = exp(-diff * diff / (0.012 + (1.0 - u_skinSmooth) * 0.02));
-
-                float w = wSpatial * wRange;
-                sumColor += sampleColor * w;
-                sumWeight += w;
-            }
-        }
-        vec3 skinFiltered = sumColor / max(sumWeight, 0.0001);
-        smoothedColor = mix(centerColor, skinFiltered, isSkin);
-    }
-
-    // ── 3. Nâng Tone Trắng Sáng (Whitening: tập trung vào vùng da mặt) ──
-    vec3 result = smoothedColor;
-    if (u_whitening > 0.0) {
-        float whiteEff = u_whitening * max(isSkin, 0.25);
-        result = mix(result, 1.0 - (1.0 - result) * (1.0 - result), whiteEff * 0.28);
-        result += vec3(whiteEff * 0.065);
-    }
-
-    // ── 4. Trắng Hồng Đào Tự Nhiên (Rosy Peach Tone) ──
-    if (u_rosyTone > 0.0) {
-        float rosyEff = u_rosyTone * max(isSkin, 0.35);
-        result.r += rosyEff * 0.04;
-        result.b += rosyEff * 0.02;
-        result.g -= rosyEff * 0.015;
-    }
-
-    // ── 5. Sáng Nét Chi Tiết (Clarity / High-Pass Detail: bảo vệ mắt & tóc) ──
-    if (u_clarity > 0.0) {
-        vec3 detail = centerColor - smoothedColor;
-        result += detail * (u_clarity * 0.45);
-    }
-
-    gl_FragColor = vec4(clamp(result, 0.0, 1.0), 1.0);
-}
-`
 
 export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewProps>(
   (
@@ -204,6 +74,8 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
       mjpegUrl,
       mirrorCamera,
       slimFace,
+      vLine = 0,
+      bigEyes = 0,
       skinSmoothing,
       whiteningTone,
       rosyTone,
@@ -225,6 +97,19 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
     const animIdRef = useRef<number | null>(null)
     const renderDirectRef = useRef<(() => boolean) | null>(null)
 
+    const detectedFacesRef = useRef<FaceDetectionData[]>([])
+    const lastDetectTimeRef = useRef<number>(0)
+    const isDetectingRef = useRef<boolean>(false)
+
+    // Khởi tạo MediaPipe Face Landmarker ngầm từ file offline
+    useEffect(() => {
+      getFaceLandmarker().then((landmarker) => {
+        if (landmarker) {
+          console.log('✨ MediaPipe Face Landmarker đã sẵn sàng (Offline GPU)')
+        }
+      })
+    }, [])
+
     // Expose capture frame API to parent component with zero-black-screen guarantee
     useImperativeHandle(ref, () => ({
       captureFrame: () => {
@@ -236,14 +121,14 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
         const gl = glRef.current
         const canvas = canvasRef.current
 
-        // Kiểm tra xem buffer WebGL có thực sự chứa pixel hình ảnh (không bị đen do swapchain)
+        // Kiểm tra xem buffer WebGL có thực sự chứa pixel hình ảnh
         let isWebGlBufferValid = false
         if (gl && canvas && canvas.width > 0 && canvas.height > 0) {
           try {
             gl.flush()
             gl.finish()
 
-            // Lấy mẫu điểm ảnh ở trung tâm và hai bên
+            // Lấy mẫu điểm ảnh ở trung tâm
             const pCenter = new Uint8Array(4)
             gl.readPixels(
               Math.floor(canvas.width / 2),
@@ -255,34 +140,14 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
               pCenter
             )
 
-            // Nếu pixel trung tâm không phải màu đen tuyền (R + G + B > 8)
             if (pCenter[0] + pCenter[1] + pCenter[2] > 8) {
               isWebGlBufferValid = true
             } else {
               const pLeft = new Uint8Array(4)
               const pRight = new Uint8Array(4)
-              gl.readPixels(
-                Math.floor(canvas.width * 0.3),
-                Math.floor(canvas.height * 0.5),
-                1,
-                1,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                pLeft
-              )
-              gl.readPixels(
-                Math.floor(canvas.width * 0.7),
-                Math.floor(canvas.height * 0.5),
-                1,
-                1,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                pRight
-              )
-              if (
-                pLeft[0] + pLeft[1] + pLeft[2] > 8 ||
-                pRight[0] + pRight[1] + pRight[2] > 8
-              ) {
+              gl.readPixels(Math.floor(canvas.width * 0.3), Math.floor(canvas.height * 0.5), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pLeft)
+              gl.readPixels(Math.floor(canvas.width * 0.7), Math.floor(canvas.height * 0.5), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pRight)
+              if (pLeft[0] + pLeft[1] + pLeft[2] > 8 || pRight[0] + pRight[1] + pRight[2] > 8) {
                 isWebGlBufferValid = true
               }
             }
@@ -309,50 +174,10 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
             off.height = h
             const ctx = off.getContext('2d')
             if (ctx) {
-              const filters: string[] = []
-              const whiteMultiplier = 1 + (whiteningTone / 100) * 0.12
-              const baseBright = (brightnessAdjust && brightnessAdjust !== 100) ? brightnessAdjust / 100 : 1
-              const totalBright = baseBright * whiteMultiplier
-              if (totalBright !== 1) {
-                filters.push(`brightness(${totalBright.toFixed(3)})`)
-              }
-
-              const baseContrast = (contrastAdjust && contrastAdjust !== 100) ? contrastAdjust / 100 : 1
-              const clarityMult = 1 + (glowClarity / 100) * 0.08
-              const totalContrast = baseContrast * clarityMult
-              if (totalContrast !== 1) {
-                filters.push(`contrast(${totalContrast.toFixed(3)})`)
-              }
-
-              const baseSat = (saturationAdjust && saturationAdjust !== 100) ? saturationAdjust / 100 : 1
-              if (baseSat !== 1) {
-                filters.push(`saturate(${baseSat.toFixed(3)})`)
-              }
-
-              if (skinSmoothing > 0) {
-                filters.push(`blur(${(skinSmoothing * 0.0065).toFixed(2)}px)`)
-              }
-              if (rosyTone > 0) {
-                filters.push(`saturate(${(1 + (rosyTone / 100) * 0.12).toFixed(3)}) hue-rotate(-${(rosyTone * 0.075).toFixed(1)}deg)`)
-              }
-              if (filters.length > 0) {
-                ctx.filter = filters.join(' ')
-              }
-
               if (mirrorCamera) {
                 ctx.translate(w, 0)
                 ctx.scale(-1, 1)
               }
-              if (slimFace > 0) {
-                const scaleXFactor = 1 - (slimFace / 100) * 0.055
-                const scaleYFactor = 1 + (slimFace / 100) * 0.015
-                const cx = w / 2
-                const cy = h / 2
-                ctx.translate(cx, cy)
-                ctx.scale(scaleXFactor, scaleYFactor)
-                ctx.translate(-cx, -cy)
-              }
-
               ctx.drawImage(img, 0, 0, w, h)
               const mjpegDataUrl = off.toDataURL('image/jpeg', 0.98)
               if (mjpegDataUrl && mjpegDataUrl.length > 1000) {
@@ -364,7 +189,7 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
           }
         }
 
-        // 3. Dự phòng tuyệt đối 100%: Chụp trực tiếp từ HTMLVideoElement bằng Canvas 2D
+        // 3. Chụp trực tiếp từ HTMLVideoElement bằng Canvas 2D
         const video = videoRef.current
         if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
           try {
@@ -375,40 +200,11 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
             off.height = h
             const ctx = off.getContext('2d')
             if (ctx) {
-              // Áp dụng bộ lọc làm đẹp trực tiếp trên 2D context
-              const filters: string[] = []
-              if (whiteningTone > 0) {
-                filters.push(`brightness(${(1 + (whiteningTone / 100) * 0.12).toFixed(3)})`)
-              }
-              if (skinSmoothing > 0) {
-                filters.push(`blur(${(skinSmoothing * 0.005).toFixed(2)}px)`)
-              }
-              if (rosyTone > 0) {
-                filters.push(`saturate(${(1 + (rosyTone / 100) * 0.15).toFixed(3)}) hue-rotate(-${(rosyTone * 0.08).toFixed(1)}deg)`)
-              }
-              if (filters.length > 0) {
-                ctx.filter = filters.join(' ')
-              }
-
               if (mirrorCamera) {
                 ctx.translate(w, 0)
                 ctx.scale(-1, 1)
               }
-              if (slimFace > 0) {
-                const scaleXFactor = 1 - (slimFace / 100) * 0.055
-                const scaleYFactor = 1 + (slimFace / 100) * 0.015
-                const cx = w / 2
-                const cy = h / 2
-                ctx.translate(cx, cy)
-                ctx.scale(scaleXFactor, scaleYFactor)
-                ctx.translate(-cx, -cy)
-              }
-
-              if (mjpegUrl && imgRef.current) {
-                ctx.drawImage(imgRef.current, 0, 0, w, h)
-              } else if (video) {
-                ctx.drawImage(video, 0, 0, w, h)
-              }
+              ctx.drawImage(video, 0, 0, w, h)
               const fallbackUrl = off.toDataURL('image/jpeg', 0.98)
               if (fallbackUrl && fallbackUrl.length > 1000) {
                 return fallbackUrl
@@ -444,7 +240,7 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
       }
     }, [stream, mjpegUrl])
 
-    // Khởi tạo WebGL Pipeline với preserveDrawingBuffer = true (BẮT BUỘC để toDataURL không bị đen)
+    // Khởi tạo WebGL Pipeline với preserveDrawingBuffer = true
     useEffect(() => {
       const canvas = canvasRef.current
       if (!canvas) return
@@ -480,8 +276,8 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
         return shader
       }
 
-      const vs = createShader(gl.VERTEX_SHADER, VERTEX_SHADER_SRC)
-      const fs = createShader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SRC)
+      const vs = createShader(gl.VERTEX_SHADER, BEAUTY_VERTEX_SHADER)
+      const fs = createShader(gl.FRAGMENT_SHADER, BEAUTY_FRAGMENT_SHADER)
       if (!vs || !fs) return
 
       const program = gl.createProgram()
@@ -545,33 +341,24 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
       }
     }, [])
 
-    const detectedFacesRef = useRef<FaceDetectionData[]>([])
-    const lastDetectTimeRef = useRef<number>(0)
-    const isDetectingRef = useRef<boolean>(false)
-
-    // Khởi tạo MediaPipe Face Landmarker ngầm từ file offline
-    useEffect(() => {
-      getFaceLandmarker().then((landmarker) => {
-        if (landmarker) {
-          console.log('✨ MediaPipe Face Landmarker đã sẵn sàng (Offline GPU)')
-        }
-      })
-    }, [])
-
     // Real-time 60 FPS Render Loop
     useEffect(() => {
       const gl = glRef.current
       const program = programRef.current
-      const video = videoRef.current
       const canvas = canvasRef.current
-      if (!gl || !program || !video || !canvas) return
+      if (!gl || !program || !canvas) return
 
       const uResolution = gl.getUniformLocation(program, 'u_resolution')
       const uSlimFace = gl.getUniformLocation(program, 'u_slimFace')
+      const uVLine = gl.getUniformLocation(program, 'u_vLine')
+      const uBigEyes = gl.getUniformLocation(program, 'u_bigEyes')
       const uSkinSmooth = gl.getUniformLocation(program, 'u_skinSmooth')
       const uWhitening = gl.getUniformLocation(program, 'u_whitening')
       const uRosyTone = gl.getUniformLocation(program, 'u_rosyTone')
       const uClarity = gl.getUniformLocation(program, 'u_clarity')
+      const uBrightness = gl.getUniformLocation(program, 'u_brightness')
+      const uContrast = gl.getUniformLocation(program, 'u_contrast')
+      const uSaturation = gl.getUniformLocation(program, 'u_saturation')
       const uMirror = gl.getUniformLocation(program, 'u_mirror')
 
       // Uniforms cho nhận diện khuôn mặt động MediaPipe
@@ -579,6 +366,7 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
       const uFaceBounds = gl.getUniformLocation(program, 'u_faceBounds')
       const uFaceVLine = gl.getUniformLocation(program, 'u_faceVLine')
       const uFaceJaw = gl.getUniformLocation(program, 'u_faceJaw')
+      const uFaceEyes = gl.getUniformLocation(program, 'u_faceEyes')
 
       let isRunning = true
 
@@ -593,7 +381,7 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
         let srcH = 1080
 
         if (isMjpeg && img) {
-          if (img.naturalWidth <= 0) return false
+          if (!img.complete || img.naturalWidth <= 0) return false
           mediaSource = img
           srcW = img.naturalWidth
           srcH = img.naturalHeight
@@ -622,10 +410,15 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
         // Cập nhật Uniforms tham số làm đẹp
         gl.uniform2f(uResolution, canvas.width, canvas.height)
         gl.uniform1f(uSlimFace, (slimFace || 0) / 100.0)
+        gl.uniform1f(uVLine, (vLine || 0) / 100.0)
+        gl.uniform1f(uBigEyes, (bigEyes || 0) / 100.0)
         gl.uniform1f(uSkinSmooth, (skinSmoothing || 0) / 100.0)
         gl.uniform1f(uWhitening, (whiteningTone || 0) / 100.0)
         gl.uniform1f(uRosyTone, (rosyTone || 0) / 100.0)
         gl.uniform1f(uClarity, (glowClarity || 0) / 100.0)
+        gl.uniform1f(uBrightness, (brightnessAdjust || 100) / 100.0)
+        gl.uniform1f(uContrast, (contrastAdjust || 100) / 100.0)
+        gl.uniform1f(uSaturation, (saturationAdjust || 100) / 100.0)
         gl.uniform1i(uMirror, mirrorCamera ? 1 : 0)
 
         // Cập nhật tọa độ khuôn mặt MediaPipe phát hiện được
@@ -637,6 +430,7 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
           const boundsData = new Float32Array(16)
           const vlineData = new Float32Array(16)
           const jawData = new Float32Array(16)
+          const eyesData = new Float32Array(16)
 
           for (let i = 0; i < count; i++) {
             const f = faces[i]
@@ -654,11 +448,17 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
             jawData[i * 4 + 1] = f.leftJawY
             jawData[i * 4 + 2] = f.rightJawX
             jawData[i * 4 + 3] = f.rightJawY
+
+            eyesData[i * 4 + 0] = f.leftEyeX
+            eyesData[i * 4 + 1] = f.leftEyeY
+            eyesData[i * 4 + 2] = f.rightEyeX
+            eyesData[i * 4 + 3] = f.rightEyeY
           }
 
           gl.uniform4fv(uFaceBounds, boundsData)
           gl.uniform4fv(uFaceVLine, vlineData)
           gl.uniform4fv(uFaceJaw, jawData)
+          gl.uniform4fv(uFaceEyes, eyesData)
         }
 
         // Nạp khung hình video/image vào WebGL Texture
@@ -680,24 +480,40 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
         if (!isDetectingRef.current && now - lastDetectTimeRef.current >= 33) {
           lastDetectTimeRef.current = now
           isDetectingRef.current = true
-          getFaceLandmarker()
-            .then((landmarker) => {
-              if (landmarker && videoRef.current && videoRef.current.readyState >= 2) {
-                try {
-                  const results = landmarker.detectForVideo(videoRef.current, now)
-                  detectedFacesRef.current = extractFaceData(results, false)
-                } catch {
-                  // Bỏ qua nếu frame chưa sẵn sàng
-                } finally {
+
+          const isMjpeg = Boolean(mjpegUrl && imgRef.current)
+          const mediaElem = isMjpeg ? imgRef.current : videoRef.current
+          const isReady = isMjpeg
+            ? Boolean(imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0)
+            : Boolean(videoRef.current && videoRef.current.readyState >= 2)
+
+          if (isReady && mediaElem) {
+            getFaceLandmarker()
+              .then((landmarker) => {
+                if (landmarker && isRunning) {
+                  try {
+                    const results = landmarker.detectForVideo(mediaElem, now)
+                    const rawFaces = extractFaceData(results, false)
+                    if (rawFaces.length > 0) {
+                      detectedFacesRef.current = smoothFaces(detectedFacesRef.current, rawFaces)
+                    } else {
+                      detectedFacesRef.current = []
+                    }
+                  } catch {
+                    // Bỏ qua lỗi tạm thời khi frame đổi
+                  } finally {
+                    isDetectingRef.current = false
+                  }
+                } else {
                   isDetectingRef.current = false
                 }
-              } else {
+              })
+              .catch(() => {
                 isDetectingRef.current = false
-              }
-            })
-            .catch(() => {
-              isDetectingRef.current = false
-            })
+              })
+          } else {
+            isDetectingRef.current = false
+          }
         }
 
         doRender()
@@ -713,56 +529,21 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
           animIdRef.current = null
         }
       }
-    }, [stream, mjpegUrl, mirrorCamera, slimFace, skinSmoothing, whiteningTone, rosyTone, glowClarity, brightnessAdjust, contrastAdjust, saturationAdjust])
-
-    // Tính toán CSS filter cho MJPEG Image stream (Canon EOS R100 Live View)
-    const mjpegFilters: string[] = []
-    
-    // 1. Áp dụng ma trận làm nét cạnh viền (Convolution Sharpening)
-    if (glowClarity > 50) {
-      mjpegFilters.push('url(#canon-sharpen-crisp)')
-    } else if (glowClarity > 0) {
-      mjpegFilters.push('url(#canon-sharpen-medium)')
-    }
-
-    // 2. Whitening + Brightness
-    const whiteMultiplier = 1 + (whiteningTone / 100) * 0.12
-    const baseBright = (brightnessAdjust && brightnessAdjust !== 100) ? brightnessAdjust / 100 : 1
-    const totalBright = baseBright * whiteMultiplier
-    if (totalBright !== 1) {
-      mjpegFilters.push(`brightness(${totalBright.toFixed(3)})`)
-    }
-
-    // 3. Contrast + Glow
-    const baseContrast = (contrastAdjust && contrastAdjust !== 100) ? contrastAdjust / 100 : 1
-    const clarityMult = 1 + (glowClarity / 100) * 0.08
-    const totalContrast = baseContrast * clarityMult
-    if (totalContrast !== 1) {
-      mjpegFilters.push(`contrast(${totalContrast.toFixed(3)})`)
-    }
-
-    // 4. Saturation
-    const baseSat = (saturationAdjust && saturationAdjust !== 100) ? saturationAdjust / 100 : 1
-    if (baseSat !== 1) {
-      mjpegFilters.push(`saturate(${baseSat.toFixed(3)})`)
-    }
-
-    // 5. Làm Mịn Da (Skin Smoothing)
-    if (skinSmoothing > 0) {
-      mjpegFilters.push(`blur(${(skinSmoothing * 0.0065).toFixed(2)}px)`)
-    }
-
-    // 6. Trắng hồng đào (Rosy Tone)
-    if (rosyTone > 0) {
-      mjpegFilters.push(`hue-rotate(-${(rosyTone * 0.075).toFixed(1)}deg) saturate(${(1 + rosyTone * 0.0025).toFixed(3)})`)
-    }
-
-    const mjpegFilterStyle = mjpegFilters.length > 0 ? mjpegFilters.join(' ') : 'none'
-
-    // Tính toán tỷ lệ co V-Line cho luồng Canon R100
-    const mjpegScaleX = (mirrorCamera ? -1 : 1) * (1 - (slimFace / 100) * 0.055)
-    const mjpegScaleY = 1 + (slimFace / 100) * 0.015
-    const mjpegTransform = `scale(${mjpegScaleX.toFixed(4)}, ${mjpegScaleY.toFixed(4)})`
+    }, [
+      stream,
+      mjpegUrl,
+      mirrorCamera,
+      slimFace,
+      vLine,
+      bigEyes,
+      skinSmoothing,
+      whiteningTone,
+      rosyTone,
+      glowClarity,
+      brightnessAdjust,
+      contrastAdjust,
+      saturationAdjust,
+    ])
 
     return (
       <div
@@ -776,100 +557,64 @@ export const BeautyCameraView = forwardRef<BeautyCameraHandle, BeautyCameraViewP
           ...style,
         }}
       >
-        {/* Bộ lọc ma trận chập tăng cường độ sắc nét cạnh (GPU Convolution Sharpening) */}
-        <svg
+        {/* Nguồn Video Webcam (ngầm) */}
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
           style={{
             position: 'absolute',
-            width: 0,
-            height: 0,
+            top: 0,
+            left: 0,
+            width: 1,
+            height: 1,
+            opacity: 0.01,
             pointerEvents: 'none',
+            zIndex: -999,
           }}
-          aria-hidden="true"
-        >
-          <defs>
-            <filter id="canon-sharpen-medium" colorInterpolationFilters="sRGB">
-              <feConvolveMatrix
-                order="3 3"
-                preserveAlpha="true"
-                kernelMatrix="
-                   0   -0.35   0
-                 -0.35  2.4  -0.35
-                   0   -0.35   0"
-              />
-            </filter>
-            <filter id="canon-sharpen-crisp" colorInterpolationFilters="sRGB">
-              <feConvolveMatrix
-                order="3 3"
-                preserveAlpha="true"
-                kernelMatrix="
-                   0   -0.55   0
-                 -0.55  3.2  -0.55
-                   0   -0.55   0"
-              />
-            </filter>
-          </defs>
-        </svg>
+        />
 
-        {/* Hiển thị trực tiếp luồng Canon EDSDK MJPEG độ phân giải cao hoặc WebGL Canvas cho Webcam */}
-        {mjpegUrl ? (
+        {/* Nguồn MJPEG Canon EDSDK Live View (ngầm) */}
+        {mjpegUrl && (
           <img
             ref={imgRef}
             src={mjpegUrl}
-            alt="Canon EDSDK LiveView"
+            alt="Canon EDSDK LiveView Source"
             crossOrigin="anonymous"
-            className="camera-preview-element"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 1,
+              height: 1,
+              opacity: 0.01,
+              pointerEvents: 'none',
+              zIndex: -999,
+            }}
             onError={(_e) => {
-              // Tự động kết nối lại sau 1.2s nếu luồng bị ngắt tạm thời
               setTimeout(() => {
                 if (imgRef.current && mjpegUrl) {
                   imgRef.current.src = `${mjpegUrl}?retry=${Date.now()}`
                 }
               }, 1200)
             }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transform: mjpegTransform,
-              filter: mjpegFilterStyle,
-              imageRendering: '-webkit-optimize-contrast' as any,
-              display: 'block',
-              zIndex: 1,
-            }}
           />
-        ) : (
-          <>
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              autoPlay
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1,
-                height: 1,
-                opacity: 0.01,
-                pointerEvents: 'none',
-                zIndex: -999,
-              }}
-            />
-            {/* WebGL Real-time Shader Output Canvas */}
-            <canvas
-              ref={canvasRef}
-              className="camera-preview-element"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          </>
         )}
+
+        {/* Khung hiển thị WebGL Real-time Beauty Shader Canvas thống nhất cho cả Canon R100 và Webcam */}
+        <canvas
+          ref={canvasRef}
+          className="camera-preview-element"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
       </div>
     )
   }

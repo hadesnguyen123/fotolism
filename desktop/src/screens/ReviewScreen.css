@@ -7,7 +7,7 @@
   max-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg-primary);
+  background: radial-gradient(circle at 50% 36%, #FFFFFF 0%, #FAF6F1 52%, #EFE5DB 100%);
   user-select: none;
   overflow: hidden;
   position: relative;
@@ -16,14 +16,14 @@
 
 /* ── Header ──────────────────────────────────────────────────────────── */
 .review-header-pastel {
-  height: 72px;
-  padding: 0 36px;
+  height: 68px;
+  padding: 0 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface-default);
-  border-bottom: 1.5px solid var(--border-default);
-  box-shadow: var(--shadow-sm);
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
   flex-shrink: 0;
   z-index: 15;
 }
@@ -109,6 +109,9 @@
   background: transparent;
   color: var(--color-dark-text);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   transition: all var(--transition-fast);
 }
 
@@ -427,9 +430,16 @@
   transition: all var(--transition-fast);
 }
 
-.copies-btn-pastel:hover {
+.copies-btn-pastel:hover:not(:disabled) {
   background: var(--color-pink-primary);
   color: #ffffff;
+}
+
+.copies-btn-pastel:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: #E5E7EB;
+  color: #9CA3AF;
 }
 
 .print-btn-pastel {
@@ -450,22 +460,35 @@
   transition: all var(--transition-fast);
 }
 
-.print-btn-pastel:hover {
+.print-btn-pastel:hover:not(:disabled) {
   background: var(--color-pink-hover);
   transform: translateY(-2px);
 }
 
-/* ── Bottom Bar ──────────────────────────────────────────────────────── */
+.print-btn-pastel:disabled {
+  background: #E5E7EB;
+  color: #9CA3AF;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  opacity: 0.85;
+}
+
+/* ── Bottom Bar: Cách lề mặc định 100px ──────────────────────────────── */
 .review-bottom-bar-pastel {
-  height: 72px;
-  padding: 0 36px;
+  height: 68px;
+  padding: 0 100px 24px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  background: var(--surface-default);
-  border-top: 1.5px solid var(--border-default);
+  justify-content: space-between;
+  background: transparent;
+  border-top: none;
+  box-shadow: none;
   flex-shrink: 0;
   z-index: 15;
+  width: 100vw;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .btn-finish-review {
@@ -497,4 +520,215 @@
 .btn-finish-review:active {
   transform: scale(0.97);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SELFBOOTH REVIEW SCREEN: MINIMAL QR CODE DELIVERY (Fotolism 3.0)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.selfbooth-review-minimal {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.selfbooth-minimal-card {
+  background: #ffffff;
+  border: 1.5px solid #e6d9cf;
+  border-radius: 32px;
+  padding: 40px 48px;
+  box-shadow: 0 20px 60px rgba(80, 42, 29, 0.1), 0 4px 16px rgba(80, 42, 29, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  max-width: 440px;
+  width: 90%;
+}
+
+.btn-selfbooth-qr-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 36px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--brand-primary, #502a1d);
+  color: #ffffff;
+  border: none;
+  font-family: var(--font-body, inherit);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  box-shadow: 0 6px 20px rgba(80, 42, 29, 0.28);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-selfbooth-qr-top:hover {
+  background: var(--brand-primary-hover, #663625);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 26px rgba(80, 42, 29, 0.38);
+}
+
+.btn-selfbooth-qr-top:active {
+  transform: scale(0.98);
+}
+
+.selfbooth-qr-img-box-large {
+  background: #faf6f1;
+  border: 2.5px solid #502a1d;
+  padding: 20px;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(80, 42, 29, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selfbooth-qr-img-large {
+  width: 280px;
+  height: 280px;
+  display: block;
+  border-radius: 12px;
+}
+
+.selfbooth-qr-loading-large {
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a89f91;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* Cột Phải: Gallery */
+.selfbooth-gallery-column {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1.5px solid #e6d9cf;
+  border-radius: 28px;
+  padding: 24px 28px;
+  box-shadow: 0 16px 40px rgba(80, 42, 29, 0.06);
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.selfbooth-gallery-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1.5px solid #f2e9e1;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.selfbooth-gallery-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #502a1d;
+  margin: 0;
+}
+
+.selfbooth-gallery-filter-badge {
+  font-size: 0.82rem;
+  color: #78452f;
+  background: #fbf8f4;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #e6d9cf;
+}
+
+.selfbooth-gallery-filter-badge strong {
+  color: #502a1d;
+}
+
+.selfbooth-gallery-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 6px;
+  align-content: start;
+}
+
+.selfbooth-gallery-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid #e6d9cf;
+  background: #f8fafc;
+  box-shadow: 0 4px 12px rgba(80, 42, 29, 0.06);
+  transition: all 0.2s ease;
+}
+
+.selfbooth-gallery-cell:hover {
+  transform: translateY(-2px);
+  border-color: #502a1d;
+  box-shadow: 0 8px 20px rgba(80, 42, 29, 0.15);
+}
+
+.selfbooth-gallery-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.selfbooth-cell-index {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+/* Lazy Loading Pulse Bar cho Selfbooth & Photobooth */
+.selfbooth-loading-pulse-bar {
+  position: relative;
+  width: 240px;
+  height: 6px;
+  background: rgba(80, 42, 29, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.selfbooth-loading-pulse-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 45%;
+  background: linear-gradient(90deg, #502A1D, #D27D60, #502A1D);
+  border-radius: 999px;
+  animation: selfboothPulseMove 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes selfboothPulseMove {
+  0% {
+    left: -45%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 

@@ -280,3 +280,76 @@ button, input, select, textarea, optgroup {
   outline: 3px solid rgba(80, 42, 29, 0.25);
 }
 
+/* ── Fotolism 3.0 Universal Kiosk Bottom Navigation Bar & Buttons ──────── */
+.kiosk-bottom-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 100px 24px; /* Cách lề mặc định 100px */
+  box-sizing: border-box;
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.kiosk-nav-btn {
+  height: 52px;
+  min-width: 130px;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-display, inherit);
+  font-size: 1.15rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  box-sizing: border-box;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Nút Quay Lại ở góc dưới bên tay trái - CHỈ HIỂN THỊ CHỮ "Quay lại" */
+.btn-nav-back {
+  background: var(--surface-default, #FFFFFF);
+  color: var(--brand-primary, #502A1D);
+  border: 1.5px solid var(--border-default, #E6D9CF);
+  padding: 0 36px;
+  box-shadow: 0 4px 14px rgba(80, 42, 29, 0.08);
+}
+
+.btn-nav-back:hover {
+  background: var(--bg-primary, #FAF6F1);
+  border-color: var(--brand-primary, #502A1D);
+  transform: translateX(-3px);
+  box-shadow: 0 6px 18px rgba(80, 42, 29, 0.14);
+}
+
+.btn-nav-back:active {
+  transform: scale(0.97);
+}
+
+/* Nút Tiếp Tục ở góc dưới bên tay phải - CHỈ HIỂN THỊ CHỮ "Tiếp tục" */
+.btn-nav-next {
+  background: var(--brand-primary, #351A10);
+  color: #FFFFFF;
+  border: none;
+  padding: 0 38px;
+  box-shadow: 0 8px 24px rgba(53, 26, 16, 0.28);
+}
+
+.btn-nav-next:hover {
+  background: var(--brand-primary-hover, #1A0B06);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(53, 26, 16, 0.38);
+}
+
+.btn-nav-next:active {
+  transform: translateY(0) scale(0.97);
+}
+

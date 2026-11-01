@@ -43,58 +43,76 @@ namespace Fotolism {
 
         public delegate uint EdsObjectEventHandler(uint inEvent, IntPtr inRef, IntPtr inContext);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern bool SetDllDirectory(string lpPathName);
+
+        static Program() {
+            try {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string localEdsdk = Path.Combine(baseDir, "EDSDK.dll");
+                if (File.Exists(localEdsdk)) {
+                    SetDllDirectory(baseDir);
+                } else {
+                    string canonWebcamDir = @"C:\Program Files\Canon\EOS Webcam Utility Pro";
+                    if (Directory.Exists(canonWebcamDir)) {
+                        SetDllDirectory(canonWebcamDir);
+                    }
+                }
+            } catch { }
+        }
+
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsInitializeSDK();
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsTerminateSDK();
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetCameraList(out IntPtr cameraList);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetChildCount(IntPtr inRef, out int outCount);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetChildAtIndex(IntPtr inRef, int index, out IntPtr outRef);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsOpenSession(IntPtr camera);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsCloseSession(IntPtr camera);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsSendCommand(IntPtr camera, uint command, int param);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsSetPropertyData(IntPtr camera, uint propId, int param, int size, ref uint data);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsSetCapacity(IntPtr camera, EdsCapacity capacity);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsSetObjectEventHandler(IntPtr camera, uint inEvent, EdsObjectEventHandler inEventHandler, IntPtr inContext);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetDirectoryItemInfo(IntPtr dirItem, out EdsDirectoryItemInfo outInfo);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsCreateFileStream([MarshalAs(UnmanagedType.LPStr)] string inFileName, uint inCreateDisposition, uint inDesiredAccess, out IntPtr outStream);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsDownload(IntPtr dirItem, ulong inReadSize, IntPtr outStream);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsDownloadComplete(IntPtr dirItem);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetPointer(IntPtr inStream, out IntPtr outPointer);
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsGetEvent();
 
-        [DllImport(@"C:\Program Files\Canon\EOS Webcam Utility Pro\EDSDK.dll")]
+        [DllImport("EDSDK.dll")]
         public static extern uint EdsRelease(IntPtr inRef);
 
         private static string TargetFilePath = "";

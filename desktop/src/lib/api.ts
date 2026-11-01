@@ -86,6 +86,11 @@ export interface FotolismAPI {
     get: (key: string) => IpcResponse
     set: (key: string, value: unknown) => IpcResponse
   }
+  device: {
+    getConfig: () => IpcResponse<any>
+    saveConfig: (config: any) => IpcResponse<any>
+    resetConfig: () => IpcResponse<void>
+  }
   storage: {
     getDownloadsPath: () => IpcResponse<{ path: string; baseDownloads: string }>
     savePhoto: (dataUrl: string, fileName: string) => IpcResponse<{ savedPath: string }>
@@ -102,6 +107,7 @@ export interface FotolismAPI {
       subfolderName: string
       filesCount: number
     }>
+    testDriveWebhook: (webhookUrl: string) => IpcResponse<{ message: string; statusCode?: number }>
   }
 }
 
@@ -122,7 +128,7 @@ const mockSessions = new Map<string, any>()
 const mockCaptures = new Map<string, any[]>()
 
 // Fallback implementation khi chạy trong browser dev mode (không có Electron)
-export const fotolismApi: FotolismAPI = {
+const defaultMockApi: FotolismAPI = {
   ai: {
     enhance: async (_imagePath: string, level: number) => ({
       success: true,
@@ -336,6 +342,33 @@ export const fotolismApi: FotolismAPI = {
     get: async (_key: string) => ({ success: true, data: null }),
     set: async () => ({ success: true }),
   },
+  device: {
+    getConfig: async () => {
+      if (typeof window !== 'undefined' && window.fotolism?.device?.getConfig) {
+        return window.fotolism.device.getConfig()
+      }
+      const local = typeof localStorage !== 'undefined' ? localStorage.getItem('fotolism_device_config') : null
+      return { success: true, data: local ? JSON.parse(local) : null }
+    },
+    saveConfig: async (config: any) => {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('fotolism_device_config', JSON.stringify(config))
+      }
+      if (typeof window !== 'undefined' && window.fotolism?.device?.saveConfig) {
+        return window.fotolism.device.saveConfig(config)
+      }
+      return { success: true, data: config }
+    },
+    resetConfig: async () => {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('fotolism_device_config')
+      }
+      if (typeof window !== 'undefined' && window.fotolism?.device?.resetConfig) {
+        return window.fotolism.device.resetConfig()
+      }
+      return { success: true }
+    },
+  },
   storage: {
     getDownloadsPath: async () => ({
       success: true,
@@ -355,16 +388,34 @@ export const fotolismApi: FotolismAPI = {
       success: true,
       data: {
         localDir: `${MOCK_SAVE_BASE}/${payload.subfolderName}`,
-        cloudFolderUrl: `https://drive.google.com/drive/folders/${payload.parentFolderId}`,
-        cloudFolderId: payload.parentFolderId,
+        cloudFolderUrl: `https://drive.google.com/drive/folders/mock_session_${payload.subfolderName}`,
+        cloudFolderId: `mock_session_${payload.subfolderName}`,
         subfolderName: payload.subfolderName,
         filesCount: payload.files.length,
       },
     }),
+    testDriveWebhook: async (webhookUrl: string) => {
+      try {
+        const res = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'test_connection', timestamp: new Date().toISOString() }),
+        })
+        if (res.status === 401 || res.status === 403) {
+          return {
+            success: false,
+            error: `Lỗi HTTP ${res.status}: Webhook đang bị chặn quyền truy cập. Hãy chọn 'Người có quyền truy cập: Bất kỳ ai' (Anyone).`,
+          }
+        }
+        return { success: true, data: { message: 'Kết nối Webhook thành công!' } }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    },
   },
 }
 
-export const mockApi: FotolismAPI = fotolismApi
+export const mockApi: FotolismAPI = defaultMockApi
 
 // Re-export brand helpers for convenience
 export {
@@ -381,7 +432,23 @@ export {
 // Global API resolver: electron context bridge hoặc browser fallback
 export const isBrowser = typeof window !== 'undefined' && !window.fotolism && !window.joyBooth
 
-export const api: FotolismAPI =
-  typeof window !== 'undefined' && (window.fotolism || window.joyBooth)
-    ? (window.fotolism || window.joyBooth)!
-    : mockApi
+export function getActiveApi(): FotolismAPI {
+  if (typeof window !== 'undefined' && (window.fotolism || window.joyBooth)) {
+    return (window.fotolism || window.joyBooth)!
+  }
+  return defaultMockApi
+}
+
+/**
+ * Fotolism API Bridge:
+ * Tự động ủy quyền (dynamic proxy) sang `window.fotolism` khi chạy trong Electron,
+ * hoặc fallback về `defaultMockApi` khi chạy trên trình duyệt / unit test.
+ */
+export const fotolismApi: FotolismAPI = new Proxy({} as FotolismAPI, {
+  get(_target, prop) {
+    const active = getActiveApi()
+    return (active as any)[prop]
+  },
+})
+
+export const api: FotolismAPI = fotolismApi

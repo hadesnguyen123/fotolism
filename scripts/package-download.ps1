@@ -64,13 +64,21 @@ Copy-Item -Path "$desktopDir\dist" -Destination "$outAppDir\resources\app\dist" 
 Write-Host "-> Sao chep Electron Process (dist-electron)..." -ForegroundColor Yellow
 Copy-Item -Path "$desktopDir\dist-electron" -Destination "$outAppDir\resources\app\dist-electron" -Recurse -Force
 
-Write-Host "-> Sao chep Canon EDSDK C# Daemon..." -ForegroundColor Yellow
+Write-Host "-> Sao chep Canon EDSDK C# Daemon & Native Libraries..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Path "$outAppDir\resources\app\electron" -Force | Out-Null
 if (Test-Path "$desktopDir\electron\fotolism_canon_daemon.exe") {
     Copy-Item -Path "$desktopDir\electron\fotolism_canon_daemon.exe" -Destination "$outAppDir\resources\app\electron\fotolism_canon_daemon.exe" -Force
 }
 if (Test-Path "$desktopDir\electron\fotolism_canon_capture.exe") {
     Copy-Item -Path "$desktopDir\electron\fotolism_canon_capture.exe" -Destination "$outAppDir\resources\app\electron\fotolism_canon_capture.exe" -Force
+}
+if (Test-Path "$desktopDir\electron\EDSDK.dll") {
+    Copy-Item -Path "$desktopDir\electron\EDSDK.dll" -Destination "$outAppDir\resources\app\electron\EDSDK.dll" -Force
+    Copy-Item -Path "$desktopDir\electron\EDSDK.dll" -Destination "$outAppDir\EDSDK.dll" -Force
+}
+if (Test-Path "$desktopDir\electron\EdsImage.dll") {
+    Copy-Item -Path "$desktopDir\electron\EdsImage.dll" -Destination "$outAppDir\resources\app\electron\EdsImage.dll" -Force
+    Copy-Item -Path "$desktopDir\electron\EdsImage.dll" -Destination "$outAppDir\EdsImage.dll" -Force
 }
 
 # Tao package.json thuc thi

@@ -21,10 +21,12 @@ import {
   LS_BEAUTY_CONFIG_KEY,
   LS_EVENT_CONFIG_KEY,
 } from '../lib/constants'
+import type { DeviceConfig } from '../services/cloudSyncService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AppScreen =
+  | 'activate'
   | 'idle'
   | 'select-size'
   | 'select-layout'
@@ -35,6 +37,7 @@ export type AppScreen =
   | 'select-sticker'
   | 'review'
   | 'admin'
+  | 'selfbooth-setup'
 
 export type BoothMode = 'attended' | 'unattended'
 export type CaptureMode = 'photobooth' | 'selfbooth'
@@ -73,7 +76,7 @@ export const FRAME_SIZE_OPTIONS: FrameSizeOption[] = [
 ]
 
 // ─── Bố Cục Theo Danh Mục Ảnh (Layouts categorized by photo count) ────────────
-export type LayoutCategory = 1 | 3 | 4 | 6 | 8
+export type LayoutCategory = 1 | 3 | 4 | 6 | 8 | 9
 
 export interface GridLayoutItem {
   id: string
@@ -83,7 +86,7 @@ export interface GridLayoutItem {
   rows: number
   strip: boolean
   description: string
-  previewType: '1_single' | '3_strip' | '4_strip' | '4_grid' | '6_grid' | '8_grid'
+  previewType: '1_single' | '3_strip' | '4_strip' | '4_grid' | '6_grid' | '8_grid' | '9_grid'
 }
 
 export const ALL_LAYOUTS: Record<LayoutCategory, GridLayoutItem[]> = {
@@ -91,18 +94,21 @@ export const ALL_LAYOUTS: Record<LayoutCategory, GridLayoutItem[]> = {
     { id: '1_full_portrait', name: '1 ảnh Chân Dung', photosCount: 1, cols: 1, rows: 1, strip: false, description: '1 ảnh đơn phóng lớn', previewType: '1_single' },
   ],
   3: [
-    { id: '3_vertical_strip', name: '3 ảnh Dọc Strip', photosCount: 3, cols: 1, rows: 3, strip: true, description: '3 ảnh dải đứng', previewType: '3_strip' },
+    { id: '3_vertical_strip', name: '3 ảnh Dọc Strip', photosCount: 3, cols: 1, rows: 3, strip: true, description: '3 ảnh dải đứng (2x6)', previewType: '3_strip' },
   ],
   4: [
-    { id: '4_strip_classic', name: '4 ảnh Dọc Strip', photosCount: 4, cols: 1, rows: 4, strip: true, description: '4 ảnh dải đứng kinh điển (2x6)', previewType: '4_strip' },
+    { id: '4_strip_classic', name: '4 ảnh Dọc Strip', photosCount: 4, cols: 1, rows: 4, strip: true, description: '4 ảnh dải đứng (2x6)', previewType: '4_strip' },
     { id: '4_grid_2x2', name: '4 ảnh Lưới Vuông', photosCount: 4, cols: 2, rows: 2, strip: false, description: '4 ảnh lưới 2x2 (4x6)', previewType: '4_grid' },
   ],
   6: [
-    { id: '6_grid_2x3', name: '6 ảnh Lưới Dọc (2x3)', photosCount: 6, cols: 2, rows: 3, strip: false, description: '6 ảnh lưới 2 cột 3 hàng', previewType: '6_grid' },
-    { id: '6_grid_3x2', name: '6 ảnh Lưới Ngang (3x2)', photosCount: 6, cols: 3, rows: 2, strip: false, description: '6 ảnh lưới 3 cột 2 hàng', previewType: '6_grid' },
+    { id: '6_grid_2x3', name: '6 ảnh Lưới Dọc (2x3)', photosCount: 6, cols: 2, rows: 3, strip: false, description: '6 ảnh lưới 2 cột 3 hàng (4x6)', previewType: '6_grid' },
+    { id: '6_grid_3x2', name: '6 ảnh Lưới Ngang (3x2)', photosCount: 6, cols: 3, rows: 2, strip: false, description: '6 ảnh lưới 3 cột 2 hàng (4x6)', previewType: '6_grid' },
   ],
   8: [
-    { id: '8_grid_2x4', name: '8 ảnh Lưới Mini (2x4)', photosCount: 8, cols: 2, rows: 4, strip: false, description: '8 ảnh mini siêu vui', previewType: '8_grid' },
+    { id: '8_grid_2x4', name: '8 ảnh Lưới Mini (2x4)', photosCount: 8, cols: 2, rows: 4, strip: false, description: '8 ảnh mini siêu vui (4x6)', previewType: '8_grid' },
+  ],
+  9: [
+    { id: '9_grid_3x3', name: '9 ảnh Lưới Vuông (3x3)', photosCount: 9, cols: 3, rows: 3, strip: false, description: '9 ảnh lưới 3 cột 3 hàng (4x6)', previewType: '9_grid' },
   ],
 }
 
@@ -117,6 +123,8 @@ export interface ThemeItem {
   bgGradient: string
   textColor: string
   borderColor: string
+  overlayUrl?: string
+  hideFooter?: boolean
   decorations?: string[]
 }
 
@@ -131,6 +139,15 @@ export const THEME_OPTIONS: ThemeItem[] = [
     borderColor: '#E6D9CF',
   },
   {
+    id: 'theme_black_noir',
+    name: 'Khung Đen Sang Trọng',
+    category: 'Một màu',
+    bgColor: '#18181B',
+    bgGradient: 'linear-gradient(180deg, #27272A 0%, #18181B 100%)',
+    textColor: '#F4F4F5',
+    borderColor: '#3F3F46',
+  },
+  {
     id: 'theme_espresso_classic',
     name: 'Khung Nâu Cổ Điển',
     category: 'Một màu',
@@ -138,6 +155,54 @@ export const THEME_OPTIONS: ThemeItem[] = [
     bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FAF6F1 100%)',
     textColor: '#502A1D',
     borderColor: '#502A1D',
+  },
+  {
+    id: 'theme_pastel_pink',
+    name: 'Khung Hồng Pastel',
+    category: 'Thời trang',
+    bgColor: '#FFF0F5',
+    bgGradient: 'linear-gradient(180deg, #FFF5F7 0%, #FFE4E8 100%)',
+    textColor: '#9E3A5A',
+    borderColor: '#F8B4C4',
+  },
+  {
+    id: 'theme_pastel_blue',
+    name: 'Khung Xanh Baby',
+    category: 'Thời trang',
+    bgColor: '#F0F7FF',
+    bgGradient: 'linear-gradient(180deg, #F5FAFF 0%, #E0F0FE 100%)',
+    textColor: '#1E4E79',
+    borderColor: '#BFDBFE',
+  },
+  {
+    id: 'theme_vintage_cream',
+    name: 'Khung Vintage Kem',
+    category: 'Khác',
+    bgColor: '#FDFBF7',
+    bgGradient: 'linear-gradient(180deg, #FAF6EE 0%, #F5EFEB 100%)',
+    textColor: '#5C4033',
+    borderColor: '#E6DCB8',
+  },
+  {
+    id: 'theme_party_sparkle',
+    name: 'Kim Tuyến Party (Overlay)',
+    category: 'Ngày lễ',
+    bgColor: '#FFFDF9',
+    bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8EE 100%)',
+    textColor: '#B46414',
+    borderColor: '#F5A623',
+    overlayUrl: '/frames/frame_party_sparkle_2x6.png',
+  },
+  {
+    id: 'theme_vintage_film',
+    name: 'Cuộn Phim 35mm (Overlay)',
+    category: 'Trào lưu',
+    bgColor: '#141414',
+    bgGradient: '#141414',
+    textColor: '#F5F5F5',
+    borderColor: '#2D2D2D',
+    overlayUrl: '/frames/frame_vintage_film_2x6.png',
+    hideFooter: true,
   },
 ]
 
@@ -197,7 +262,7 @@ export interface PlacedSticker {
   rotation: number
 }
 
-// ─── Bộ Lọc Màu (Color Filters) ───────────────────────────────────────────────
+// ─── Bộ Lọc Màu (Color Filters) — Quy chuẩn chỉ gồm 3 bộ lọc cốt lõi ────────────
 export interface ColorFilterItem {
   id: string
   name: string
@@ -244,148 +309,42 @@ export interface SessionState {
   qrUrl: string | null
   qrImagePath: string | null
   timelapseUrl: string | null
+  timelapseDataUrl?: string | null
   gdriveUrl: string | null
+  storageUrl?: string | null
+  customerName?: string | null
+  customerPhone?: string | null
+  pinCode?: string | null
   // Thông tin thanh toán đã chốt
   paidAmount: number
   paidCopies: number
   paymentMethod: 'vietqr' | 'cash' | 'free' | null
   discountCodeUsed: string | null
   discountAmount: number
+  hasPrinted?: boolean
 }
 
-// ─── Preset Làm Đẹp K-Beauty (Beauty Presets) ──────────────────────────────────
-export interface BeautyPreset {
-  id: string
-  name: string
-  icon: string
-  description: string
-  slimFace?: number     // 0 - 100 Mặt nhỏ / V-Line
-  smoothing: number     // 0 - 100 Da mịn
-  whitening?: number    // 0 - 100 Trắng da
-  rosyTone: number      // 0 - 100 Trắng hồng
-  glowClarity: number   // 0 - 100 Sáng nét
-  brightness: number    // 70 - 130
-  contrast: number      // 70 - 130
-}
+import {
+  BEAUTY_PRESETS,
+  DEFAULT_BEAUTY_CONFIG,
+  type BeautyConfig,
+  type BeautyPreset,
+} from '../services/beautyEngine'
 
-export interface BeautyConfig {
-  slimFace: number       // 0 - 100 Mặt nhỏ / V-Line
-  skinSmoothing: number  // 0 - 100 Da mịn
-  whiteningTone: number  // 0 - 100 Trắng sáng
-  rosyTone: number       // 0 - 100 Trắng hồng
-  glowClarity: number    // 0 - 100 Sáng nét
-  brightnessAdjust: number
-  contrastAdjust: number
-  saturationAdjust: number
-}
-
-export const DEFAULT_BEAUTY_CONFIG: BeautyConfig = {
-  slimFace: 0,          // Mặc định gốc, không biến dạng mặt
-  skinSmoothing: 0,     // Mặc định gốc, không làm mờ mịn
-  whiteningTone: 0,     // Mặc định gốc, không nâng sáng giả lập
-  rosyTone: 0,          // Mặc định gốc, không ám hồng
-  glowClarity: 0,       // Mặc định gốc, không gắt nét
-  brightnessAdjust: 100, // 100% trung tính chuẩn máy ảnh
-  contrastAdjust: 100,   // 100% trung tính chuẩn máy ảnh
-  saturationAdjust: 100, // 100% trung tính chuẩn máy ảnh
-}
+export { BEAUTY_PRESETS, DEFAULT_BEAUTY_CONFIG, type BeautyConfig, type BeautyPreset }
 
 export function loadSavedBeautyConfig(): BeautyConfig {
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_BEAUTY_CONFIG_KEY) : null
     if (raw) {
       const parsed = JSON.parse(raw)
-      // Tự động dọn dẹp cấu hình cũ nếu trước đó có lưu các giá trị thử nghiệm (50%, 45%)
-      if (parsed.skinSmoothing === 50 && parsed.whiteningTone === 45) {
-        localStorage.removeItem(LS_BEAUTY_CONFIG_KEY)
-        return DEFAULT_BEAUTY_CONFIG
-      }
       return { ...DEFAULT_BEAUTY_CONFIG, ...parsed }
     }
   } catch {}
   return DEFAULT_BEAUTY_CONFIG
 }
 
-export const BEAUTY_PRESETS: BeautyPreset[] = [
-  {
-    id: 'none',
-    name: 'Gốc (Máy ảnh)',
-    icon: '📷',
-    description: '100% thuần khiết, giữ nguyên màu sắc, nhiệt độ và thông số gốc từ máy ảnh Canon',
-    slimFace: 0,
-    smoothing: 0,
-    whitening: 0,
-    rosyTone: 0,
-    glowClarity: 0,
-    brightness: 100,
-    contrast: 100,
-  },
-  {
-    id: 'korean_glass',
-    name: 'Trắng Hồng Hàn Quốc',
-    icon: '🌸',
-    description: 'Làn da sứ trong veo, căng bóng mịn màng chuẩn K-Beauty',
-    slimFace: 35,
-    smoothing: 50,
-    whitening: 45,
-    rosyTone: 30,
-    glowClarity: 25,
-    brightness: 106,
-    contrast: 98,
-  },
-  {
-    id: 'natural',
-    name: 'Tự Nhiên',
-    icon: '🌿',
-    description: 'Nét mộc chân thật, làm mịn nhẹ nhàng tự nhiên',
-    slimFace: 15,
-    smoothing: 25,
-    whitening: 15,
-    rosyTone: 15,
-    glowClarity: 15,
-    brightness: 100,
-    contrast: 100,
-  },
-  {
-    id: 'haru_soft',
-    name: 'Trong Trẻo Haru',
-    icon: '❄️',
-    description: 'Tông sáng mộng mơ, mềm mại trong trẻo phong cách Haru Film',
-    slimFace: 30,
-    smoothing: 45,
-    whitening: 50,
-    rosyTone: 20,
-    glowClarity: 25,
-    brightness: 108,
-    contrast: 97,
-  },
-  {
-    id: 'peachy_glow',
-    name: 'Má Đào Pastel',
-    icon: '🍑',
-    description: 'Má ửng hồng tươi tắn, ngọt ngào tràn đầy sức sống',
-    slimFace: 35,
-    smoothing: 40,
-    whitening: 40,
-    rosyTone: 45,
-    glowClarity: 20,
-    brightness: 104,
-    contrast: 100,
-  },
-  {
-    id: 'studio_glam',
-    name: 'Studio Glam',
-    icon: '👑',
-    description: 'Sắc nét nổi bật, tôn khối mắt và sống mũi rạng rỡ',
-    slimFace: 40,
-    smoothing: 35,
-    whitening: 35,
-    rosyTone: 20,
-    glowClarity: 45,
-    brightness: 104,
-    contrast: 104,
-  },
-]
+
 
 export interface EventConfig {
   eventName: string
@@ -439,6 +398,16 @@ interface AppStore {
   boothMode: BoothMode
   setBoothMode: (mode: BoothMode) => void
 
+  // Google Drive session sync state
+  isSyncingDrive: boolean
+  driveSyncDone: boolean
+  driveSyncError: string | null
+  cloudFolderUrl: string | null
+  setIsSyncingDrive: (val: boolean) => void
+  setDriveSyncDone: (val: boolean) => void
+  setDriveSyncError: (err: string | null) => void
+  setCloudFolderUrl: (url: string | null) => void
+
   // Session
   session: SessionState | null
   startNewSession: () => void
@@ -448,8 +417,10 @@ interface AppStore {
   removeSessionPhotoAt: (index: number) => void
   clearSession: () => void
   setQr: (url: string, imagePath: string) => void
-  setTimelapseUrl: (url: string | null) => void
+  setTimelapseUrl: (url: string | null, dataUrl?: string | null) => void
   setGdriveUrl: (url: string | null) => void
+  setStorageUrl: (url: string | null) => void
+  setCustomerInfo: (info: { customerName?: string | null; customerPhone?: string | null; pinCode?: string | null }) => void
 
   // Mode settings
   setCaptureMode: (mode: CaptureMode) => void
@@ -467,6 +438,7 @@ interface AppStore {
     discountCodeUsed: string | null
     discountAmount: number
   }) => void
+  setSessionPrinted: () => void
 
   // Step 2: Chọn Bố Cục (1, 3, 4, 6, 8 ảnh)
   selectedCategory: LayoutCategory
@@ -490,7 +462,9 @@ interface AppStore {
   selectFilter: (filter: ColorFilterItem) => void
   selectedBeautyPreset: string | null
   applyBeautyPreset: (presetId: string) => void
-  slimFace: number      // 0 - 100 Mặt nhỏ / V-Line
+  slimFace: number      // 0 - 100 Thon gọn má
+  vLine: number         // 0 - 100 Cằm V-Line
+  bigEyes: number       // 0 - 100 Mắt to tự nhiên
   skinSmoothing: number // 0 - 100 Làm mịn da
   whiteningTone: number // 0 - 100 Trắng da
   rosyTone: number      // 0 - 100 Trắng hồng
@@ -499,6 +473,8 @@ interface AppStore {
   contrastAdjust: number
   saturationAdjust: number
   setSlimFace: (val: number) => void
+  setVLine: (val: number) => void
+  setBigEyes: (val: number) => void
   setSkinSmoothing: (val: number) => void
   setWhiteningTone: (val: number) => void
   setRosyTone: (val: number) => void
@@ -531,6 +507,13 @@ interface AppStore {
   setCameras: (cameras: Array<{ id: string; name: string }>) => void
   selectCamera: (id: string) => void
   setMirrorCamera: (mirror: boolean) => void
+
+  // Device Provisioning & Activation
+  deviceConfig: DeviceConfig | null
+  isDeviceActivated: boolean
+  loadDeviceConfig: () => Promise<DeviceConfig | null>
+  setDeviceConfig: (config: DeviceConfig | null) => void
+  resetDeviceConfig: () => Promise<void>
 }
 
 function generateSessionId(): string {
@@ -576,7 +559,54 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_EVENT_CONFIG_KEY) : null
     if (raw) {
-      return JSON.parse(raw)
+      const parsed = JSON.parse(raw)
+      // Tự động chuẩn hóa tên thương hiệu / sự kiện thành chữ viết thường fotolism
+      if (
+        !parsed.eventName ||
+        parsed.eventName === 'FOTOLISM PHOTOBOOTH' ||
+        parsed.eventName === 'Fotolism Photobooth' ||
+        parsed.eventName === 'Fotolism' ||
+        parsed.eventName === 'FOTOLISM'
+      ) {
+        parsed.eventName = DEFAULT_EVENT_NAME
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LS_EVENT_CONFIG_KEY, JSON.stringify(parsed))
+        }
+      }
+
+      // Tự động đồng bộ số tài khoản MB Bank thực tế nếu đang giữ số cũ
+      if (
+        !parsed.accountNumber ||
+        parsed.accountNumber === '0388889999' ||
+        parsed.accountNumber === '190388889999' ||
+        parsed.accountHolder === 'FOTOLISM VIETNAM' ||
+        parsed.accountHolder === 'Fotolism Vietnam'
+      ) {
+        parsed.accountNumber = DEFAULT_ACCOUNT_NUMBER
+        parsed.bankBin = DEFAULT_BANK_BIN
+        parsed.bankName = DEFAULT_BANK_NAME
+        parsed.accountHolder = DEFAULT_ACCOUNT_HOLDER
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LS_EVENT_CONFIG_KEY, JSON.stringify(parsed))
+        }
+      }
+      // Tự động đồng bộ giá in thêm 30.000đ cho tất cả các khổ
+      if (!parsed.extraCopyPrice2x6 || parsed.extraCopyPrice2x6 === 20000) {
+        parsed.extraCopyPrice2x6 = DEFAULT_EXTRA_COPY_PRICE_2X6
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LS_EVENT_CONFIG_KEY, JSON.stringify(parsed))
+        }
+      }
+      if (
+        !parsed.gdriveWebhookUrl ||
+        !parsed.gdriveWebhookUrl.includes('AKfycbw2koNyt')
+      ) {
+        parsed.gdriveWebhookUrl = DEFAULT_GDRIVE_WEBHOOK_URL
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LS_EVENT_CONFIG_KEY, JSON.stringify(parsed))
+        }
+      }
+      return parsed
     }
   } catch {}
   return {}
@@ -591,23 +621,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   selectedFrameSize: '2x6',
   selectFrameSize: (size) => {
-    if (size === '2x6') {
-      const defaultLayout = ALL_LAYOUTS[4][0]
-      set({
+    set((state) => {
+      const isStrip = size === '2x6'
+      const defaultCopies = isStrip ? 2 : 1
+      if (state.selectedLayout && state.selectedLayout.strip === isStrip) {
+        return {
+          selectedFrameSize: size,
+          selectedCopies: defaultCopies,
+        }
+      }
+      const defaultLayout = isStrip ? ALL_LAYOUTS[4][0] : (ALL_LAYOUTS[4][1] || ALL_LAYOUTS[4][0])
+      return {
         selectedFrameSize: size,
-        selectedCategory: 4,
+        selectedCategory: defaultLayout.photosCount as any,
         selectedLayout: defaultLayout,
-        selectedCopies: 2,
-      })
-    } else {
-      const defaultLayout = ALL_LAYOUTS[4][1] || ALL_LAYOUTS[4][0]
-      set({
-        selectedFrameSize: size,
-        selectedCategory: 4,
-        selectedLayout: defaultLayout,
-        selectedCopies: 1,
-      })
-    }
+        selectedCopies: defaultCopies,
+      }
+    })
   },
 
   selectedCopies: 2,
@@ -621,6 +651,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
             ...data,
           }
         : null,
+    })),
+
+  setSessionPrinted: () =>
+    set((state) => ({
+      session: state.session ? { ...state.session, hasPrinted: true } : null,
     })),
 
   selectedCategory: 4,
@@ -664,10 +699,56 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
   clearStickers: () => set({ placedStickers: [] }),
 
+  // Google Drive session sync state
+  isSyncingDrive: false,
+  driveSyncDone: false,
+  driveSyncError: null,
+  cloudFolderUrl: null,
+  setIsSyncingDrive: (isSyncingDrive) => set({ isSyncingDrive }),
+  setDriveSyncDone: (driveSyncDone) => set({ driveSyncDone }),
+  setDriveSyncError: (driveSyncError) => set({ driveSyncError }),
+  setCloudFolderUrl: (cloudFolderUrl) => set({ cloudFolderUrl }),
+
   session: null,
   startNewSession: () =>
     set({
+      selectedFrameSize: '2x6',
+      selectedCategory: 4,
+      selectedLayout: ALL_LAYOUTS[4][0],
+      selectedCopies: 2,
+      selectedTheme: THEME_OPTIONS[0],
+      selectedFilter: COLOR_FILTERS[0],
       session: {
+        sessionId: generateSessionId(),
+        photos: [],
+        selectedFrameSize: '2x6',
+        selectedLayout: ALL_LAYOUTS[4][0],
+        selectedTheme: THEME_OPTIONS[0],
+        placedStickers: [],
+        qrUrl: null,
+        qrImagePath: null,
+        timelapseUrl: null,
+        gdriveUrl: null,
+        storageUrl: null,
+        customerName: null,
+        customerPhone: null,
+        pinCode: null,
+        paidAmount: 0,
+        paidCopies: 2,
+        paymentMethod: null,
+        discountCodeUsed: null,
+        discountAmount: 0,
+      },
+      placedStickers: [],
+      isSyncingDrive: false,
+      driveSyncDone: false,
+      driveSyncError: null,
+      cloudFolderUrl: null,
+    }),
+
+  addPhoto: (photo) =>
+    set((state) => {
+      const s = state.session || {
         sessionId: generateSessionId(),
         photos: [],
         selectedFrameSize: get().selectedFrameSize,
@@ -678,27 +759,44 @@ export const useAppStore = create<AppStore>((set, get) => ({
         qrImagePath: null,
         timelapseUrl: null,
         gdriveUrl: null,
+        storageUrl: null,
+        customerName: null,
+        customerPhone: null,
+        pinCode: null,
         paidAmount: 0,
         paidCopies: get().selectedCopies,
         paymentMethod: null,
         discountCodeUsed: null,
         discountAmount: 0,
-      },
-      placedStickers: [],
-      mirrorCamera: true,
+      }
+      return { session: { ...s, photos: [...s.photos, photo] } }
     }),
 
-  addPhoto: (photo) =>
-    set((state) => ({
-      session: state.session
-        ? { ...state.session, photos: [...state.session.photos, photo] }
-        : state.session,
-    })),
-
   setSessionPhotos: (photos) =>
-    set((state) => ({
-      session: state.session ? { ...state.session, photos } : state.session,
-    })),
+    set((state) => {
+      const s = state.session || {
+        sessionId: generateSessionId(),
+        photos: [],
+        selectedFrameSize: get().selectedFrameSize,
+        selectedLayout: get().selectedLayout,
+        selectedTheme: get().selectedTheme,
+        placedStickers: [],
+        qrUrl: null,
+        qrImagePath: null,
+        timelapseUrl: null,
+        gdriveUrl: null,
+        storageUrl: null,
+        customerName: null,
+        customerPhone: null,
+        pinCode: null,
+        paidAmount: 0,
+        paidCopies: get().selectedCopies,
+        paymentMethod: null,
+        discountCodeUsed: null,
+        discountAmount: 0,
+      }
+      return { session: { ...s, photos } }
+    }),
 
   replaceSessionPhotoAt: (index, photo) =>
     set((state) => {
@@ -725,7 +823,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
       eventConfig: { ...state.eventConfig, selfboothDurationSeconds },
     })),
 
-  clearSession: () => set({ session: null, placedStickers: [], mirrorCamera: true }),
+  clearSession: () => {
+    const savedBeauty = loadSavedBeautyConfig()
+    set({
+      session: null,
+      selectedFrameSize: '2x6',
+      selectedCategory: 4,
+      selectedLayout: ALL_LAYOUTS[4][0],
+      selectedCopies: 2,
+      selectedTheme: THEME_OPTIONS[0],
+      selectedFilter: COLOR_FILTERS[0],
+      selectedBeautyPreset: 'natural',
+      slimFace: savedBeauty.slimFace,
+      vLine: savedBeauty.vLine ?? 16,
+      bigEyes: savedBeauty.bigEyes ?? 12,
+      skinSmoothing: savedBeauty.skinSmoothing,
+      whiteningTone: savedBeauty.whiteningTone,
+      rosyTone: savedBeauty.rosyTone,
+      glowClarity: savedBeauty.glowClarity,
+      brightnessAdjust: savedBeauty.brightnessAdjust,
+      contrastAdjust: savedBeauty.contrastAdjust,
+      placedStickers: [],
+      isSyncingDrive: false,
+      driveSyncDone: false,
+      driveSyncError: null,
+      cloudFolderUrl: null,
+    })
+  },
 
   setQr: (url, imagePath) =>
     set((state) => ({
@@ -734,9 +858,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
         : state.session,
     })),
 
-  setTimelapseUrl: (url) =>
+  setTimelapseUrl: (url, dataUrl) =>
     set((state) => ({
-      session: state.session ? { ...state.session, timelapseUrl: url } : state.session,
+      session: state.session
+        ? {
+            ...state.session,
+            timelapseUrl: url,
+            timelapseDataUrl:
+              dataUrl !== undefined
+                ? dataUrl
+                : url?.startsWith('data:')
+                  ? url
+                  : state.session.timelapseDataUrl,
+          }
+        : state.session,
     })),
 
   setGdriveUrl: (url) =>
@@ -744,14 +879,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
       session: state.session ? { ...state.session, gdriveUrl: url } : state.session,
     })),
 
+  setStorageUrl: (url) =>
+    set((state) => ({
+      session: state.session ? { ...state.session, storageUrl: url } : state.session,
+    })),
+
+  setCustomerInfo: (info) =>
+    set((state) => ({
+      session: state.session
+        ? {
+            ...state.session,
+            customerName: info.customerName !== undefined ? info.customerName : state.session.customerName,
+            customerPhone: info.customerPhone !== undefined ? info.customerPhone : state.session.customerPhone,
+            pinCode: info.pinCode !== undefined ? info.pinCode : state.session.pinCode,
+          }
+        : null,
+    })),
+
   selectedFilter: COLOR_FILTERS[0],
   selectFilter: (filter) => set({ selectedFilter: filter }),
 
-  selectedBeautyPreset: 'none',
+  selectedBeautyPreset: 'natural',
   ...(() => {
     const saved = loadSavedBeautyConfig()
     return {
       slimFace: saved.slimFace,
+      vLine: saved.vLine ?? 16,
+      bigEyes: saved.bigEyes ?? 12,
       skinSmoothing: saved.skinSmoothing,
       whiteningTone: saved.whiteningTone,
       rosyTone: saved.rosyTone,
@@ -767,9 +921,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (!preset) return
     set({
       selectedBeautyPreset: presetId,
-      slimFace: preset.slimFace ?? get().slimFace,
-      skinSmoothing: preset.smoothing,
-      whiteningTone: preset.whitening ?? get().whiteningTone,
+      slimFace: preset.slimFace,
+      vLine: preset.vLine,
+      bigEyes: preset.bigEyes,
+      skinSmoothing: preset.skinSmoothing,
+      whiteningTone: preset.whiteningTone,
       rosyTone: preset.rosyTone,
       glowClarity: preset.glowClarity,
       brightnessAdjust: preset.brightness,
@@ -778,6 +934,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setSlimFace: (slimFace) => set({ slimFace, selectedBeautyPreset: null }),
+  setVLine: (vLine) => set({ vLine, selectedBeautyPreset: null }),
+  setBigEyes: (bigEyes) => set({ bigEyes, selectedBeautyPreset: null }),
   setSkinSmoothing: (skinSmoothing) => set({ skinSmoothing, selectedBeautyPreset: null }),
   setWhiteningTone: (whiteningTone) => set({ whiteningTone, selectedBeautyPreset: null }),
   setRosyTone: (rosyTone) => set({ rosyTone, selectedBeautyPreset: null }),
@@ -790,6 +948,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const current = get()
     const updated: BeautyConfig = {
       slimFace: config?.slimFace ?? current.slimFace,
+      vLine: config?.vLine ?? current.vLine,
+      bigEyes: config?.bigEyes ?? current.bigEyes,
       skinSmoothing: config?.skinSmoothing ?? current.skinSmoothing,
       whiteningTone: config?.whiteningTone ?? current.whiteningTone,
       rosyTone: config?.rosyTone ?? current.rosyTone,
@@ -855,15 +1015,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return parts.length > 0 ? parts.join(' ') : 'none'
   },
 
-  // Thon gọn mặt (Mặt nhỏ / V-Line) kết hợp lật gương
+  // Lật gương đồng bộ
   getCameraTransformCss: (mirror: boolean) => {
-    const { slimFace } = get()
-    // Tỉ lệ bóp nhẹ bề ngang (0 - 5.5%) và kéo nhẹ bề dọc (0 - 1.5%)
-    const scaleXFactor = 1 - (slimFace / 100) * 0.055
-    const scaleYFactor = 1 + (slimFace / 100) * 0.015
-
-    const finalX = mirror ? -scaleXFactor : scaleXFactor
-    return `scale(${finalX.toFixed(4)}, ${scaleYFactor.toFixed(4)})`
+    return mirror ? 'scaleX(-1)' : 'none'
   },
 
   getEffectiveFilterCss: () => {
@@ -875,10 +1029,40 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return parts.length > 0 ? parts.join(' ') : 'none'
   },
 
-  ringLightEnabled: false,
-  ringLightLevel: 75,
-  setRingLightEnabled: (ringLightEnabled) => set({ ringLightEnabled }),
-  setRingLightLevel: (ringLightLevel) => set({ ringLightLevel }),
+  ringLightEnabled: (() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const v = localStorage.getItem('fotolism_ring_light_enabled')
+        return v !== null ? v === 'true' : false
+      }
+      return false
+    } catch { return false }
+  })(),
+  ringLightLevel: (() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const v = localStorage.getItem('fotolism_ring_light_level')
+        return v ? Number(v) : 75
+      }
+      return 75
+    } catch { return 75 }
+  })(),
+  setRingLightEnabled: (ringLightEnabled) => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fotolism_ring_light_enabled', String(ringLightEnabled))
+      }
+    } catch { }
+    set({ ringLightEnabled })
+  },
+  setRingLightLevel: (ringLightLevel) => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fotolism_ring_light_level', String(ringLightLevel))
+      }
+    } catch { }
+    set({ ringLightLevel })
+  },
 
   countdownSeconds: 5,
   setCountdownSeconds: (countdownSeconds) =>
@@ -903,8 +1087,65 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   availableCameras: [],
   selectedCameraId: null,
-  mirrorCamera: true,
+  mirrorCamera: (() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const v = localStorage.getItem('fotolism_mirror_camera')
+        return v !== null ? v === 'true' : true
+      }
+      return true
+    } catch { return true }
+  })(),
   setCameras: (cameras) => set({ availableCameras: cameras }),
   selectCamera: (id) => set({ selectedCameraId: id }),
-  setMirrorCamera: (mirrorCamera) => set({ mirrorCamera }),
+  setMirrorCamera: (mirrorCamera) => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fotolism_mirror_camera', String(mirrorCamera))
+      }
+    } catch { }
+    set({ mirrorCamera })
+  },
+
+  // Device Provisioning State & Handlers
+  deviceConfig: null,
+  isDeviceActivated: false,
+  loadDeviceConfig: async () => {
+    try {
+      const { api } = await import('../lib/api')
+      const res = await api.device.getConfig()
+      if (res?.success && res.data?.device_token) {
+        set({ deviceConfig: res.data, isDeviceActivated: true, screen: 'idle' })
+        return res.data
+      }
+    } catch (err) {
+      console.warn('Failed to load device config:', err)
+    }
+    const hasExplicitScreen = typeof window !== 'undefined' && Boolean(window.location?.search && new URLSearchParams(window.location.search).get('screen'))
+    set({
+      deviceConfig: null,
+      isDeviceActivated: false,
+      ...(hasExplicitScreen ? {} : { screen: 'activate' }),
+    })
+    return null
+  },
+  setDeviceConfig: (deviceConfig) => {
+    set({ deviceConfig, isDeviceActivated: Boolean(deviceConfig?.device_token) })
+  },
+  resetDeviceConfig: async () => {
+    try {
+      const { api } = await import('../lib/api')
+      await api.device.resetConfig()
+      const { cloudSyncService } = await import('../services/cloudSyncService')
+      cloudSyncService.setDeviceConfig(null)
+    } catch (err) {
+      console.warn('Failed to reset device config:', err)
+    }
+    const hasExplicitScreen = typeof window !== 'undefined' && Boolean(window.location?.search && new URLSearchParams(window.location.search).get('screen'))
+    set({
+      deviceConfig: null,
+      isDeviceActivated: false,
+      ...(hasExplicitScreen ? {} : { screen: 'activate' }),
+    })
+  },
 }))

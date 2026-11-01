@@ -3,16 +3,16 @@
 
 // ── 1. Brand & Identity ──
 /** Tên thương hiệu chính */
-export const BRAND_NAME = 'Fotolism'
+export const BRAND_NAME = 'fotolism'
 
 /** Tên thương hiệu viết hoa */
-export const BRAND_NAME_UPPER = 'FOTOLISM'
+export const BRAND_NAME_UPPER = 'fotolism'
 
 /** Tên ứng dụng đầy đủ */
-export const APP_NAME = 'Fotolism Photobooth'
+export const APP_NAME = 'fotolism photobooth'
 
 /** Tên sự kiện mặc định */
-export const DEFAULT_EVENT_NAME = 'FOTOLISM PHOTOBOOTH'
+export const DEFAULT_EVENT_NAME = 'fotolism photobooth'
 
 /** Năm phát hành */
 export const APP_YEAR = '2026'
@@ -47,7 +47,7 @@ export const FILE_PREFIX_TIMELAPSE = 'fotolism_timelapse'
 export const FILE_PREFIX_SELF = 'fotolism_self'
 
 /** Tiền tố tên thư mục phiên chụp (session subfolder) */
-export const SESSION_FOLDER_PREFIX = 'Fotolism'
+export const SESSION_FOLDER_PREFIX = 'fotolism'
 
 /** LocalStorage key cho beauty config */
 export const LS_BEAUTY_CONFIG_KEY = 'fotolism_beauty_config'
@@ -60,36 +60,88 @@ export const LS_EVENT_CONFIG_KEY = 'fotolism_event_config'
 export const DEFAULT_BANK_BIN = '970422'
 
 /** Tên ngân hàng mặc định */
-export const DEFAULT_BANK_NAME = 'MB Bank (Quân Đội)'
+export const DEFAULT_BANK_NAME = 'MBBank (Ngân hàng Quân Đội)'
 
 /** Số tài khoản mặc định */
-export const DEFAULT_ACCOUNT_NUMBER = '0388889999'
+export const DEFAULT_ACCOUNT_NUMBER = '03609032002'
 
 /** Tên chủ tài khoản mặc định */
-export const DEFAULT_ACCOUNT_HOLDER = 'FOTOLISM VIETNAM'
+export const DEFAULT_ACCOUNT_HOLDER = 'NGUYEN HOANG'
 
 /** Mã giảm giá mẫu mặc định */
-export const DEFAULT_COUPON_CODE = 'FOTOLISM10'
+export const DEFAULT_COUPON_CODE = 'fotolism10'
 
 // ── 5. Pricing Defaults (VND) ──
-/** Giá gói dải 2x6 inch */
-export const DEFAULT_PRICE_2X6 = 50000
+/** Giá gói dải 2x6 inch (70.000 đ) */
+export const DEFAULT_PRICE_2X6 = 70000
 
-/** Giá gói postcard 4x6 inch */
-export const DEFAULT_PRICE_4X6 = 70000
+/** Giá gói postcard 4x6 inch (90.000 đ) */
+export const DEFAULT_PRICE_4X6 = 90000
 
-/** Giá in thêm 2x6 inch (+2 dải) */
-export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 25000
+/** Giá in thêm 2x6 inch (+1 ảnh: 30.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 30000
 
-/** Giá in thêm 4x6 inch (+1 postcard) */
-export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 35000
+/** Giá in thêm 4x6 inch (+1 ảnh: 30.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 30000
+
+/** Giá gói Selfbooth 5 phút mặc định (VND) */
+export const DEFAULT_SELFBOOTH_PRICE_5M = 50000
+
+/** Giá gói Selfbooth 7 phút mặc định (VND) */
+export const DEFAULT_SELFBOOTH_PRICE_7M = 70000
+
+/** Giá gói Selfbooth 10 phút mặc định (VND) */
+export const DEFAULT_SELFBOOTH_PRICE_10M = 100000
 
 // ── 6. Session & Timeouts ──
 /** Thời gian chờ trở về màn hình chờ khi không có thao tác (giây) */
 export const DEFAULT_IDLE_TIMEOUT_SECONDS = 60
 
-/** Thời gian phiên chụp tự do Selfbooth mặc định (giây) */
-export const DEFAULT_SELFBOOTH_DURATION_SECONDS = 60
+/** Thời gian phiên chụp tự do Selfbooth mặc định (giây - 5 phút) */
+export const DEFAULT_SELFBOOTH_DURATION_SECONDS = 300
+
+/** Thời gian đếm ngược khi bấm Remote Selfbooth (giây) */
+export const DEFAULT_SELFBOOTH_CAPTURE_COUNTDOWN = 2
+
+export interface SelfboothPackage {
+  id: '5m' | '7m' | '10m'
+  name: string
+  minutes: number
+  durationSeconds: number
+  defaultPrice: number
+  badge: string
+  description: string
+}
+
+export const SELFBOOTH_PACKAGES: SelfboothPackage[] = [
+  {
+    id: '5m',
+    name: 'Gói 5 Phút',
+    minutes: 5,
+    durationSeconds: 300,
+    defaultPrice: DEFAULT_SELFBOOTH_PRICE_5M,
+    badge: 'TIÊU CHUẨN',
+    description: 'Chụp tự do không giới hạn số ảnh trong 5 phút',
+  },
+  {
+    id: '7m',
+    name: 'Gói 7 Phút',
+    minutes: 7,
+    durationSeconds: 420,
+    defaultPrice: DEFAULT_SELFBOOTH_PRICE_7M,
+    badge: 'PHỔ BIẾN NHẤT',
+    description: 'Thời gian chụp lý tưởng, thoải mái tạo dáng cùng bạn bè',
+  },
+  {
+    id: '10m',
+    name: 'Gói 10 Phút',
+    minutes: 10,
+    durationSeconds: 600,
+    defaultPrice: DEFAULT_SELFBOOTH_PRICE_10M,
+    badge: 'VIP KHUYẾN NGHỊ',
+    description: 'Trọn vẹn mọi khoảnh khắc, nhận toàn bộ ảnh gốc chất lượng cao',
+  },
+]
 
 /** Tốc độ tua video timelapse hậu trường (VD: 2.5x) */
 export const DEFAULT_TIMELAPSE_SPEED = 2.5
@@ -103,7 +155,7 @@ export const DEFAULT_GDRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders
 
 /** Webhook Google Apps Script mặc định để tự động tạo subfolder */
 export const DEFAULT_GDRIVE_WEBHOOK_URL =
-  'https://script.google.com/macros/s/AKfycbwaxURdY_LUzje8k_IXilHcQiCXnvICL5Xo767cm6RwPsYjE2yJp-I3bE_jpQ3i66J7/exec'
+  'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
 
 // ── 8. Hardware & Camera Specifications ──
 /** USB Vendor ID của Canon EOS */

@@ -1,6 +1,6 @@
 import { useAppStore, THEME_OPTIONS, type ThemeItem } from '../store/appStore'
 import { DEFAULT_EVENT_NAME } from '../lib/constants'
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
+import { Check, Camera } from 'lucide-react'
 import './ThemeSelectScreen.css'
 
 export default function ThemeSelectScreen() {
@@ -23,23 +23,11 @@ export default function ThemeSelectScreen() {
 
   return (
     <div className="theme-screen-container" id="theme-select-screen">
-      {/* ── Top Header: Single Left Back Arrow + Center Title ── */}
+      {/* ── Top Header: Tiêu đề trung tâm ── */}
       <header className="theme-screen-header">
-        <button
-          className="screen-back-btn"
-          onClick={() => setScreen('capture')}
-          title="Quay lại chụp ảnh"
-          aria-label="Quay lại"
-        >
-          <ArrowLeft size={28} strokeWidth={2} />
-        </button>
-
         <div className="theme-header-center">
           <h1 className="theme-header-title">Chọn Frame</h1>
-          <p className="theme-header-subtitle">Chọn mẫu khung viền cho dải ảnh của bạn</p>
         </div>
-
-        <div className="header-placeholder" />
       </header>
 
       {/* ── Main Split: Fixed Strip Preview (Left) + Frame Options (Right) ── */}
@@ -60,7 +48,8 @@ export default function ThemeSelectScreen() {
                     <img src={photo.compositedPath} alt={`Photo ${index + 1}`} />
                   ) : (
                     <div className="theme-slot-placeholder">
-                      📸 Ảnh {index + 1}
+                      <Camera size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} />
+                      <span>Ảnh {index + 1}</span>
                     </div>
                   )}
                 </div>
@@ -68,25 +57,31 @@ export default function ThemeSelectScreen() {
             </div>
 
             {/* Strip Branding Footer */}
-            <div className="strip-branding-footer">
-              <span
-                style={{
-                  color: selectedTheme.textColor,
-                }}
-              >
-                {eventConfig.eventName || DEFAULT_EVENT_NAME}
-              </span>
-            </div>
+            {!selectedTheme.hideFooter && (
+              <div className="strip-branding-footer">
+                <span
+                  style={{
+                    color: selectedTheme.textColor,
+                  }}
+                >
+                  {eventConfig.eventName || DEFAULT_EVENT_NAME}
+                </span>
+              </div>
+            )}
+
+            {/* Lớp Khung Đồ Họa PNG Trong Suốt (Overlay) */}
+            {selectedTheme.overlayUrl && (
+              <img
+                src={selectedTheme.overlayUrl}
+                alt={selectedTheme.name}
+                className="theme-frame-overlay-img"
+              />
+            )}
           </div>
         </div>
 
-        {/* Right Side: 1-2 Frame Mặc Định (Tối giản, Sang trọng) */}
+        {/* Right Side: Frame Options (Tối giản, Sang trọng) */}
         <div className="frame-selector-panel">
-          <div className="frame-selector-header">
-            <span className="frame-selector-title">Mẫu Khung Khả Dụng</span>
-            <span className="frame-selector-count">({THEME_OPTIONS.length} mẫu)</span>
-          </div>
-
           <div className="frames-grid-cards">
             {THEME_OPTIONS.map((theme: ThemeItem) => {
               const isSelected = selectedTheme.id === theme.id
@@ -105,14 +100,15 @@ export default function ThemeSelectScreen() {
                       borderColor: theme.borderColor,
                     }}
                   >
-                    <div className="frame-thumb-inner" />
+                    {theme.overlayUrl ? (
+                      <img src={theme.overlayUrl} alt={theme.name} className="frame-card-thumb-overlay" />
+                    ) : (
+                      <div className="frame-thumb-inner" />
+                    )}
                   </div>
 
                   <div className="frame-card-meta">
                     <span className="frame-card-name">{theme.name}</span>
-                    <span className="frame-card-desc">
-                      {theme.id.includes('white') ? 'Tinh khôi, thanh lịch' : 'Ấm áp, sang trọng'}
-                    </span>
                   </div>
 
                   {isSelected && (
@@ -127,14 +123,24 @@ export default function ThemeSelectScreen() {
         </div>
       </div>
 
-      {/* ── Bottom Bar: Only Single Primary Action ── */}
-      <footer className="theme-bottom-bar">
+      {/* ── Bottom Bar: Nút Quay Lại (Góc dưới trái) + Nút Tiếp Tục (Góc dưới phải) ── */}
+      <footer className="kiosk-bottom-nav-bar theme-bottom-bar">
         <button
-          className="btn-proceed-theme"
-          onClick={() => setScreen('select-filter')}
+          className="kiosk-nav-btn btn-nav-back"
+          onClick={() => setScreen('capture')}
+          title="Quay lại"
+          aria-label="Quay lại"
         >
-          <span>Tiếp Tục Chọn Bộ Lọc Màu</span>
-          <ArrowRight size={22} strokeWidth={2.2} />
+          Quay lại
+        </button>
+
+        <button
+          className="kiosk-nav-btn btn-nav-next"
+          onClick={() => setScreen('select-filter')}
+          title="Tiếp tục"
+          aria-label="Tiếp tục"
+        >
+          Tiếp tục
         </button>
       </footer>
     </div>

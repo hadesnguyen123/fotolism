@@ -1,0 +1,313 @@
+/* ==========================================================================
+   FOTOLISM 3.0 — SELFBOOTH SETUP SCREEN (MINIMAL LUXURY & CALL TO ACTION)
+   - 16:9 Live Preview Ratio
+   - Only 3 Core Color Tones
+   - Clean Minutes Duration (5 Phút, 7 Phút, 10 Phút)
+   - Balanced, High-Contrast Call To Action
+   ========================================================================== */
+
+.selfbooth-setup-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: radial-gradient(circle at 50% 36%, #FFFFFF 0%, #FAF6F1 55%, #EFE5DB 100%);
+  user-select: none;
+  overflow: hidden;
+  position: relative;
+  padding: 20px 0 0;
+  box-sizing: border-box;
+}
+
+/* ── Top Header ──────────────────────────────────────────────────────────── */
+.selfbooth-setup-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.setup-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.setup-header-title {
+  font-family: var(--font-display, inherit);
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: var(--brand-primary, #502A1D);
+  letter-spacing: -0.5px;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.setup-header-subtitle {
+  font-family: var(--font-body, inherit);
+  font-size: 0.95rem;
+  color: var(--text-secondary, #70594F);
+  font-weight: 500;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.header-placeholder {
+  width: 48px;
+  height: 48px;
+  visibility: hidden;
+}
+
+/* ── Main Stage: 2 Cột Cân Đối, Căn Giữa Màn Hình ───────────────────────── */
+.selfbooth-setup-grid {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 0;
+}
+
+/* ── Cột Trái: Live Camera Preview 16:9 ───────────────────────────────────── */
+.setup-preview-card {
+  flex: 1;
+  max-width: 580px;
+  background: #FFFFFF;
+  border-radius: 28px;
+  padding: 18px;
+  border: 2px solid var(--border-default, #E6D9CF);
+  box-shadow: 0 16px 40px rgba(80, 42, 29, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* Khung Camera Tỉ Lệ Chuẩn 16:9 Tuyệt Đối */
+.preview-video-container-16-9 {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #18181B;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.preview-video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: filter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.preview-filter-indicator {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  color: #FFFFFF;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.preview-filter-indicator .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.preview-filter-indicator strong {
+  color: #FFFDF9;
+  font-weight: 800;
+}
+
+/* ── Cột Phải: Bộ Điều Khiển Tối Giản ────────────────────────────────────── */
+.setup-controls-card {
+  flex: 1;
+  max-width: 520px;
+  background: #FFFFFF;
+  border-radius: 28px;
+  padding: 28px 32px;
+  border: 2px solid var(--border-default, #E6D9CF);
+  box-shadow: 0 16px 40px rgba(80, 42, 29, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-label {
+  font-family: var(--font-display, inherit);
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--brand-primary, #502A1D);
+  letter-spacing: -0.2px;
+}
+
+/* ── 3 Tông Màu ──────────────────────────────────────────────────────────── */
+.filters-3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.filter-btn-compact {
+  height: 60px;
+  background: #FAF6F1;
+  border: 2px solid #E6D9CF;
+  border-radius: 16px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  outline: none;
+}
+
+.filter-btn-compact:hover {
+  background: #FFFFFF;
+  border-color: var(--brand-primary, #502A1D);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.1);
+}
+
+.filter-btn-compact.active {
+  background: #FFFDF9;
+  border-color: var(--brand-primary, #502A1D);
+  border-width: 2.5px;
+  box-shadow: 0 6px 20px rgba(80, 42, 29, 0.18);
+  transform: translateY(-2px);
+}
+
+.filter-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.filter-name {
+  font-family: var(--font-display, inherit);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-primary, #2A1810);
+}
+
+.active-check-icon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--brand-primary, #502A1D);
+}
+
+/* ── Thời Gian Chỉ Để Phút (5 Phút, 7 Phút, 10 Phút) ─────────────────────── */
+.durations-minutes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.duration-btn-compact {
+  height: 64px;
+  background: #FAF6F1;
+  border: 2px solid #E6D9CF;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  outline: none;
+}
+
+.duration-btn-compact:hover {
+  background: #FFFFFF;
+  border-color: var(--brand-primary, #502A1D);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.1);
+}
+
+.duration-btn-compact.selected {
+  background: #FFFDF9;
+  border-color: var(--brand-primary, #502A1D);
+  border-width: 2.5px;
+  box-shadow: 0 6px 20px rgba(80, 42, 29, 0.18);
+  transform: translateY(-2px);
+}
+
+.duration-text {
+  font-family: var(--font-display, inherit);
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--brand-primary, #502A1D);
+  letter-spacing: -0.3px;
+}
+
+/* ── CALL TO ACTION BUTTON (Đậm, Rõ Ràng, Mời Gọi) ───────────────────────── */
+.btn-start-selfbooth-cta {
+  width: 100%;
+  height: 58px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--brand-primary, #502A1D);
+  color: #FFFFFF;
+  border: none;
+  font-family: var(--font-display, inherit);
+  font-size: 1.18rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(80, 42, 29, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 6px;
+}
+
+.btn-start-selfbooth-cta:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 14px 34px rgba(80, 42, 29, 0.38);
+  background: #3F2016;
+}
+
+.btn-start-selfbooth-cta:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ── Bottom Bar: Cách lề mặc định 100px ── */
+.selfbooth-bottom-bar {
+  padding: 0 100px 20px;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+}

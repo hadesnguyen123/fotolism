@@ -13,24 +13,62 @@
  * 8. Dán URL vào mục Quản Trị > Google Drive & Timelapse > Webhook URL trong Fotolism!
  */
 
-export const GOOGLE_APPS_SCRIPT_SAMPLE = `function doPost(e) {
+export const GOOGLE_APPS_SCRIPT_SAMPLE = `function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    message: "Fotolism Google Apps Script Webhook đang hoạt động tốt!"
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
   try {
-    var data = JSON.parse(e.postData.contents);
-    var parentId = data.parentFolderId || '1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU';
-    var parentFolder = DriveApp.getFolderById(parentId);
-    
-    // Tự động tạo tên folder theo ngày giờ (VD: Fotolism_2026-10-08_22h35)
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch(parseErr) {
+        data = {};
+      }
+    }
+
+    // 1. Phản hồi kiểm tra kết nối từ nút "Kiểm Tra Webhook" của Kiosk
+    if (data.action === 'test_connection' || data.action === 'test_ping') {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Kết nối Webhook thành công! Google Apps Script hoạt động tốt."
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. Tìm thư mục cha (Ưu tiên: Folder ID gửi lên -> Tìm thư mục tên 'Fotolism' -> Root Drive)
+    var parentFolder = null;
+    if (data.parentFolderId && data.parentFolderId.length > 5 && data.parentFolderId !== '1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU') {
+      try {
+        parentFolder = DriveApp.getFolderById(data.parentFolderId);
+      } catch(fErr) {}
+    }
+
+    if (!parentFolder) {
+      // Tìm thư mục có tên 'Fotolism' trên Google Drive của bạn
+      var existingFolders = DriveApp.getFoldersByName('Fotolism');
+      if (existingFolders.hasNext()) {
+        parentFolder = existingFolders.next();
+      } else {
+        // Tự tạo thư mục Fotolism ở Drive nếu chưa có
+        parentFolder = DriveApp.createFolder('Fotolism');
+        parentFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      }
+    }
+
+    // 3. Tự động tạo thư mục con cho phiên chụp (VD: Fotolism_2026-10-31_14h30)
     var now = new Date();
     var pad = function(n) { return (n < 10 ? '0' : '') + n; };
     var timeStamp = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '_' + pad(now.getHours()) + 'h' + pad(now.getMinutes());
-    
     var folderName = data.folderName || ('Fotolism_' + timeStamp);
+
     var newFolder = parentFolder.createFolder(folderName);
-    
-    // Đặt quyền truy cập công khai xem ảnh cho người quét mã QR
     newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
-    // Đẩy từng file ảnh lên folder con
+
+    // 4. Đẩy từng file ảnh lên thư mục con
     if (data.files && Array.isArray(data.files)) {
       for (var i = 0; i < data.files.length; i++) {
         var fileItem = data.files[i];
@@ -45,14 +83,14 @@ export const GOOGLE_APPS_SCRIPT_SAMPLE = `function doPost(e) {
         }
       }
     }
-    
+
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       folderId: newFolder.getId(),
       folderUrl: newFolder.getUrl(),
       folderName: folderName
     })).setMimeType(ContentService.MimeType.JSON);
-    
+
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
       success: false,
