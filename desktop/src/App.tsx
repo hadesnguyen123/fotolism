@@ -14,12 +14,25 @@ import AdminScreen from './screens/AdminScreen'
 import OverheadScreen from './screens/OverheadScreen'
 import SelfboothSetupScreen from './screens/SelfboothSetupScreen'
 import ErrorNotificationCenter from './components/ErrorNotificationCenter'
+import KioskLockOverlay from './components/KioskLockOverlay'
 import './App.css'
 
 export default function App() {
   const storeScreen = useAppStore((s) => s.screen)
   const setScreen = useAppStore((s) => s.setScreen)
   const loadDeviceConfig = useAppStore((s) => s.loadDeviceConfig)
+  const isKioskLocked = useAppStore((s) => s.isKioskLocked)
+  const setIsKioskLocked = useAppStore((s) => s.setIsKioskLocked)
+
+  // Lắng nghe trạng thái khóa máy (isLocked) từ Cloud CMS Heartbeat
+  useEffect(() => {
+    const unsubscribe = cloudSyncService.subscribe((status) => {
+      if (typeof status.isLocked === 'boolean') {
+        setIsKioskLocked(status.isLocked)
+      }
+    })
+    return () => unsubscribe()
+  }, [setIsKioskLocked])
 
   const isOverhead = typeof window !== 'undefined' && window.location.search.includes('mode=overhead')
 
@@ -86,6 +99,9 @@ export default function App() {
 
       {/* Trung tâm thông báo lỗi API & Camera Logs */}
       <ErrorNotificationCenter />
+
+      {/* Lệnh khóa máy từ xa từ Cloud CMS */}
+      {isKioskLocked && <KioskLockOverlay />}
     </div>
   )
 }

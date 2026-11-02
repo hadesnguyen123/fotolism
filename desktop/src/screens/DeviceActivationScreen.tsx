@@ -128,6 +128,8 @@ export default function DeviceActivationScreen() {
           kioskName: result.data.kiosk_name || result.data.kiosk_id,
           branchName: result.data.branch_name || 'Chi Nhánh fotolism',
         })
+        const { api } = await import('../lib/api')
+        await api.device.saveConfig(result.data)
         setDeviceConfig(result.data)
 
         // Sau 1.4s chuyển vào màn hình chờ chính

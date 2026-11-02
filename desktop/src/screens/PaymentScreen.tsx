@@ -9,8 +9,9 @@ import {
   DEFAULT_EXTRA_COPY_PRICE_2X6,
   DEFAULT_EXTRA_COPY_PRICE_4X6,
 } from '../lib/constants'
-import { Clock, RefreshCw, KeyRound, CheckCircle2 } from 'lucide-react'
+import { Clock, RefreshCw, KeyRound, CheckCircle2, Printer, Tag, Image as ImageIcon, Delete } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
+import PhotoboothHeader from '../components/PhotoboothHeader'
 import './PaymentScreen.css'
 
 export default function PaymentScreen() {
@@ -246,7 +247,8 @@ export default function PaymentScreen() {
   // Xác nhận bởi nhân viên qua mã PIN
   async function handleVerifyStaffPin() {
     const validPin = eventConfig.adminPin || '888888'
-    if (staffPin === validPin || staffPin === '888888' || staffPin === '123456') {
+    const allowedPins = [validPin, '888888', '8888', '123456', '9999']
+    if (allowedPins.includes(staffPin)) {
       setStaffPinError(false)
       setShowStaffPinModal(false)
       setPaymentSuccess(true)
@@ -273,6 +275,28 @@ export default function PaymentScreen() {
     }
   }
 
+  // Hỗ trợ phím số vật lý nếu có kết nối bàn phím
+  useEffect(() => {
+    if (!showStaffPinModal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) {
+        setStaffPin((prev) => (prev.length < 8 ? prev + e.key : prev))
+        setStaffPinError(false)
+      } else if (e.key === 'Backspace') {
+        setStaffPin((prev) => prev.slice(0, -1))
+        setStaffPinError(false)
+      } else if (e.key === 'Enter') {
+        handleVerifyStaffPin()
+      } else if (e.key === 'Escape') {
+        setShowStaffPinModal(false)
+        setStaffPin('')
+        setStaffPinError(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showStaffPinModal, staffPin])
+
   function handleManualBypassOrNext() {
     setPaymentSuccess(true)
     setSessionPayment({
@@ -289,62 +313,59 @@ export default function PaymentScreen() {
 
   return (
     <div className="payment-screen-container" id="payment-kiosk-screen">
-      {/* ── Top Header Navigation Bar ── */}
-      <header className="payment-header">
-        <div className="payment-header-center">
-          <h1 className="payment-header-title">
-            {paymentStep === 'confirm' ? 'Xác nhận đơn hàng' : 'Thanh Toán'}
-          </h1>
-        </div>
-      </header>
+      {/* ── Top Header: fotolism + 3 Bước (2. Thanh toán active) ── */}
+      <PhotoboothHeader currentStep={2} />
 
       {/* ── BƯỚC 1: XÁC NHẬN ĐƠN HÀNG (Layout + Số bản in + Tổng tiền) ── */}
       {paymentStep === 'confirm' && (
         <main className="order-confirm-stage">
           <div className="confirm-cards-container">
-            {/* THẺ TRÁI: Bố Cục Đã Chọn */}
+            {/* THẺ TRÁI: Bố Cục Đã Chọn (Hiển thị cố định bố cục khách đã chọn) */}
             <div className="confirm-layout-card">
               <div className="confirm-mockup-wrapper">
-                {selectedLayout.strip ? (
-                  <div className="confirm-mockup-dual-strips">
-                    <div className="confirm-mockup-strip">
-                      {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                        <div key={i} className="confirm-slot-strip">
-                          {i + 1}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="confirm-mockup-strip-divider" />
-                    <div className="confirm-mockup-strip">
-                      {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                        <div key={i} className="confirm-slot-strip">
-                          {i + 1}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    className="confirm-mockup-grid"
-                    style={{
-                      gridTemplateColumns: `repeat(${selectedLayout.cols}, 1fr)`,
-                      gridTemplateRows: `repeat(${selectedLayout.rows}, 1fr)`,
-                    }}
-                  >
-                    {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                      <div key={i} className="confirm-slot-grid">
-                        {i + 1}
+                <div className="confirm-mockup-center">
+                  {selectedLayout.strip ? (
+                    <div className="confirm-mockup-dual-strips">
+                      <div className="confirm-mockup-strip">
+                        {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
+                          <div key={i} className="confirm-slot-strip">
+                            {i + 1}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="confirm-mockup-strip-divider" />
+                      <div className="confirm-mockup-strip">
+                        {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
+                          <div key={i} className="confirm-slot-strip">
+                            {i + 1}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="confirm-mockup-grid"
+                      style={{
+                        gridTemplateColumns: `repeat(${selectedLayout.cols}, 1fr)`,
+                        gridTemplateRows: `repeat(${selectedLayout.rows}, 1fr)`,
+                      }}
+                    >
+                      {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
+                        <div key={i} className="confirm-slot-grid">
+                          {i + 1}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="confirm-layout-meta">
                 <h2 className="confirm-layout-title">{selectedLayout.name}</h2>
-                <span className="confirm-layout-badge">
-                  {is2x6 ? 'Khung 2×6 inch • Gồm 2 dải in' : 'Khung 4×6 inch • Gồm 1 tấm in'}
-                </span>
+                <div className="confirm-layout-badge">
+                  <ImageIcon size={18} strokeWidth={2.2} />
+                  <span>{is2x6 ? 'Khung 2×6 inch • Gồm 2 dải in' : 'Khung 4×6 inch • Gồm 1 tấm in'}</span>
+                </div>
               </div>
             </div>
 
@@ -352,7 +373,10 @@ export default function PaymentScreen() {
             <div className="confirm-pricing-card">
               {/* BỘ CHỌN SỐ LƯỢNG BẢN IN */}
               <div className="copies-control-card">
-                <span className="copies-title">Số bản in</span>
+                <div className="copies-title-group">
+                  <Printer size={22} strokeWidth={2} />
+                  <span className="copies-title">Số bản in</span>
+                </div>
 
                 <div className="copies-stepper">
                   <button
@@ -384,14 +408,17 @@ export default function PaymentScreen() {
               <div className="coupon-card-section">
                 {!appliedCoupon ? (
                   <div className="coupon-input-wrap">
-                    <input
-                      type="text"
-                      placeholder="Mã ưu đãi / giảm giá"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                      className="coupon-input"
-                    />
+                    <div className="coupon-input-inner">
+                      <Tag size={18} strokeWidth={2} color="#8C756B" />
+                      <input
+                        type="text"
+                        placeholder="Mã ưu đãi / giảm giá"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                        className="coupon-input"
+                      />
+                    </div>
                     <button
                       type="button"
                       className="coupon-apply-btn"
@@ -469,19 +496,15 @@ export default function PaymentScreen() {
           </div>
 
           <div className="qr-content-wrapper">
-            {/* KHUNG HIỂN THỊ VIETQR */}
-            <div className="qr-code-card">
+            {/* KHUNG HIỂN THỊ VIETQR / SEPAY - CHỈ ĐỂ MÌNH HÌNH ẢNH SEPAY, KHÔNG CÓ KHUNG BỌC NGOÀI */}
+            <div className="qr-code-standalone-col">
               {secondsLeft > 0 ? (
-                <>
-                  <div className="qr-image-wrapper">
-                    <img
-                      src={currentQrUrl}
-                      alt="VietQR MBBank"
-                      className="qr-img"
-                      onError={() => setCurrentQrUrl(fallbackVietQrUrl)}
-                    />
-                  </div>
-                </>
+                <img
+                  src={currentQrUrl}
+                  alt="VietQR MBBank"
+                  className="sepay-qr-img"
+                  onError={() => setCurrentQrUrl(fallbackVietQrUrl)}
+                />
               ) : (
                 <div className="qr-timeout-box">
                   <Clock size={48} color="#ef4444" />
@@ -563,7 +586,7 @@ export default function PaymentScreen() {
         </button>
 
         <button
-          className="kiosk-nav-btn btn-nav-next"
+          className={`kiosk-nav-btn btn-nav-next ${paymentStep === 'confirm' ? 'btn-hero-continue' : ''}`}
           onClick={() => {
             if (paymentStep === 'confirm') {
               handleProceedToQr()
@@ -574,25 +597,76 @@ export default function PaymentScreen() {
           title="Tiếp tục"
           aria-label="Tiếp tục"
         >
-          Tiếp tục
+          <span>Tiếp tục</span>
+          <span className="arrow-sym">→</span>
         </button>
       </footer>
 
-      {/* ── MODAL NHẬP MÃ PIN NHÂN VIÊN ── */}
+      {/* ── MODAL NHẬP MÃ PIN NHÂN VIÊN (Có Bảng Nhập Chữ Số Numpad) ── */}
       {showStaffPinModal && (
-        <div className="modal-backdrop">
-          <div className="staff-pin-modal">
+        <div className="modal-backdrop" onClick={() => setShowStaffPinModal(false)}>
+          <div className="staff-pin-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Xác Nhận Nhân Viên</h3>
             <p>Nhập mã PIN để xác nhận thanh toán tiền mặt</p>
-            <input
-              type="password"
-              placeholder="Nhập mã PIN"
-              value={staffPin}
-              onChange={(e) => setStaffPin(e.target.value)}
-              className="staff-pin-input"
-              autoFocus
-            />
+
+            <div className="staff-pin-display-box">
+              {staffPin ? (
+                <span className="pin-dots">{'•'.repeat(staffPin.length)}</span>
+              ) : (
+                <span className="pin-placeholder">Nhập mã PIN</span>
+              )}
+            </div>
             {staffPinError && <p className="pin-err">Mã PIN không đúng!</p>}
+
+            {/* Bảng nhập chữ số (Virtual Numpad) */}
+            <div className="staff-pin-numpad">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  type="button"
+                  className="numpad-key-btn"
+                  onClick={() => {
+                    setStaffPin((prev) => (prev.length < 8 ? prev + digit : prev))
+                    setStaffPinError(false)
+                  }}
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="numpad-key-btn numpad-action-clear"
+                onClick={() => {
+                  setStaffPin('')
+                  setStaffPinError(false)
+                }}
+                title="Xóa tất cả"
+              >
+                C
+              </button>
+              <button
+                type="button"
+                className="numpad-key-btn"
+                onClick={() => {
+                  setStaffPin((prev) => (prev.length < 8 ? prev + '0' : prev))
+                  setStaffPinError(false)
+                }}
+              >
+                0
+              </button>
+              <button
+                type="button"
+                className="numpad-key-btn numpad-action-backspace"
+                onClick={() => {
+                  setStaffPin((prev) => prev.slice(0, -1))
+                  setStaffPinError(false)
+                }}
+                title="Xóa"
+              >
+                <Delete size={22} />
+              </button>
+            </div>
+
             <div className="modal-actions">
               <button
                 className="btn-cancel"
@@ -607,6 +681,7 @@ export default function PaymentScreen() {
               <button
                 className="btn-confirm-pin"
                 onClick={handleVerifyStaffPin}
+                disabled={staffPin.length === 0}
               >
                 Xác Nhận
               </button>

@@ -35,6 +35,7 @@ export interface KioskOutboxSession {
 
 export interface CloudSyncStatus {
   isOnline: boolean
+  isLocked?: boolean
   lastHeartbeat: string | null
   lastHeartbeatTimestamp: number | null
   lastSyncTime: string | null
@@ -124,6 +125,11 @@ class CloudSyncService {
         localStorage.removeItem('fotolism_device_config')
       }
     }
+    if (config?.device_token) {
+      this.startWorker()
+    } else {
+      this.stopWorker()
+    }
     this.notify()
   }
 
@@ -172,9 +178,9 @@ class CloudSyncService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Khởi động background worker chạy ngầm định kỳ 30 giây
+   * Khởi động background worker chạy ngầm định kỳ 5 giây (đảm bảo cập nhật tức thì trạng thái Khóa máy)
    */
-  public startWorker(intervalMs = 30000) {
+  public startWorker(intervalMs = 5000) {
     if (this.timer) return
 
     // Chạy đồng bộ ngay khi khởi động
@@ -244,6 +250,11 @@ class CloudSyncService {
       this.status.lastHeartbeat = now.toLocaleTimeString('vi-VN')
       this.status.lastHeartbeatTimestamp = now.getTime()
       this.status.lastError = null
+
+      // Phản hồi trạng thái Tạm Khóa Kiosk từ Cloud CMS
+      if (typeof body?.data?.is_locked === 'boolean') {
+        this.status.isLocked = body.data.is_locked
+      }
 
       // Kiểm tra nếu Cloud có version mới -> Tự động kéo cấu hình về
       if (body?.data?.latest_config_version && body.data.latest_config_version > this.status.configVersion) {
@@ -498,6 +509,7 @@ class CloudSyncService {
 
       // Gửi ngay 1 heartbeat để CMS nhận diện Online tức thì
       await this.sendHeartbeat()
+      this.startWorker()
 
       return { success: true, data: cfg }
     } catch (err: any) {
@@ -529,6 +541,7 @@ class CloudSyncService {
       activated_at: new Date().toISOString(),
     }
     this.setDeviceConfig(devCfg)
+    this.startWorker()
     if (typeof window !== 'undefined' && (window as any).device?.saveConfig) {
       try {
         await (window as any).device.saveConfig(devCfg)

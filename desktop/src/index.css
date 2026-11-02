@@ -104,10 +104,10 @@
   --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-body:    'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 
-  /* Typography Scale — Fotolism 3.0 */
-  --font-size-title: clamp(28px, 3.2vw, 40px);
-  --font-size-body:  clamp(16px, 1.8vw, 18px);
-  --font-size-btn:   clamp(18px, 2.0vw, 22px);
+  /* Typography Scale — Fotolism 3.0 Touch-First Kiosk */
+  --font-size-title: clamp(2.4rem, 3.4vw, 3.2rem);
+  --font-size-body:  clamp(18px, 2.0vw, 22px);
+  --font-size-btn:   clamp(20px, 2.2vw, 26px);
 
   /* Transitions */
   --transition-fast:   150ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -293,11 +293,11 @@ button, input, select, textarea, optgroup {
 }
 
 .kiosk-nav-btn {
-  height: 52px;
-  min-width: 130px;
+  height: 60px;
+  min-width: 160px;
   border-radius: var(--radius-full, 9999px);
   font-family: var(--font-display, inherit);
-  font-size: 1.15rem;
+  font-size: 1.35rem;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
@@ -319,7 +319,7 @@ button, input, select, textarea, optgroup {
   background: var(--surface-default, #FFFFFF);
   color: var(--brand-primary, #502A1D);
   border: 1.5px solid var(--border-default, #E6D9CF);
-  padding: 0 36px;
+  padding: 0 44px;
   box-shadow: 0 4px 14px rgba(80, 42, 29, 0.08);
 }
 
@@ -339,7 +339,7 @@ button, input, select, textarea, optgroup {
   background: var(--brand-primary, #351A10);
   color: #FFFFFF;
   border: none;
-  padding: 0 38px;
+  padding: 0 46px;
   box-shadow: 0 8px 24px rgba(53, 26, 16, 0.28);
 }
 
