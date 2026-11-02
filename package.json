@@ -2,6 +2,10 @@
   "name": "fotolism-root",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "cms",
+    "desktop"
+  ],
   "description": "Fotolism Photobooth Software Suite",
   "scripts": {
     "dev": "npm --prefix desktop run dev",
@@ -10,11 +14,11 @@
     "build:win": "npm --prefix desktop run build:win",
     "start": "npm --prefix desktop start",
     "preview": "npm --prefix desktop run preview",
-    "cms": "npm --prefix fotolism run dev",
-    "cms:build": "npm --prefix fotolism run build",
-    "cms:test": "npm --prefix fotolism test",
+    "cms": "npm --prefix cms run dev",
+    "cms:build": "npm --prefix cms run build",
+    "cms:test": "npm --prefix cms test",
     "verify": "node .agents/skills/joybooth-system-verifier/scripts/verify-all.mjs",
-    "test": "npm --prefix desktop test && npm --prefix fotolism test",
+    "test": "npm --prefix desktop test && npm --prefix cms test",
     "ai": "cd desktop/ai-service && python main.py"
   }
 }
