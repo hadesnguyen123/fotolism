@@ -108,10 +108,10 @@
 
 .confirm-cards-container {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 28px;
-  max-width: 960px;
+  gap: 32px;
+  max-width: 1060px;
   width: 100%;
   margin: 0 auto;
 }
@@ -119,14 +119,13 @@
 .confirm-layout-card,
 .confirm-pricing-card {
   flex: 1;
-  max-width: 450px;
-  min-height: 410px;
-  max-height: 430px;
+  max-width: 500px;
+  min-height: 440px;
   background: #FFFFFF;
-  border-radius: 24px;
-  padding: 26px 24px;
-  box-shadow: 0 10px 30px rgba(53, 26, 16, 0.06);
-  border: 1.5px solid var(--border-default, #E6D9CF);
+  border-radius: 28px;
+  padding: 26px 28px;
+  box-shadow: 0 10px 32px rgba(53, 26, 16, 0.05);
+  border: 1.5px solid #F0E6DE;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -134,27 +133,35 @@
 }
 
 .confirm-layout-card {
-  justify-content: center;
-  gap: 18px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .confirm-card-tag {
   display: none;
 }
 
-/* Mockup Layout Preview in Confirm Step */
+/* Mockup Layout Preview in Confirm Step (Hiển thị cố định bố cục đã chọn) */
 .confirm-mockup-wrapper {
+  position: relative;
   width: 100%;
-  height: 220px;
+  height: 240px;
   background: #FAF7F2;
-  border: 1px solid rgba(53, 26, 16, 0.08);
-  border-radius: 16px;
+  border: 1px solid rgba(53, 26, 16, 0.06);
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 14px;
   box-sizing: border-box;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+.confirm-mockup-center {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .confirm-mockup-dual-strips {
@@ -220,29 +227,32 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .confirm-layout-title {
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 900;
+  font-size: 1.6rem;
+  font-weight: 800;
   color: var(--brand-primary, #502A1D);
-  margin: 0;
+  margin: 4px 0 0;
 }
 
 .confirm-layout-badge {
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.98rem;
   font-weight: 700;
   color: var(--brand-primary, #502A1D);
-  background: #F5EFEB;
-  border: 1px solid #E6D9CF;
+  background: #FAF4EF;
+  border: 1px solid #EAE0D7;
   border-radius: 9999px;
-  padding: 4px 14px;
+  padding: 6px 18px;
 }
 
 .confirm-layout-note {
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: var(--text-secondary, #70594F);
   margin: 0;
@@ -250,29 +260,31 @@
 
 /* Copies Controller */
 .copies-control-card {
-  background: var(--surface-warm, #FFF9F4);
-  border: 1.5px solid var(--border-default, #E6D9CF);
-  border-radius: 16px;
-  padding: 10px 16px;
+  border: 1.5px solid #EAE0D7;
+  border-radius: 18px;
+  padding: 12px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  background: #FFFFFF;
 }
 
-.copies-info {
+.copies-title-group {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #351A10;
 }
 
 .copies-title {
-  font-size: 0.95rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--brand-primary, #502A1D);
 }
 
 .copies-subtext {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary, #70594F);
   margin-top: 2px;
@@ -281,30 +293,29 @@
 .copies-stepper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .stepper-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border-default, #E6D9CF);
-  background: #FFFFFF;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid #EAE0D7;
+  background: #FAF7F2;
   color: var(--brand-primary, #502A1D);
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 800;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 6px rgba(80, 42, 29, 0.05);
+  box-shadow: 0 2px 6px rgba(80, 42, 29, 0.04);
 }
 
 .stepper-btn:hover:not(:disabled) {
   border-color: var(--brand-primary, #502A1D);
-  background: var(--brand-primary, #502A1D);
-  color: #FFFFFF;
+  background: #FFFFFF;
   transform: scale(1.05);
 }
 
@@ -317,58 +328,75 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 48px;
+  min-width: 52px;
 }
 
 .stepper-count {
-  font-size: 1.3rem;
+  font-size: 1.65rem;
   font-weight: 900;
   color: var(--brand-primary, #502A1D);
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .stepper-unit {
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-secondary, #70594F);
+  margin-top: 2px;
 }
 
 /* Coupon */
 .coupon-card-section {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .coupon-input-wrap {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+}
+
+.coupon-input-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #FAF7F2;
+  border: 1.5px solid #EAE0D7;
+  border-radius: 16px;
+  padding: 0 16px;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .coupon-input {
   flex: 1;
-  height: 38px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border-default, #E6D9CF);
-  padding: 0 12px;
-  font-size: 0.85rem;
+  border: none;
+  background: transparent;
+  font-size: 1.05rem;
   outline: none;
-  background: #FAF6F1;
+  color: #351A10;
+  padding: 0;
 }
 
 .coupon-input:focus {
-  border-color: var(--brand-primary, #502A1D);
-  background: #FFFFFF;
+  outline: none;
 }
 
 .coupon-apply-btn {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 10px;
+  height: 50px;
+  padding: 0 26px;
+  border-radius: 16px;
   background: var(--brand-primary, #502A1D);
   color: #FFFFFF;
   border: none;
-  font-weight: 700;
-  font-size: 0.85rem;
+  font-weight: 800;
+  font-size: 1.1rem;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.coupon-apply-btn:hover {
+  background: var(--brand-primary-hover, #3D2017);
 }
 
 .coupon-active-pill {
@@ -377,10 +405,10 @@
   gap: 8px;
   background: #ECFDF5;
   border: 1px solid #A7F3D0;
-  padding: 6px 12px;
-  border-radius: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
   color: #065F46;
-  font-size: 0.85rem;
+  font-size: 1.05rem;
   font-weight: 700;
 }
 
@@ -395,33 +423,35 @@
 
 .coupon-error-text {
   color: #DC2626;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   margin-top: 4px;
   margin-bottom: 0;
 }
 
 /* Summary lines */
 .confirm-summary-list {
-  background: #FAF6F1;
-  border-radius: 14px;
-  padding: 10px 16px;
+  background: #FAF7F2;
+  border-radius: 18px;
+  padding: 18px 22px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 0;
 }
 
 .summary-line {
   display: flex;
   justify-content: space-between;
-  font-size: 0.88rem;
-  color: var(--text-secondary, #70594F);
-  font-weight: 600;
+  align-items: center;
+  font-size: 1.15rem;
+  color: #351A10;
+  font-weight: 700;
 }
 
 .summary-val {
-  font-weight: 700;
-  color: var(--text-primary, #2A1810);
+  font-weight: 800;
+  color: #351A10;
+  font-size: 1.25rem;
 }
 
 .highlight-extra .summary-val {
@@ -435,7 +465,7 @@
 .summary-divider {
   height: 1px;
   background: #E6D9CF;
-  margin: 3px 0;
+  margin: 8px 0;
 }
 
 .summary-total-line {
@@ -447,16 +477,16 @@
 
 .total-title {
   font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: var(--brand-primary, #502A1D);
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: #351A10;
 }
 
 .total-amount-large {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 2.1rem;
   font-weight: 900;
-  color: var(--brand-primary, #502A1D);
+  color: #351A10;
   letter-spacing: -0.5px;
 }
 
@@ -563,18 +593,75 @@
 
 .qr-content-wrapper {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 36px;
   max-width: 960px;
   width: 100%;
 }
 
-.qr-code-card,
+/* Cột bên trái: CHỈ ĐỂ MÌNH HÌNH ẢNH SEPAY, KHÔNG CÓ THÊM KHUNG BỌC NGOÀI */
+.qr-code-standalone-col {
+  flex: 1;
+  max-width: 450px;
+  min-height: 440px;
+  max-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.sepay-qr-img {
+  max-height: 460px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 20px;
+  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.08);
+  display: block;
+}
+
+/* Fallback / backward-compatibility aliases */
+.qr-code-card {
+  flex: 1;
+  max-width: 450px;
+  min-height: 440px;
+  max-height: 480px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.qr-image-wrapper {
+  display: contents;
+}
+
+.qr-img {
+  max-height: 460px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 20px;
+  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.08);
+  display: block;
+}
+
+/* Khung thông tin ngân hàng bên phải */
 .qr-bank-details-card {
   flex: 1;
   max-width: 450px;
-  min-height: 450px;
+  min-height: 440px;
   max-height: 480px;
   background: #FFFFFF;
   border-radius: 24px;
@@ -585,11 +672,6 @@
   flex-direction: column;
   justify-content: space-between;
   box-sizing: border-box;
-}
-
-.qr-code-card {
-  align-items: center;
-  justify-content: center;
 }
 
 .qr-card-tag {
@@ -607,28 +689,6 @@
   margin-bottom: 8px;
 }
 
-/* ── Mã QR to rõ hơn (290px), dễ quét từ xa ── */
-.qr-image-wrapper {
-  width: 290px;
-  height: 290px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #FFFFFF;
-  border-radius: 18px;
-  border: 1px solid #EFE5DB;
-  box-shadow: 0 6px 20px rgba(80, 42, 29, 0.06);
-  padding: 8px;
-  box-sizing: border-box;
-  margin: 0 auto;
-}
-
-.qr-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .qr-scan-guide {
   font-family: var(--font-display, inherit);
   font-size: 0.95rem;
@@ -643,8 +703,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 20px;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 36px;
+  background: #FFFFFF;
+  border-radius: 24px;
+  box-shadow: 0 12px 36px rgba(80, 42, 29, 0.08);
+  border: 1.8px solid var(--border-default, #E6D9CF);
 }
 
 .qr-timeout-box h3 {
@@ -814,6 +879,44 @@
   box-sizing: border-box;
 }
 
+/* Hero Tiếp tục button on confirm step */
+.btn-hero-continue {
+  min-width: 320px;
+  height: 60px;
+  border-radius: var(--radius-full, 9999px);
+  background: #502A1D;
+  color: #FFFFFF;
+  font-family: var(--font-display, inherit);
+  font-size: 1.35rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(53, 26, 16, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0 54px;
+}
+
+.btn-hero-continue:hover {
+  background: var(--brand-primary-hover, #3D2017);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(53, 26, 16, 0.38);
+}
+
+.btn-hero-continue:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-hero-continue .arrow-sym {
+  font-size: 1.5rem;
+  transition: transform 0.2s ease;
+}
+
+.btn-hero-continue:hover .arrow-sym {
+  transform: translateX(4px);
+}
+
 /* Staff Override */
 .staff-override-row {
   margin-top: 14px;
@@ -854,71 +957,163 @@
 
 .staff-pin-modal {
   background: #FFFFFF;
-  border-radius: 20px;
-  padding: 28px;
-  width: 340px;
+  border-radius: 24px;
+  padding: 26px 24px;
+  width: 360px;
+  max-width: 90vw;
   text-align: center;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 48px rgba(53, 26, 16, 0.25);
+  box-sizing: border-box;
 }
 
 .staff-pin-modal h3 {
   margin: 0 0 6px 0;
+  font-family: var(--font-display, inherit);
+  font-size: 1.45rem;
+  font-weight: 800;
   color: var(--brand-primary, #502A1D);
 }
 
 .staff-pin-modal p {
   color: var(--text-secondary, #70594F);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   margin: 0 0 16px 0;
+  line-height: 1.35;
 }
 
-.staff-pin-input {
+/* Khung hiển thị mã PIN */
+.staff-pin-display-box {
   width: 100%;
-  height: 48px;
-  font-size: 1.5rem;
-  text-align: center;
-  letter-spacing: 6px;
+  height: 56px;
   border: 2px solid #E6D9CF;
-  border-radius: 12px;
-  outline: none;
+  border-radius: 14px;
+  background: #FAF7F2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
   box-sizing: border-box;
 }
 
-.staff-pin-input:focus {
-  border-color: var(--brand-primary, #502A1D);
+.pin-dots {
+  font-size: 2.2rem;
+  letter-spacing: 8px;
+  color: #351A10;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.pin-placeholder {
+  font-size: 1.25rem;
+  color: #A38F85;
+  font-weight: 600;
+  letter-spacing: 2px;
 }
 
 .pin-err {
   color: #DC2626;
-  font-size: 0.82rem;
-  margin-top: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 4px 0 10px 0;
+}
+
+/* Bảng nhập chữ số (Virtual Numpad) */
+.staff-pin-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.numpad-key-btn {
+  height: 52px;
+  border-radius: 14px;
+  border: 1.5px solid #E6D9CF;
+  background: #FAF7F2;
+  color: #351A10;
+  font-family: var(--font-display, inherit);
+  font-size: 1.55rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  box-shadow: 0 2px 6px rgba(53, 26, 16, 0.04);
+}
+
+.numpad-key-btn:hover {
+  background: #FFFFFF;
+  border-color: #502A1D;
+  transform: scale(1.03);
+}
+
+.numpad-key-btn:active {
+  background: #502A1D;
+  color: #FFFFFF;
+  transform: scale(0.96);
+}
+
+.numpad-action-clear {
+  color: #B43F3F;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.numpad-action-backspace {
+  color: #502A1D;
 }
 
 .modal-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 12px;
+  width: 100%;
 }
 
 .btn-cancel,
 .btn-confirm-pin {
   flex: 1;
-  height: 42px;
-  border-radius: 10px;
-  font-weight: 700;
+  height: 50px;
+  border-radius: 14px;
+  font-family: var(--font-display, inherit);
+  font-size: 1.15rem;
+  font-weight: 800;
   cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-cancel {
-  background: #F3F4F6;
-  border: 1px solid #D1D5DB;
-  color: #4B5563;
+  background: #FAF7F2;
+  border: 1.5px solid #E6D9CF;
+  color: #502A1D;
+}
+
+.btn-cancel:hover {
+  background: #FFFFFF;
+  border-color: #502A1D;
 }
 
 .btn-confirm-pin {
   background: var(--brand-primary, #502A1D);
   border: none;
   color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.25);
+}
+
+.btn-confirm-pin:hover:not(:disabled) {
+  background: var(--brand-primary-hover, #3D2017);
+  transform: translateY(-1px);
+}
+
+.btn-confirm-pin:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Success Overlay */

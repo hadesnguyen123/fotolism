@@ -1295,8 +1295,8 @@ export default function CaptureScreen() {
         {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth. Xóa hoàn toàn khung bên phải trong Selfbooth ── */}
         {!isSelfboothMode && (
           <aside className="slots-grid-col-2 right-slots-dock">
-            <div className="live-slots-deck vertical-slots-deck">
-              <div className="live-slots-list">
+            <div className={`live-slots-deck vertical-slots-deck ${totalShots >= 6 ? 'multi-col-deck' : ''} shots-${totalShots}`}>
+              <div className={`live-slots-list ${totalShots >= 6 ? 'slots-grid-2cols' : ''} shots-${totalShots}`}>
                 {Array.from({ length: totalShots }).map((_, index) => {
                   const slotItem = slots[index]
                   const isFilled = slotItem !== null
@@ -1304,11 +1304,12 @@ export default function CaptureScreen() {
                   const isJustCaptured = justCapturedSlot === index
                   const retakesUsed = slotRetakeCounts[index] || 0
                   const canRetake = retakesUsed < 1
+                  const isCenteredLast = totalShots === 9 && index === 8
 
                   return (
                     <div
                       key={index}
-                      className={`live-slot-thumb ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${!canRetake ? 'retake-locked' : ''}`}
+                      className={`live-slot-thumb ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${!canRetake ? 'retake-locked' : ''} ${isCenteredLast ? 'slot-thumb-centered-last' : ''}`}
                       onClick={() => {
                         if (isFilled && !isCapturingShot && canRetake) {
                           handleDeleteSlot(index)

@@ -1,6 +1,7 @@
 import { useAppStore, ALL_LAYOUTS, type GridLayoutItem, type FrameSize } from '../store/appStore'
 import { DEFAULT_PRICE_2X6, DEFAULT_PRICE_4X6 } from '../lib/constants'
 import { Check } from 'lucide-react'
+import PhotoboothHeader from '../components/PhotoboothHeader'
 import './SelectLayoutScreen.css'
 
 interface UnifiedLayoutConfig {
@@ -155,12 +156,8 @@ export default function SelectLayoutScreen() {
 
   return (
     <div className="layout-poster-container" id="select-layout-screen">
-      {/* ── Top Header: Chọn Layout ── */}
-      <header className="layout-poster-header">
-        <div className="poster-header-center">
-          <h1 className="poster-header-title">Chọn Layout</h1>
-        </div>
-      </header>
+      {/* ── Top Header: fotolism + 3 Bước (1. Chọn layout active) ── */}
+      <PhotoboothHeader currentStep={1} />
 
       {/* ── Showcase Bảng Giá: 2 Hàng (Hàng trên 3, Hàng dưới 2) ── */}
       <main className="poster-board-main">

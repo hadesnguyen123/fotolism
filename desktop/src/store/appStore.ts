@@ -394,6 +394,10 @@ interface AppStore {
   screen: AppScreen
   setScreen: (screen: AppScreen) => void
 
+  // Trạng thái Tạm Khóa Kiosk từ CMS
+  isKioskLocked: boolean
+  setIsKioskLocked: (locked: boolean) => void
+
   // Mode
   boothMode: BoothMode
   setBoothMode: (mode: BoothMode) => void
@@ -615,6 +619,9 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
 export const useAppStore = create<AppStore>((set, get) => ({
   screen: 'idle',
   setScreen: (screen) => set({ screen }),
+
+  isKioskLocked: false,
+  setIsKioskLocked: (isKioskLocked) => set({ isKioskLocked }),
 
   boothMode: 'unattended',
   setBoothMode: (boothMode) => set({ boothMode }),
@@ -1131,6 +1138,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   setDeviceConfig: (deviceConfig) => {
     set({ deviceConfig, isDeviceActivated: Boolean(deviceConfig?.device_token) })
+    import('../services/cloudSyncService').then(({ cloudSyncService }) => {
+      cloudSyncService.setDeviceConfig(deviceConfig)
+      if (deviceConfig?.device_token) {
+        cloudSyncService.startWorker()
+      } else {
+        cloudSyncService.stopWorker()
+      }
+    }).catch(console.warn)
   },
   resetDeviceConfig: async () => {
     try {
