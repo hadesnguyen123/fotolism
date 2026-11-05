@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { generateStripComposite, preparePrintImageForDNP } from '../lib/canvasCompositor'
@@ -10,6 +10,7 @@ import {
   BRAND_NAME,
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
+  DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
 import QRCode from 'qrcode'
 import { QrCode, Loader2, AlertCircle, RefreshCw, Image as ImageIcon, Film, Printer, Download } from 'lucide-react'
@@ -92,17 +93,17 @@ export default function ReviewScreen() {
     let isMounted = true
 
     async function processSessionMedia() {
-      try {
+        try {
         if (isSelfboothMode) {
           // Chế độ Selfbooth: Không cần ghép khung in ấn
           setIsGeneratingComposite(false)
 
-          // Nếu đã hoàn thành đồng bộ từ bước chụp thì không cần gọi lại
+          // Nếu đã hoàn thành đồng bộ từ bước ProcessingScreen thì không cần gọi lại
           if (driveSyncDone && cloudFolderUrl && !cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)) {
             return
           }
 
-          // Nếu đang trong quá trình đồng bộ nền từ CaptureScreen thì chờ đợi
+          // Nếu đang trong quá trình đồng bộ nền từ CaptureScreen/ProcessingScreen thì chờ đợi
           if (isSyncingDrive) {
             return
           }
@@ -110,7 +111,11 @@ export default function ReviewScreen() {
           if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
             setIsSyncingDrive(true)
             const filesToUpload: Array<{ name: string; dataUrl: string }> = []
-            photos.forEach((p, idx) => {
+            const sourcePhotos = (session?.selfboothLibrary && session.selfboothLibrary.length > 0)
+              ? session.selfboothLibrary
+              : photos
+
+            sourcePhotos.forEach((p, idx) => {
               const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
               if (dataUrl && dataUrl.trim().length > 0) {
                 filesToUpload.push({
@@ -131,8 +136,6 @@ export default function ReviewScreen() {
             }
 
             const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
-            console.log('[ReviewScreen] Uploading Selfbooth to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
-
             const api = isBrowser ? mockApi : fotolismApi
             let res = await api.storage.uploadDriveSession({
               parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
@@ -141,11 +144,8 @@ export default function ReviewScreen() {
               webhookUrl: effectiveWebhookUrl,
             })
 
-            // Direct Renderer Fallback cho Selfbooth: Gọi trực tiếp từ Renderer nếu IPC trả về lỗi/fallback
             if (!res.success || !res.data?.cloudFolderUrl || res.data.cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)) {
-              console.log('[ReviewScreen] Selfbooth IPC returned fallback/error, trying direct renderer upload...')
               try {
-                const validDataFiles = filesToUpload.filter((f) => f.dataUrl && f.dataUrl.startsWith('data:'))
                 const directRes = await fetch(effectiveWebhookUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -153,13 +153,11 @@ export default function ReviewScreen() {
                     action: 'create_session_folder',
                     parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
                     folderName: subfolderName,
-                    files: validDataFiles,
+                    files: filesToUpload.filter((f) => f.dataUrl && f.dataUrl.startsWith('data:')),
                   }),
-                  redirect: 'follow',
                 })
                 const directJson = await directRes.json()
                 if (directJson && directJson.success && directJson.folderUrl) {
-                  console.log('[ReviewScreen] Selfbooth direct renderer upload SUCCESS:', directJson.folderUrl)
                   res = {
                     success: true,
                     data: {
@@ -167,12 +165,12 @@ export default function ReviewScreen() {
                       cloudFolderUrl: directJson.folderUrl,
                       cloudFolderId: directJson.folderId || '',
                       subfolderName,
-                      filesCount: directJson.filesCount || validDataFiles.length,
+                      filesCount: filesToUpload.length,
                     },
                   }
                 }
-              } catch (directErr: any) {
-                console.warn('[ReviewScreen] Selfbooth direct fetch fallback error:', directErr.message)
+              } catch (directErr) {
+                console.warn('[ReviewScreen] Selfbooth direct fetch failed:', directErr)
               }
             }
 
@@ -194,7 +192,18 @@ export default function ReviewScreen() {
           return
         }
 
-        // Chế độ Photobooth truyền thống
+          const prebuiltStrip = useAppStore.getState().compositeStripUrl || session?.compositeStripUrl
+        if (prebuiltStrip) {
+          setCompositeStripUrl(prebuiltStrip)
+          setIsGeneratingComposite(false)
+          if (cloudFolderUrl || useAppStore.getState().cloudFolderUrl) {
+            setIsSyncingDrive(false)
+            setDriveSyncDone(true)
+            return
+          }
+        }
+
+        // Sinh dải ảnh in hoàn chỉnh cho cả Photobooth và Selfbooth (fallback)
         setIsGeneratingComposite(true)
         const photoUrls = photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath).filter(Boolean)
         const stripUrl = await generateStripComposite({
@@ -227,8 +236,12 @@ export default function ReviewScreen() {
             })
           }
 
-          // 2. Các ảnh chụp đơn lẻ
-          photos.forEach((p, idx) => {
+          // 2. Toàn bộ ảnh chụp đơn lẻ (bao gồm toàn bộ kho ảnh Selfbooth nếu có)
+          const sourcePhotos = (session?.selfboothLibrary && session.selfboothLibrary.length > 0)
+            ? session.selfboothLibrary
+            : photos
+
+          sourcePhotos.forEach((p, idx) => {
             const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
             if (dataUrl && dataUrl.trim().length > 0) {
               filesToUpload.push({
@@ -351,11 +364,39 @@ export default function ReviewScreen() {
     setGdriveUrl,
   ])
 
+  // Đánh dấu vé lượt chụp hoàn thành (COMPLETED) trên Cloud CMS
+  const markTicketCompleted = useCallback(async () => {
+    const pin = session?.pinCode
+    const adminPin = (eventConfig.adminPin || DEFAULT_ADMIN_PIN || '8888').trim()
+    if (!pin || pin === '8888' || pin === adminPin) return
+
+    try {
+      await fetch('http://localhost:3000/api/kiosk/tickets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin_code: pin,
+          status: 'COMPLETED',
+          kiosk_id: isSelfboothMode ? 'kiosk_02' : 'kiosk_01',
+        }),
+      })
+      console.log(`[ReviewScreen] Đã cập nhật vé ${pin} sang COMPLETED trên Cloud CMS`)
+    } catch (err) {
+      console.warn('[ReviewScreen] Không thể cập nhật trạng thái vé COMPLETED:', err)
+    }
+  }, [session?.pinCode, eventConfig.adminPin, isSelfboothMode])
+
+  // Cập nhật trạng thái COMPLETED ngay khi khách vào màn hình Review nhận ảnh
+  useEffect(() => {
+    markTicketCompleted()
+  }, [markTicketCompleted])
+
   // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS
   const recordSessionToOutbox = useMemo(() => () => {
     if (!session) return
     const is4x6 = selectedFrameSize === '4x6'
     const layoutType = isSelfboothMode ? 'selfbooth' : (is4x6 ? '4x6' : '2x6')
+    const kioskId = isSelfboothMode ? 'kiosk_02' : 'kiosk_01'
     const storageUrl =
       session.storageUrl ||
       cloudFolderUrl ||
@@ -369,7 +410,7 @@ export default function ReviewScreen() {
       pin_code: session.pinCode || null,
       customer_name: session.customerName || null,
       customer_phone: session.customerPhone || null,
-      kiosk_id: 'kiosk_01',
+      kiosk_id: kioskId,
       branch_id: 'branch_01',
       layout_type: layoutType,
       copies: isSelfboothMode ? 0 : printCopies,
@@ -381,11 +422,51 @@ export default function ReviewScreen() {
       drive_url: storageUrl,
       status: 'completed',
       created_at: new Date().toISOString(),
-      photos: photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath || ''),
+      photos: photos.map((p) => {
+        const pth = p.compositedPath || p.enhancedPath || p.rawPath || ''
+        // Chống lỗi QuotaExceededError (5MB) trong LocalStorage khi lưu DataURL base64 lớn
+        return pth.startsWith('data:') ? `[photo_slot_${p.id || 'shot'}]` : pth
+      }),
     })
-  }, [session, selectedFrameSize, printCopies, photos, cloudFolderUrl, subfolderName])
+  }, [session, selectedFrameSize, printCopies, photos, cloudFolderUrl, subfolderName, isSelfboothMode])
+
+  // ── Auto Return to Idle Timer (Cố định tối thiểu 120s / 2 phút cho tiến trình ngầm) ──
+  const [countdownToIdle, setCountdownToIdle] = useState<number>(() => Math.max(120, eventConfig.idleTimeoutSeconds || 120))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdownToIdle((prev) => {
+        if (prev <= 1) {
+          // Nếu các tiến trình ngầm (tải Drive, nén composite) chưa hoàn tất, hoãn đếm ngược
+          if (isSyncingDrive || isGeneratingComposite) {
+            return 15
+          }
+          clearInterval(timer)
+          handleFinish()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isSyncingDrive, isGeneratingComposite])
+
+  // Dọn dẹp Object URL nhị phân khi unmount
+  useEffect(() => {
+    return () => {
+      if (compositeStripUrl && compositeStripUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(compositeStripUrl) } catch { }
+      }
+    }
+  }, [compositeStripUrl])
 
   function handleFinish() {
+    if (isSyncingDrive || isGeneratingComposite) {
+      console.log('Background upload/sync is still active, waiting...')
+      return
+    }
+    markTicketCompleted()
     recordSessionToOutbox()
     clearSession()
     setScreen('idle')
@@ -555,9 +636,12 @@ export default function ReviewScreen() {
     }
 
     const isGrid =
+      selectedLayout.strip === false ||
       selectedLayout.previewType === '4_grid' ||
       selectedLayout.previewType === '6_grid' ||
-      selectedLayout.previewType === '8_grid'
+      selectedLayout.previewType === '8_grid' ||
+      selectedLayout.previewType === '9_grid' ||
+      (selectedLayout.cols !== undefined && selectedLayout.cols > 1)
 
     return (
       <div className="review-screen-pastel" id="review-screen">
@@ -695,7 +779,17 @@ export default function ReviewScreen() {
                         <span>{selectedTheme.decorations ? selectedTheme.decorations[1] : '✨'}</span>
                       </div>
 
-                      <div className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}>
+                      <div
+                        className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}
+                        style={
+                          isGrid
+                            ? {
+                                gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
+                                gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
+                              }
+                            : undefined
+                        }
+                      >
                         {photos.map((photo, index) => (
                           <div key={photo.id || index} className="strip-photo-item">
                             <img
@@ -888,23 +982,27 @@ export default function ReviewScreen() {
         {/* ── Bottom Bar: Cách lề mặc định 100px với 2 chữ 'Quay lại' và 'Tiếp tục' ── */}
         {(Boolean(qrDataUrl) || Boolean(syncError)) && (
           <footer className="kiosk-bottom-nav-bar review-bottom-bar-pastel animate-pop">
-            <button
-              className="kiosk-nav-btn btn-nav-back"
-              onClick={() => setScreen('select-filter')}
-              title="Quay lại"
-              aria-label="Quay lại"
-            >
-              Quay lại
-            </button>
+            {!isSelfboothMode && (
+              <button
+                className="kiosk-nav-btn btn-nav-back"
+                onClick={() => setScreen('select-filter')}
+                title="Quay lại"
+                aria-label="Quay lại"
+              >
+                Quay lại
+              </button>
+            )}
 
             <button
-              className="kiosk-nav-btn btn-nav-next"
+              className={`kiosk-nav-btn btn-nav-next ${(isSyncingDrive || isGeneratingComposite) ? 'disabled' : ''}`}
               id="finish-button"
+              disabled={isSyncingDrive || isGeneratingComposite}
               onClick={handleFinish}
-              title="Tiếp tục"
+              title={isSyncingDrive ? 'Đang hoàn tất lưu ảnh ngầm...' : 'Tiếp tục'}
               aria-label="Tiếp tục"
+              style={isSelfboothMode ? { margin: '0 auto' } : undefined}
             >
-              Tiếp tục
+              {isSyncingDrive ? 'Đang lưu ảnh ngầm...' : `Tiếp tục (${countdownToIdle}s)`}
             </button>
           </footer>
         )}

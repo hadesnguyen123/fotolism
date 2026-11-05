@@ -13,7 +13,7 @@ Hướng dẫn chuẩn hóa pipeline công nghệ làm đẹp chân dung AI kép
 
 ## 1. Tầng 1: WebGL Real-time Beauty Shader (Client-Side)
 
-Hoạt động trực tiếp trên màn hình xem trước [BeautyCameraView.tsx](file:///f:/JoyBooth/desktop/src/components/BeautyCameraView.tsx) bằng GPU WebGL, không chiếm CPU:
+Hoạt động trực tiếp trên màn hình xem trước [BeautyCameraView.tsx](file:///f:/Fotolism/desktop/src/components/BeautyCameraView.tsx) bằng GPU WebGL, không chiếm CPU:
 
 ```
 ┌─────────────────────────────────┐

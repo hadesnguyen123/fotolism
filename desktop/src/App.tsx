@@ -6,6 +6,7 @@ import IdleScreen from './screens/IdleScreen'
 import SelectFrameSizeScreen from './screens/SelectFrameSizeScreen'
 import SelectLayoutScreen from './screens/SelectLayoutScreen'
 import CaptureScreen from './screens/CaptureScreen'
+import ConfirmScreen from './screens/ConfirmScreen'
 import PaymentScreen from './screens/PaymentScreen'
 import ThemeSelectScreen from './screens/ThemeSelectScreen'
 import FilterScreen from './screens/FilterScreen'
@@ -13,6 +14,8 @@ import ReviewScreen from './screens/ReviewScreen'
 import AdminScreen from './screens/AdminScreen'
 import OverheadScreen from './screens/OverheadScreen'
 import SelfboothSetupScreen from './screens/SelfboothSetupScreen'
+import SelfboothPhotoSelectScreen from './screens/SelfboothPhotoSelectScreen'
+import ProcessingScreen from './screens/ProcessingScreen'
 import ErrorNotificationCenter from './components/ErrorNotificationCenter'
 import KioskLockOverlay from './components/KioskLockOverlay'
 import './App.css'
@@ -89,11 +92,14 @@ export default function App() {
       {screen === 'idle' && <IdleScreen />}
       {screen === 'select-size' && <SelectFrameSizeScreen />}
       {screen === 'select-layout' && <SelectLayoutScreen />}
+      {screen === 'confirm' && <ConfirmScreen />}
       {screen === 'selfbooth-setup' && <SelfboothSetupScreen />}
+      {screen === 'selfbooth-select' && <SelfboothPhotoSelectScreen />}
       {screen === 'payment' && <PaymentScreen />}
       {screen === 'capture' && <CaptureScreen />}
       {screen === 'select-theme' && <ThemeSelectScreen />}
       {(screen === 'select-filter' || screen === 'select-sticker') && <FilterScreen />}
+      {screen === 'processing' && <ProcessingScreen />}
       {screen === 'review' && <ReviewScreen />}
       {screen === 'admin' && <AdminScreen />}
 

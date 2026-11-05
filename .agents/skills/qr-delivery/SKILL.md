@@ -5,7 +5,7 @@ description: Hướng dẫn tạo mã QR tức thì cho khách quét tải ảnh
 
 # 📱 QR Delivery Skill — Fotolism 3.0
 
-Hướng dẫn chuẩn hóa quy trình phân phối ảnh chụp và video hậu trường (Timelapse) tức thì đến điện thoại khách hàng thông qua mã QR trên màn hình [ReviewScreen](file:///f:/JoyBooth/desktop/src/screens/ReviewScreen.tsx).
+Hướng dẫn chuẩn hóa quy trình phân phối ảnh chụp và video hậu trường (Timelapse) tức thì đến điện thoại khách hàng thông qua mã QR trên màn hình [ReviewScreen](file:///f:/Fotolism/desktop/src/screens/ReviewScreen.tsx).
 
 ---
 

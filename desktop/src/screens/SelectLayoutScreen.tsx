@@ -22,26 +22,26 @@ export default function SelectLayoutScreen() {
   const price4x6 = eventConfig.price4x6 || DEFAULT_PRICE_4X6
 
   const formatVND = (num: number) =>
-    new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+    new Intl.NumberFormat('vi-VN').format(num)
 
   // Hàng 1: 3 bố cục (Strip 4, Strip 3, Grid 6)
   const row1Configs: UnifiedLayoutConfig[] = [
     {
       layout: ALL_LAYOUTS[4].find((l) => l.id === '4_strip_classic') || ALL_LAYOUTS[4][0],
       frameSize: '2x6',
-      tag: 'Khổ nhỏ 2×6',
+      tag: 'Khổ 2×6',
       defaultCopies: 2,
     },
     {
       layout: ALL_LAYOUTS[3].find((l) => l.id === '3_vertical_strip') || ALL_LAYOUTS[3][0],
       frameSize: '2x6',
-      tag: 'Khổ nhỏ 2×6',
+      tag: 'Khổ 2×6',
       defaultCopies: 2,
     },
     {
       layout: ALL_LAYOUTS[6].find((l) => l.id === '6_grid_2x3') || ALL_LAYOUTS[6][0],
       frameSize: '4x6',
-      tag: 'Khổ lớn 4×6',
+      tag: 'Khổ 4×6',
       defaultCopies: 1,
     },
   ]
@@ -51,7 +51,7 @@ export default function SelectLayoutScreen() {
     {
       layout: ALL_LAYOUTS[4].find((l) => l.id === '4_grid_2x2') || ALL_LAYOUTS[4][1],
       frameSize: '4x6',
-      tag: 'Khổ lớn 4×6',
+      tag: 'Khổ 4×6',
       defaultCopies: 1,
     },
     {
@@ -66,7 +66,7 @@ export default function SelectLayoutScreen() {
         previewType: '9_grid',
       },
       frameSize: '4x6',
-      tag: 'Khổ lớn 4×6',
+      tag: 'Khổ 4×6',
       defaultCopies: 1,
     },
   ]
@@ -82,7 +82,7 @@ export default function SelectLayoutScreen() {
 
   function handleProceed() {
     if (eventConfig.paymentRequiredForPhotobooth) {
-      setScreen('payment')
+      setScreen('confirm')
     } else {
       setScreen('capture')
     }
@@ -103,7 +103,7 @@ export default function SelectLayoutScreen() {
       >
         {/* Khung Mockup Đồ Họa 2 Lớp (Mô phỏng 100% Ảnh In Thật 2x6 & 4x6) */}
         <div className={`poster-frame-wrapper ${is2x6 ? 'ratio-2x6' : 'ratio-4x6'}`}>
-          {/* Tấm Nghiêng Màu Nhạt Phía Sau (Bản in thứ 2 trong gói 1+1) */}
+          {/* Tấm Nghiêng Màu Nhạt Phía Sau */}
           <div className="poster-sheet-back">
             <div
               className="poster-slots-grid"
@@ -121,7 +121,7 @@ export default function SelectLayoutScreen() {
             </div>
           </div>
 
-          {/* Tấm Chính Phía Trước (Khung Ngoài In Thật + Phần Trống Chèn Ảnh) */}
+          {/* Tấm Chính Phía Trước (Khung Ngoài In Thật + Ô Trống Chèn Ảnh) */}
           <div className="poster-sheet-front">
             <div
               className="poster-slots-grid"
@@ -148,7 +148,7 @@ export default function SelectLayoutScreen() {
 
         {/* Nút Giá Tiền Nâu Đậm Dạng Khối Đúng Mẫu Bảng Giá */}
         <div className="poster-price-btn">
-          <span>{formatVND(price).replace(' đ', '')}</span>
+          <span>{formatVND(price)}</span>
         </div>
       </div>
     )
@@ -156,7 +156,7 @@ export default function SelectLayoutScreen() {
 
   return (
     <div className="layout-poster-container" id="select-layout-screen">
-      {/* ── Top Header: fotolism + 3 Bước (1. Chọn layout active) ── */}
+      {/* ── Fixed Top Header: fotolism + 4 Bước (1. Chọn layout active) ── */}
       <PhotoboothHeader currentStep={1} />
 
       {/* ── Showcase Bảng Giá: 2 Hàng (Hàng trên 3, Hàng dưới 2) ── */}
@@ -172,19 +172,18 @@ export default function SelectLayoutScreen() {
         </div>
       </main>
 
-      {/* ── Footer: Nút Quay Lại (Góc dưới trái) + Banner Giá In Thêm (Giữa) + Nút Tiếp Tục (Góc dưới phải) ── */}
-      <footer className="poster-footer-section">
-        {/* Nút Quay Lại góc dưới bên tay trái (cách lề 100px) */}
+      {/* ── Fixed Bottom Footer: Nút Quay Lại (Trái) + Banner Giá In Thêm (Giữa) + Nút Tiếp Tục (Phải) ── */}
+      <footer className="kiosk-fixed-bottom-bar poster-fixed-footer">
         <button
           className="kiosk-nav-btn btn-nav-back"
           onClick={() => setScreen('idle')}
           title="Quay lại"
           aria-label="Quay lại"
         >
-          Quay lại
+          <span>Quay lại</span>
         </button>
 
-        {/* Banner Giá In Thêm ở giữa (Căn chỉnh cân đối trọn vẹn bên trong nền hồng) */}
+        {/* Banner Giá In Thêm ở giữa */}
         <div className="poster-extra-banner">
           <span className="extra-banner-label">GIÁ IN THÊM:</span>
           <span className="extra-banner-vbar" />
@@ -195,14 +194,13 @@ export default function SelectLayoutScreen() {
           </div>
         </div>
 
-        {/* Nút Tiếp Tục góc dưới bên tay phải (cách lề 100px) */}
         <button
           className="kiosk-nav-btn btn-nav-next"
           onClick={handleProceed}
           title="Tiếp tục"
           aria-label="Tiếp tục"
         >
-          Tiếp tục
+          <span>Tiếp tục</span>
         </button>
       </footer>
     </div>

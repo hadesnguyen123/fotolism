@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore, STICKER_LIBRARY, type StickerCategory } from '../store/appStore'
 import { DEFAULT_EVENT_NAME } from '../lib/constants'
-import { ArrowRight } from 'lucide-react'
 import './StickerScreen.css'
 
 export default function StickerScreen() {
@@ -341,7 +340,6 @@ export default function StickerScreen() {
           onClick={() => setScreen('review')}
         >
           <span>Tiếp Tục & In Ảnh</span>
-          <ArrowRight size={22} strokeWidth={2.2} />
         </button>
       </footer>
     </div>

@@ -1,15 +1,17 @@
 import React from 'react'
+import { Check } from 'lucide-react'
 import './PhotoboothHeader.css'
 
 export interface PhotoboothHeaderProps {
-  currentStep: 1 | 2 | 3
+  currentStep: 1 | 2 | 3 | 4
 }
 
 export default function PhotoboothHeader({ currentStep }: PhotoboothHeaderProps) {
   const steps = [
     { num: 1, label: 'Chọn layout' },
-    { num: 2, label: 'Thanh toán' },
-    { num: 3, label: 'Chụp ảnh' },
+    { num: 2, label: 'Confirm' },
+    { num: 3, label: 'Thanh toán' },
+    { num: 4, label: 'Chụp ảnh' },
   ]
 
   return (
@@ -34,7 +36,9 @@ export default function PhotoboothHeader({ currentStep }: PhotoboothHeaderProps)
                   isActive ? 'is-active' : isPassed ? 'is-passed' : 'is-pending'
                 }`}
               >
-                <span className="photobooth-step-circle">{step.num}</span>
+                <span className="photobooth-step-circle">
+                  {isPassed ? <Check size={16} strokeWidth={3.2} /> : step.num}
+                </span>
                 <span className="photobooth-step-label">{step.label}</span>
               </div>
             </React.Fragment>

@@ -205,6 +205,7 @@ ipcMain.handle('print:send', async (_event, payload: { imagePath: string; copies
   }
 
   isPrintSpoolerActive = true
+  let localTempFile = ''
 
   try {
     const copiesCount = Math.max(1, payload.copies || 1)
@@ -217,7 +218,6 @@ ipcMain.handle('print:send', async (_event, payload: { imagePath: string; copies
     const jobUniqueId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
     // 1. Lưu file ảnh cần in ra thư mục tạm trên ổ cứng với ID duy nhất tuyệt đối (không bao giờ ghi đè)
-    let localTempFile = ''
     try {
       const isDataUrl = payload.imagePath.startsWith('data:')
       if (isDataUrl) {
@@ -357,6 +357,14 @@ try {
     }
   } finally {
     isPrintSpoolerActive = false
+    // Tự động dọn dẹp file in tạm thời trong %TEMP% sau 8 giây (để Windows Spooler kịp đọc xong)
+    if (localTempFile && localTempFile.includes(app.getPath('temp')) && fs.existsSync(localTempFile)) {
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(localTempFile)) fs.unlinkSync(localTempFile)
+        } catch { }
+      }, 8000)
+    }
   }
 })
 
@@ -387,10 +395,7 @@ ipcMain.handle('print:list-printers', async () => {
     return {
       success: true,
       data: {
-        printers: [
-          { name: 'DNP DS-RX1HS', isDefault: true },
-          { name: 'Canon SELPHY CP1500 (Dye-Sub)', isDefault: false },
-        ],
+        printers: [],
       },
     }
   }
@@ -1334,11 +1339,67 @@ if (!gotTheLock) {
     }
   })
 
+
+/**
+ * Tự động dọn dẹp ổ đĩa (Disk Storage Retention Policy):
+ * 1. Xóa các file in tạm rác (%TEMP%\fotolism_print_*.jpg, print_job_*.ps1) cũ hơn 2 giờ.
+ * 2. Xóa các thư mục session ảnh cũ hơn 15 ngày tại F:\Fotolism_image\sessions\ để tránh đầy ổ cứng SSD.
+ */
+function cleanupDiskStorage(retentionDays = 15): void {
+  try {
+    const tempDir = app.getPath('temp')
+    const now = Date.now()
+
+    // 1. Quét dọn temp folder
+    if (fs.existsSync(tempDir)) {
+      const files = fs.readdirSync(tempDir)
+      for (const file of files) {
+        if (file.startsWith('fotolism_print_') || file.startsWith('print_job_') || file.startsWith('print_page_')) {
+          try {
+            const fullPath = path.join(tempDir, file)
+            const stats = fs.statSync(fullPath)
+            if (now - stats.mtimeMs > 2 * 3600 * 1000) { // Cũ hơn 2 tiếng
+              fs.unlinkSync(fullPath)
+            }
+          } catch { }
+        }
+      }
+    }
+
+    // 2. Quét dọn sessions cũ trên SSD (F:\Fotolism_image\sessions)
+    const sessionsBase = 'F:\\Fotolism_image\\sessions'
+    if (fs.existsSync(sessionsBase)) {
+      const sessionDirs = fs.readdirSync(sessionsBase)
+      const cutoffMs = now - retentionDays * 24 * 3600 * 1000
+      let cleanedCount = 0
+
+      for (const dirName of sessionDirs) {
+        try {
+          const dirPath = path.join(sessionsBase, dirName)
+          const stats = fs.statSync(dirPath)
+          if (stats.isDirectory() && stats.mtimeMs < cutoffMs) {
+            fs.rmSync(dirPath, { recursive: true, force: true })
+            cleanedCount++
+          }
+        } catch { }
+      }
+
+      if (cleanedCount > 0) {
+        console.log(`[Storage Retention] Đã tự động dọn dẹp ${cleanedCount} thư mục phiên chụp cũ hơn ${retentionDays} ngày.`)
+      }
+    }
+  } catch (err) {
+    console.warn('[Storage Retention] Lỗi trong quá trình dọn dẹp ổ đĩa:', err)
+  }
+}
+
   app.whenReady().then(() => {
     createWindow()
     // Khởi động Canon Daemon Persistent và AI Service trong nền ngay khi mở ứng dụng
     ensureCanonDaemon().catch((err) => console.warn('[Canon Daemon] Init failed:', err))
     ensureAiService().catch((err) => console.warn('[AI Service] Init failed:', err))
+    // Chạy tác vụ dọn dẹp ổ đĩa ngầm sau 10 giây khi khởi động
+    setTimeout(() => cleanupDiskStorage(15), 10000)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -155,10 +155,7 @@ const defaultMockApi: FotolismAPI = {
     listPrinters: async () => ({
       success: true,
       data: {
-        printers: [
-          { name: 'Canon SELPHY CP1500 (Dye-Sub)', isDefault: true },
-          { name: 'DNP DS-RX1HS', isDefault: false },
-        ],
+        printers: [],
       },
     }),
   },

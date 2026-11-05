@@ -1,25 +1,50 @@
-/* ── Fotolism 3.0 Chọn Frame Screen ─────────────────────────────────── */
+/* ==========================================================================
+   FOTOLISM 3.0 — CHỌN FRAME SCREEN (MÀN HÌNH CHỌN KHUNG SAU KHI CHỤP)
+   - Warm Minimalist Luxury & Touch-First Kiosk
+   - Logo fotolism cố định góc trên bên trái
+   - Khối Trái: Live Preview dải ảnh in hoàn chỉnh
+   - Khối Phải: Touch-First Slide Vuốt Trái / Phải & Dots Indicator
+   - Không dùng nút mũi tên bấm web, hỗ trợ vuốt chạm cảm ứng mượt mà
+   - Không cho phép quay lại màn chụp, Nút Tiếp tục không icon
+   ========================================================================== */
 
 .theme-screen-container {
   width: 100vw;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-primary);
+  background-color: #FAF6F0;
   user-select: none;
   overflow: hidden;
   position: relative;
-  padding: 16px 48px;
+  padding: 24px 48px;
+  box-sizing: border-box;
 }
 
-/* ── Top Header ──────────────────────────────────────────────────────────── */
+/* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
+.theme-fixed-brand-logo {
+  position: absolute;
+  top: 28px;
+  left: 48px;
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: clamp(2rem, 2.5vw, 2.4rem);
+  font-weight: 800;
+  color: #502A1D;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ── Top Header: Tiêu đề Trung Tâm ───────────────────────────────────────── */
 .theme-screen-header {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 68px;
-  margin-bottom: 8px;
+  margin-top: 4px;
+  margin-bottom: 20px;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .theme-header-center {
@@ -29,84 +54,80 @@
   text-align: center;
 }
 
-.theme-header-title {
-  font-family: var(--font-display);
-  font-size: var(--font-size-title);
-  font-weight: 800;
-  color: var(--brand-primary);
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.theme-header-subtitle {
-  font-family: var(--font-body);
-  font-size: var(--font-size-body);
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-top: 4px;
-}
-
-.header-placeholder {
-  width: 52px;
-  height: 52px;
-  visibility: hidden;
-}
-
-/* ── Main Split ──────────────────────────────────────────────────────────── */
-.theme-main-split {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 440px 1fr;
-  gap: 48px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-  align-items: center;
-  overflow: hidden;
-}
-
-/* ── CỐ ĐỊNH KÍCH THƯỚC DẢI STRIP PREVIEW (Shared across screens) ────────── */
-.strip-preview-fixed-column {
-  width: 440px;
-  min-width: 440px;
-  max-width: 440px;
+.theme-header-icon-box {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  margin-bottom: 6px;
+  color: #502A1D;
+}
+
+.theme-header-title {
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: clamp(1.9rem, 2.4vw, 2.3rem);
+  font-weight: 800;
+  color: #502A1D;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.theme-header-subtitle {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 1.02rem;
+  color: #7A665A;
+  font-weight: 500;
+  margin: 6px 0 0 0;
+}
+
+/* ── Main 2-Column Split: Trái Preview + Phải Touch Slide ───────────────── */
+.theme-main-split {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  width: 100%;
+  max-width: 1220px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* ── CỘT TRÁI: Live Preview Card Dải Ảnh In ─────────────────────────────── */
+.theme-preview-card {
+  background: #FFFFFF;
+  border-radius: 24px;
+  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 510px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .strip-preview-fixed-frame {
-  box-shadow: 0 16px 45px rgba(53, 28, 21, 0.12), 0 0 0 2px rgba(80, 42, 29, 0.08);
+  box-shadow: 0 16px 40px rgba(53, 28, 21, 0.12), 0 0 0 1.5px rgba(80, 42, 29, 0.08);
   border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 12px 16px;
+  padding: 12px 12px 14px;
   box-sizing: border-box;
-  transition: all var(--transition-normal);
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  border: 2px solid;
 }
 
-.theme-frame-overlay-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  pointer-events: none;
-  z-index: 10;
-  border-radius: inherit;
-}
-
-/* Kích thước CỐ ĐỊNH cho Khung Strip 2x6 */
+/* Kích thước Khung Strip 2x6 */
 .frame-size-2x6 {
-  width: 148px;
-  height: 480px;
+  width: 154px;
+  height: 460px;
 }
 
-/* Kích thước CỐ ĐỊNH cho Khung Postcard 4x6 */
+/* Kích thước Khung Postcard 4x6 */
 .frame-size-4x6 {
   width: 320px;
   height: 440px;
@@ -125,6 +146,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   width: 100%;
+  height: 100%;
   flex: 1;
 }
 
@@ -133,7 +155,7 @@
   width: 100%;
   border-radius: 4px;
   overflow: hidden;
-  background: #2a2220;
+  background: #2A2220;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,183 +169,459 @@
 }
 
 .theme-slot-placeholder {
-  color: #fff;
+  color: #FFFFFF;
   font-family: var(--font-body);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
+  opacity: 0.85;
 }
 
 .strip-branding-footer {
   text-align: center;
-  margin-top: 6px;
-  font-family: var(--font-display);
+  margin-top: 8px;
+  font-family: var(--font-display, 'Baloo 2', sans-serif);
   font-weight: 800;
   font-size: 0.85rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  letter-spacing: 0.8px;
   flex-shrink: 0;
+  line-height: 1;
 }
 
-/* ── Right Side: Frame Selector Panel (1-2 Mẫu Khung Mặc Định) ───────────── */
-.frame-selector-panel {
+.theme-frame-overlay-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+/* Perforations cuộn phim 35mm cho preview live */
+.film-live-perforations {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 3px;
+  z-index: 5;
+}
+
+.film-holes-strip {
+  width: 4px;
+  height: 100%;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.8) 0px,
+    rgba(255, 255, 255, 0.8) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  border-radius: 1px;
+}
+
+/* ── CỘT PHẢI: Card Trượt Cảm Ứng (Touch Slide) ─────────────────────────── */
+.theme-carousel-card {
+  background: #FFFFFF;
+  border-radius: 24px;
+  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
+  padding: 28px 36px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 520px;
-}
-
-.frame-selector-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.frame-selector-title {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--brand-primary);
-}
-
-.frame-selector-count {
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-
-.frames-grid-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.frame-option-card {
-  background: var(--surface-default);
-  border: 1.5px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: 18px 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
-  outline: none;
+  justify-content: space-between;
+  height: 510px;
+  flex: 1;
+  max-width: 860px;
+  box-sizing: border-box;
   position: relative;
 }
 
-.frame-option-card:hover {
-  border-color: var(--brand-primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.frame-option-card.selected {
-  border: 2.5px solid var(--brand-primary);
-  background: #FFFDFB;
-  box-shadow: var(--shadow-brand);
-}
-
-.frame-card-preview-thumb {
-  width: 54px;
-  height: 72px;
-  border-radius: var(--radius-xs);
-  border: 1.5px solid;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 4px 10px rgba(53, 28, 21, 0.08);
-}
-
-.frame-thumb-inner {
-  width: 100%;
-  height: 100%;
-  background: #E2D3C8;
-  border-radius: 2px;
-}
-
-.frame-card-thumb-overlay {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 2px;
-}
-
-.frame-card-meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.frame-card-name {
-  font-family: var(--font-display);
-  font-size: 1.18rem;
-  font-weight: 800;
-  color: var(--brand-primary);
-}
-
-.frame-card-desc {
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.frame-check-badge {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  background: var(--brand-primary);
-  color: var(--text-inverse);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-/* ── Bottom Bar: Cách lề mặc định 100px ─────────────────────────────────── */
-.theme-bottom-bar {
-  height: 72px;
+/* Card Header */
+.carousel-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 100vw;
-  padding: 0 100px 20px;
-  margin: 0;
-  width: 100%;
-  box-sizing: border-box;
+  margin-bottom: 8px;
 }
 
-.btn-proceed-theme {
-  height: 54px;
-  padding: 0 44px;
-  background: var(--brand-primary);
-  color: var(--text-inverse);
-  border: none;
-  border-radius: var(--radius-full);
-  font-family: var(--font-display);
-  font-size: var(--font-size-btn);
+.carousel-card-title {
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #502A1D;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.carousel-card-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.carousel-swipe-hint {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #A8988C;
+  background: #FAF6F1;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  letter-spacing: 0.1px;
+}
+
+.carousel-card-counter {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 1.12rem;
   font-weight: 700;
-  display: inline-flex;
+  color: #8C7A70;
+}
+
+/* Vùng Trượt Cảm Ứng (Touch Slide Viewport) */
+.carousel-touch-viewport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+/* Hiệu ứng viền mờ 2 bên gợi ý vuốt trượt */
+.carousel-touch-viewport::before,
+.carousel-touch-viewport::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.carousel-touch-viewport::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.95), transparent);
+}
+
+.carousel-touch-viewport::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.95), transparent);
+}
+
+/* Dải cuộn trượt danh sách các khung mini (Touch-First Drag/Swipe Track) */
+.carousel-items-track {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 16px 20px;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 1;
+}
+
+.carousel-items-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* Khi đang chạm kéo thì chuyển sang con trỏ grabbing và tắt tạm snap để theo sát ngón tay */
+.carousel-items-track.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+/* Wrapper Thẻ Khung Mini */
+.frame-mini-wrapper {
+  position: relative;
+  cursor: pointer;
+  border-radius: 18px;
+  padding: 6px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  outline: none;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  scroll-snap-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-x;
+}
+
+.frame-mini-wrapper:hover {
+  transform: translateY(-3px);
+}
+
+.frame-mini-wrapper.selected {
+  border-color: #502A1D;
+  background: #FFFBF7;
+  box-shadow: 0 8px 24px rgba(80, 42, 29, 0.12);
+  transform: translateY(-4px);
+}
+
+/* Badge Tích Chọn ✓ ở góc trên bên phải */
+.frame-selected-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #502A1D;
+  color: #FFFFFF;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  box-shadow: 0 2px 8px rgba(80, 42, 29, 0.3);
+  z-index: 10;
+}
+
+/* Thân Khung Dải Mini */
+.frame-mini-item {
+  width: 82px;
+  height: 260px;
+  border-radius: 13px;
+  border: 1.5px solid;
+  padding: 8px 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(53, 28, 21, 0.06);
+  pointer-events: none; /* Tránh cản trở drag gesture */
+}
+
+/* Style chi tiết từng mẫu khung mini chuẩn Warm Luxury */
+.frame-mini-item.frame-style-theme_espresso_classic {
+  background-color: #502A1D !important;
+  border-color: #502A1D !important;
+}
+
+.frame-mini-item.frame-style-theme_white_minimal {
+  background-color: #FFFFFF !important;
+  border-color: #8C7E75 !important;
+}
+
+.frame-mini-item.frame-style-theme_pastel_pink {
+  background-color: #FFF5F7 !important;
+  border-color: #F8B4C4 !important;
+}
+
+.frame-mini-item.frame-style-theme_pastel_blue {
+  background-color: #F5FAFF !important;
+  border-color: #BFDBFE !important;
+}
+
+.frame-mini-item.frame-style-theme_vintage_cream {
+  background-color: #FDFBF7 !important;
+  border-color: #C8B69B !important;
+}
+
+.frame-mini-item.frame-style-theme_vintage_film {
+  background-color: #141414 !important;
+  border-color: #2D2D2D !important;
+}
+
+.frame-mini-item.frame-style-theme_black_noir {
+  background-color: #18181B !important;
+  border-color: #3F3F46 !important;
+}
+
+.frame-mini-item.frame-style-theme_party_sparkle {
+  background-color: #FFFDF9 !important;
+  border-color: #F5A623 !important;
+}
+
+/* Các Ô Mô Phỏng Bên Trong Khung Mini */
+.frame-mini-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  flex: 1;
+}
+
+.frame-mini-slot-box {
+  background: #FFFFFF;
+  border-radius: 3px;
+  flex: 1;
+  width: 100%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Chân Dải Mini in Chữ fotolism */
+.frame-mini-brand-footer {
+  font-family: var(--font-display, 'Baloo 2', sans-serif);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin-top: 5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Hiệu ứng Phim 35mm cho khung mini */
+.mini-film-perforations {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 2px;
+  z-index: 2;
+}
+
+.mini-film-holes {
+  width: 3px;
+  height: 100%;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.7) 0px,
+    rgba(255, 255, 255, 0.7) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border-radius: 1px;
+}
+
+/* Dải Chấm Tròn Phân Trang (Dots Indicator) */
+.carousel-dots-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E5DDD5;
+  border: none;
   cursor: pointer;
-  box-shadow: var(--shadow-brand);
-  transition: all var(--transition-fast);
+  padding: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   outline: none;
 }
 
-.btn-proceed-theme:hover {
-  background: var(--brand-primary-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(80, 42, 29, 0.38);
+.carousel-dot:hover {
+  background: #BFAEA3;
 }
 
-.btn-proceed-theme:active {
+.carousel-dot.active {
+  width: 10px;
+  height: 10px;
+  background: #502A1D;
+  box-shadow: 0 2px 6px rgba(80, 42, 29, 0.25);
+}
+
+/* ── Bottom Nav: Nút Tiếp Tục ở góc dưới phải (Không icon) ──────────────── */
+.theme-bottom-nav {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 48px 10px;
+  box-sizing: border-box;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.bottom-nav-spacer {
+  flex: 1;
+}
+
+.btn-theme-proceed {
+  height: 56px;
+  padding: 0 48px;
+  background: #502A1D;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 9999px;
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(80, 42, 29, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-theme-proceed:hover {
+  background: #3D1F15;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(80, 42, 29, 0.38);
+}
+
+.btn-theme-proceed:active {
   transform: scale(0.97);
+}
+
+.btn-theme-back {
+  height: 56px;
+  padding: 0 40px;
+  background: #FFFFFF;
+  color: #502A1D;
+  border: 1.5px solid #EAE0D7;
+  border-radius: 9999px;
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(80, 42, 29, 0.06);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: auto;
+}
+
+.btn-theme-back:hover {
+  background: #FAF7F2;
+  border-color: #502A1D;
+}
+
+.btn-theme-back:active {
+  transform: scale(0.97);
+}
+
+/* ── BỐ CỤC KHUNG MINI 4x6 (Grid 4, 6, 8, 9 ảnh) ── */
+.frame-mini-item.layout-4x6 {
+  width: 136px !important;
+  height: 204px !important;
+  border-radius: 14px !important;
+  padding: 8px 8px 10px !important;
+}
+
+.frame-mini-slots.mini-grid {
+  display: grid !important;
+  gap: 3.5px !important;
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+.frame-mini-slots.mini-grid .frame-mini-slot-box {
+  width: 100% !important;
+  height: 100% !important;
+  background: #FFFFFF !important;
+  border-radius: 2px !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
 }

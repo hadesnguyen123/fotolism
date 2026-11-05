@@ -17,7 +17,7 @@
     "cms": "npm --prefix cms run dev",
     "cms:build": "npm --prefix cms run build",
     "cms:test": "npm --prefix cms test",
-    "verify": "node .agents/skills/joybooth-system-verifier/scripts/verify-all.mjs",
+    "verify": "node .agents/skills/system-verifier/scripts/verify-all.mjs",
     "test": "npm --prefix desktop test && npm --prefix cms test",
     "ai": "cd desktop/ai-service && python main.py"
   }

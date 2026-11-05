@@ -18,11 +18,18 @@ function addResult(subsystem, testName, passed, details) {
   console.log(`[${icon}] [${subsystem}] ${testName} - ${details}`)
 }
 
+// Tìm đúng thư mục CMS (cms)
+function getCmsDir() {
+  if (fs.existsSync(path.join(ROOT_DIR, 'cms'))) return 'cms'
+  if (fs.existsSync(path.join(ROOT_DIR, 'fotolism'))) return 'fotolism'
+  return 'joybooth-cms'
+}
+
 // 1. Kiểm tra cấu hình Cổng (Port Partitioning)
 function checkPortsConfig() {
   try {
     const desktopPkg = fs.readFileSync(path.join(ROOT_DIR, 'desktop/package.json'), 'utf-8')
-    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const cmsDir = getCmsDir()
     const cmsPkg = fs.readFileSync(path.join(ROOT_DIR, `${cmsDir}/package.json`), 'utf-8')
 
     const desktopHas5173 = desktopPkg.includes('5173')
@@ -33,7 +40,7 @@ function checkPortsConfig() {
         'PORT_PARTITION',
         'Phân bổ cổng mạng độc lập',
         true,
-        'Desktop: 5173 | Fotolism Cloud CMS (Next.js): 3000 (Không xung đột)'
+        'Desktop: 5173 | Fotolism Cloud CMS (Next.js): 3000 | Canon Daemon: 8899'
       )
     } else {
       addResult('PORT_PARTITION', 'Phân bổ cổng mạng', false, 'Phát hiện cấu hình cổng không khớp')
@@ -46,7 +53,7 @@ function checkPortsConfig() {
 // 2. Kiểm tra Database Migration & Schema Supabase
 function checkDatabaseMigration() {
   try {
-    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const cmsDir = getCmsDir()
     const migrationPath = path.join(ROOT_DIR, `${cmsDir}/supabase/migrations/001_initial_schema.sql`)
     if (!fs.existsSync(migrationPath)) {
       addResult('SUPABASE_SCHEMA', 'Kiểm tra migration SQL', false, 'Chưa tìm thấy 001_initial_schema.sql')
@@ -77,7 +84,7 @@ function checkDatabaseMigration() {
 // 3. Kiểm tra tính đúng đắn công thức Đối soát 3 góc (Triple Reconciliation Engine)
 function checkReconciliationModule() {
   try {
-    const cmsDir = fs.existsSync(path.join(ROOT_DIR, 'fotolism')) ? 'fotolism' : 'joybooth-cms'
+    const cmsDir = getCmsDir()
     const enginePath = path.join(ROOT_DIR, `${cmsDir}/src/lib/reconciliation/engine.ts`)
     const testPath = path.join(ROOT_DIR, `${cmsDir}/tests/reconciliation.test.ts`)
 
@@ -197,3 +204,4 @@ if (passCount === totalCount) {
 } else {
   process.exit(1)
 }
+

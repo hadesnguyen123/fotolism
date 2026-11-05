@@ -30,14 +30,17 @@ export type AppScreen =
   | 'idle'
   | 'select-size'
   | 'select-layout'
+  | 'confirm'
   | 'payment'
   | 'capture'
   | 'select-theme'
   | 'select-filter'
   | 'select-sticker'
+  | 'processing'
   | 'review'
   | 'admin'
   | 'selfbooth-setup'
+  | 'selfbooth-select'
 
 export type BoothMode = 'attended' | 'unattended'
 export type CaptureMode = 'photobooth' | 'selfbooth'
@@ -130,31 +133,22 @@ export interface ThemeItem {
 
 export const THEME_OPTIONS: ThemeItem[] = [
   {
+    id: 'theme_espresso_classic',
+    name: 'Khung Nâu Cổ Điển',
+    category: 'Một màu',
+    bgColor: '#502A1D',
+    bgGradient: '#502A1D',
+    textColor: '#FFFFFF',
+    borderColor: '#502A1D',
+  },
+  {
     id: 'theme_white_minimal',
     name: 'Khung Trắng Tối Giản',
     category: 'Một màu',
     bgColor: '#FFFFFF',
     bgGradient: '#FFFFFF',
     textColor: '#351C15',
-    borderColor: '#E6D9CF',
-  },
-  {
-    id: 'theme_black_noir',
-    name: 'Khung Đen Sang Trọng',
-    category: 'Một màu',
-    bgColor: '#18181B',
-    bgGradient: 'linear-gradient(180deg, #27272A 0%, #18181B 100%)',
-    textColor: '#F4F4F5',
-    borderColor: '#3F3F46',
-  },
-  {
-    id: 'theme_espresso_classic',
-    name: 'Khung Nâu Cổ Điển',
-    category: 'Một màu',
-    bgColor: '#FAF6F1',
-    bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FAF6F1 100%)',
-    textColor: '#502A1D',
-    borderColor: '#502A1D',
+    borderColor: '#8C7E75',
   },
   {
     id: 'theme_pastel_pink',
@@ -181,17 +175,7 @@ export const THEME_OPTIONS: ThemeItem[] = [
     bgColor: '#FDFBF7',
     bgGradient: 'linear-gradient(180deg, #FAF6EE 0%, #F5EFEB 100%)',
     textColor: '#5C4033',
-    borderColor: '#E6DCB8',
-  },
-  {
-    id: 'theme_party_sparkle',
-    name: 'Kim Tuyến Party (Overlay)',
-    category: 'Ngày lễ',
-    bgColor: '#FFFDF9',
-    bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8EE 100%)',
-    textColor: '#B46414',
-    borderColor: '#F5A623',
-    overlayUrl: '/frames/frame_party_sparkle_2x6.png',
+    borderColor: '#C8B69B',
   },
   {
     id: 'theme_vintage_film',
@@ -203,6 +187,25 @@ export const THEME_OPTIONS: ThemeItem[] = [
     borderColor: '#2D2D2D',
     overlayUrl: '/frames/frame_vintage_film_2x6.png',
     hideFooter: true,
+  },
+  {
+    id: 'theme_black_noir',
+    name: 'Khung Đen Sang Trọng',
+    category: 'Một màu',
+    bgColor: '#18181B',
+    bgGradient: 'linear-gradient(180deg, #27272A 0%, #18181B 100%)',
+    textColor: '#F4F4F5',
+    borderColor: '#3F3F46',
+  },
+  {
+    id: 'theme_party_sparkle',
+    name: 'Kim Tuyến Party (Overlay)',
+    category: 'Ngày lễ',
+    bgColor: '#FFFDF9',
+    bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8EE 100%)',
+    textColor: '#B46414',
+    borderColor: '#F5A623',
+    overlayUrl: '/frames/frame_party_sparkle_2x6.png',
   },
 ]
 
@@ -302,6 +305,7 @@ export const DEFAULT_DISCOUNT_COUPONS: DiscountCoupon[] = [
 export interface SessionState {
   sessionId: string
   photos: CapturedPhoto[]
+  selfboothLibrary?: CapturedPhoto[]
   selectedFrameSize: FrameSize
   selectedLayout: GridLayoutItem
   selectedTheme: ThemeItem
@@ -310,6 +314,7 @@ export interface SessionState {
   qrImagePath: string | null
   timelapseUrl: string | null
   timelapseDataUrl?: string | null
+  compositeStripUrl?: string | null
   gdriveUrl: string | null
   storageUrl?: string | null
   customerName?: string | null
@@ -411,12 +416,15 @@ interface AppStore {
   setDriveSyncDone: (val: boolean) => void
   setDriveSyncError: (err: string | null) => void
   setCloudFolderUrl: (url: string | null) => void
+  compositeStripUrl: string | null
+  setCompositeStripUrl: (url: string | null) => void
 
   // Session
   session: SessionState | null
   startNewSession: () => void
   addPhoto: (photo: CapturedPhoto) => void
   setSessionPhotos: (photos: CapturedPhoto[]) => void
+  setSelfboothLibrary: (photos: CapturedPhoto[]) => void
   replaceSessionPhotoAt: (index: number, photo: CapturedPhoto) => void
   removeSessionPhotoAt: (index: number) => void
   clearSession: () => void
@@ -435,6 +443,8 @@ interface AppStore {
   selectFrameSize: (size: FrameSize) => void
   selectedCopies: number
   setSelectedCopies: (copies: number) => void
+  appliedCoupon: DiscountCoupon | null
+  setAppliedCoupon: (coupon: DiscountCoupon | null) => void
   setSessionPayment: (data: {
     paidAmount: number
     paidCopies: number
@@ -507,6 +517,8 @@ interface AppStore {
   // Camera
   availableCameras: Array<{ id: string; name: string }>
   selectedCameraId: string | null
+  cameraType: 'eos' | 'laptop'
+  setCameraType: (type: 'eos' | 'laptop') => void
   mirrorCamera: boolean
   setCameras: (cameras: Array<{ id: string; name: string }>) => void
   selectCamera: (id: string) => void
@@ -649,6 +661,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   selectedCopies: 2,
   setSelectedCopies: (selectedCopies) => set({ selectedCopies }),
+  appliedCoupon: null,
+  setAppliedCoupon: (appliedCoupon) => set({ appliedCoupon }),
 
   setSessionPayment: (data) =>
     set((state) => ({
@@ -715,6 +729,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setDriveSyncDone: (driveSyncDone) => set({ driveSyncDone }),
   setDriveSyncError: (driveSyncError) => set({ driveSyncError }),
   setCloudFolderUrl: (cloudFolderUrl) => set({ cloudFolderUrl }),
+  compositeStripUrl: null,
+  setCompositeStripUrl: (compositeStripUrl) =>
+    set((state) => ({
+      compositeStripUrl,
+      session: state.session ? { ...state.session, compositeStripUrl } : state.session,
+    })),
 
   session: null,
   startNewSession: () =>
@@ -723,6 +743,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       selectedCategory: 4,
       selectedLayout: ALL_LAYOUTS[4][0],
       selectedCopies: 2,
+      appliedCoupon: null,
       selectedTheme: THEME_OPTIONS[0],
       selectedFilter: COLOR_FILTERS[0],
       session: {
@@ -779,6 +800,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return { session: { ...s, photos: [...s.photos, photo] } }
     }),
 
+  setSelfboothLibrary: (photos) =>
+    set((state) => {
+      if (!state.session) return {}
+      return { session: { ...state.session, selfboothLibrary: photos } }
+    }),
+
   setSessionPhotos: (photos) =>
     set((state) => {
       const s = state.session || {
@@ -831,9 +858,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   clearSession: () => {
+    // 1. Thu hồi các Object URL nhị phân (Blob) để chống rò rỉ RAM (Memory Leak)
+    const currentSession = get().session
+    if (typeof window !== 'undefined' && typeof URL !== 'undefined') {
+      if (currentSession?.timelapseUrl?.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(currentSession.timelapseUrl)
+        } catch { }
+      }
+    }
+
     const savedBeauty = loadSavedBeautyConfig()
     set({
       session: null,
+      appliedCoupon: null, // Xóa bỏ triệt để mã giảm giá của phiên trước
       selectedFrameSize: '2x6',
       selectedCategory: 4,
       selectedLayout: ALL_LAYOUTS[4][0],
@@ -855,6 +893,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       driveSyncDone: false,
       driveSyncError: null,
       cloudFolderUrl: null,
+      compositeStripUrl: null,
     })
   },
 
@@ -1094,6 +1133,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   availableCameras: [],
   selectedCameraId: null,
+  cameraType: (() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const v = localStorage.getItem('fotolism_camera_type')
+        return (v === 'laptop' ? 'laptop' : 'eos') as 'eos' | 'laptop'
+      }
+      return 'eos'
+    } catch { return 'eos' }
+  })(),
+  setCameraType: (type: 'eos' | 'laptop') => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fotolism_camera_type', type)
+      }
+    } catch { }
+    set({
+      cameraType: type,
+      selectedCameraId: type === 'eos' ? 'canon-daemon-stream' : null,
+    })
+  },
   mirrorCamera: (() => {
     try {
       if (typeof window !== 'undefined') {

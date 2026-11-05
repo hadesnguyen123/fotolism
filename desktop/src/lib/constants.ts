@@ -95,7 +95,7 @@ export const DEFAULT_SELFBOOTH_PRICE_10M = 100000
 
 // ── 6. Session & Timeouts ──
 /** Thời gian chờ trở về màn hình chờ khi không có thao tác (giây) */
-export const DEFAULT_IDLE_TIMEOUT_SECONDS = 60
+export const DEFAULT_IDLE_TIMEOUT_SECONDS = 120
 
 /** Thời gian phiên chụp tự do Selfbooth mặc định (giây - 5 phút) */
 export const DEFAULT_SELFBOOTH_DURATION_SECONDS = 300

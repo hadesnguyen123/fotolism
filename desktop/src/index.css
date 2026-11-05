@@ -281,6 +281,37 @@ button, input, select, textarea, optgroup {
 }
 
 /* ── Fotolism 3.0 Universal Kiosk Bottom Navigation Bar & Buttons ──────── */
+/* Kiosk Fixed Bottom Bar: Khóa cứng vị trí đáy màn hình cho 4 bước chọn -> confirm -> pay */
+.kiosk-fixed-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  height: 90px;
+  padding: 0 100px 24px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  z-index: 100;
+  background: #FAF7F2;
+  user-select: none;
+}
+
+.kiosk-fixed-bottom-bar .btn-nav-back {
+  justify-self: start;
+}
+
+.kiosk-fixed-bottom-bar .kiosk-footer-center {
+  justify-self: center;
+}
+
+.kiosk-fixed-bottom-bar .btn-nav-next {
+  justify-self: end;
+}
+
+
 .kiosk-bottom-nav-bar {
   display: flex;
   align-items: center;

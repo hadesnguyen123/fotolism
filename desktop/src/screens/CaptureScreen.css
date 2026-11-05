@@ -1809,3 +1809,18 @@
   box-shadow: 0 6px 20px rgba(80, 42, 29, 0.38);
 }
 
+
+/* Khóa nút đếm ngược và các chức năng xung quanh sau khi chụp */
+.countdown-pill:disabled,
+.countdown-pill.locked-disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--border-default) !important;
+}
+
+.camera-viewfinder-wrapper.selfbooth-clickable {
+  cursor: pointer;
+}
