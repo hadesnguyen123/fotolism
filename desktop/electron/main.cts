@@ -142,9 +142,9 @@ function createOverheadWindow(displayId?: number) {
   })
 }
 
-// ─── FOTOLISM STORAGE DIRECTORY (ƯU TIÊN Ổ D:\) ──────────────────────────────
+// ─── FOTOLISM STORAGE DIRECTORY (ƯU TIÊN Ổ F:\ VÀ D:\) ──────────────────────────────
 const SAVE_FOLDER_NAME = 'Fotolism_image'
-const STORAGE_DRIVE_CANDIDATES = ['D:\\', 'F:\\']
+const STORAGE_DRIVE_CANDIDATES = ['F:\\', 'D:\\', 'C:\\']
 
 function getFotolismDir(): string {
   for (const drive of STORAGE_DRIVE_CANDIDATES) {
@@ -163,6 +163,38 @@ function getFotolismDir(): string {
   const fallbackPath = join(app.getPath('downloads'), SAVE_FOLDER_NAME)
   if (!fs.existsSync(fallbackPath)) fs.mkdirSync(fallbackPath, { recursive: true })
   return fallbackPath
+}
+
+// ─── CAPTURE ONE (C1) HOT FOLDER DIRECTORIES (PHOTOBOOTH INTEGRATION) ───────────────
+const C1_RAW_FOLDER_NAME = 'Fotolism_raw'
+const C1_EXPORT_SUBFOLDER_NAME = 'c1_processed'
+
+function getFotolismRawDir(): string {
+  for (const drive of STORAGE_DRIVE_CANDIDATES) {
+    if (fs.existsSync(drive)) {
+      const targetPath = join(drive, C1_RAW_FOLDER_NAME)
+      try {
+        if (!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, { recursive: true })
+        return targetPath
+      } catch (_err) {
+        /* proceed to next candidate */
+      }
+    }
+  }
+  const fallbackPath = join(app.getPath('downloads'), C1_RAW_FOLDER_NAME)
+  if (!fs.existsSync(fallbackPath)) fs.mkdirSync(fallbackPath, { recursive: true })
+  return fallbackPath
+}
+
+function getFotolismC1ExportDir(): string {
+  const baseDir = getFotolismDir()
+  const c1ExportPath = join(baseDir, C1_EXPORT_SUBFOLDER_NAME)
+  if (!fs.existsSync(c1ExportPath)) {
+    try {
+      fs.mkdirSync(c1ExportPath, { recursive: true })
+    } catch (_err) {}
+  }
+  return c1ExportPath
 }
 
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
@@ -746,6 +778,17 @@ ipcMain.handle(
                 console.warn('[SessionDB] SQLite record warning:', dbErr)
               }
 
+              // ── Capture One Integration: Tự động sao chép RAW 24MP sang F:\Fotolism_raw ──
+              try {
+                const c1RawDir = getFotolismRawDir()
+                const baseFileName = path.basename(targetPath)
+                const c1RawDest = join(c1RawDir, baseFileName)
+                fs.copyFileSync(targetPath, c1RawDest)
+                console.log(`[Capture One Integration] Copied 24MP RAW to C1 Hot Folder: ${c1RawDest}`)
+              } catch (c1CopyErr) {
+                console.warn('[Capture One Integration] Copy to raw folder error:', c1CopyErr)
+              }
+
               console.log(
                 `[Canon Daemon] Shutter success! Saved: ${targetPath} (${sizeMb} MB) in ${result.latencyMs}ms (Idempotent: ${Boolean(result.idempotent)})`
               )
@@ -1125,6 +1168,164 @@ ipcMain.handle('storage:save-photo', async (_event, payload: { dataUrl: string; 
     return { success: false, error: err.message }
   }
 })
+
+// ── Capture One (C1) Storage Handlers ─────────────────────────────────────────
+ipcMain.handle('storage:c1-get-paths', async () => {
+  try {
+    return {
+      success: true,
+      data: {
+        rawDir: getFotolismRawDir(),
+        exportDir: getFotolismC1ExportDir(),
+        mainImageDir: getFotolismDir(),
+      },
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle(
+  'storage:c1-save-raw',
+  async (_event, payload: { dataUrl: string; fileName: string }) => {
+    try {
+      const rawDir = getFotolismRawDir()
+      if (!fs.existsSync(rawDir)) fs.mkdirSync(rawDir, { recursive: true })
+      const base64Data = payload.dataUrl.replace(/^data:[^;]+;base64,/, '')
+      const buffer = Buffer.from(base64Data, 'base64')
+      const targetFile = join(rawDir, payload.fileName)
+      fs.writeFileSync(targetFile, buffer)
+      console.log(`[Capture One Integration] Saved raw photo for C1: ${targetFile} (${buffer.length} bytes)`)
+      return { success: true, data: { savedPath: targetFile } }
+    } catch (err: any) {
+      console.warn('[Capture One Integration] Save raw error:', err)
+      return { success: false, error: err.message }
+    }
+  }
+)
+
+ipcMain.handle(
+  'storage:c1-wait-photo',
+  async (
+    _event,
+    payload: {
+      fileName: string
+      timestamp: number
+      timeoutMs?: number
+    }
+  ) => {
+    const timeoutMs = payload.timeoutMs || 6000
+    const startTime = Date.now()
+    const exportDir = getFotolismC1ExportDir()
+    const mainDir = getFotolismDir()
+    const searchDirs = [exportDir, mainDir]
+
+    const baseStem = path.parse(payload.fileName).name
+
+    const checkFileReady = (filePath: string): boolean => {
+      try {
+        if (!fs.existsSync(filePath)) return false
+        const stat = fs.statSync(filePath)
+        if (stat.size < 10000) return false
+        const fd = fs.openSync(filePath, 'r')
+        fs.closeSync(fd)
+        return true
+      } catch (_e) {
+        return false
+      }
+    }
+
+    while (Date.now() - startTime < timeoutMs) {
+      for (const dir of searchDirs) {
+        if (!fs.existsSync(dir)) continue
+        try {
+          const files = fs.readdirSync(dir)
+
+          // 1. Tìm file trùng khớp tên gốc
+          const matchingFile = files.find((f) => {
+            const ext = path.extname(f).toLowerCase()
+            if (!['.jpg', '.jpeg', '.png'].includes(ext)) return false
+            const stem = path.parse(f).name
+            return stem === baseStem || stem.startsWith(baseStem)
+          })
+
+          if (matchingFile) {
+            const fullPath = join(dir, matchingFile)
+            if (checkFileReady(fullPath)) {
+              await new Promise((r) => setTimeout(r, 80))
+              const buffer = fs.readFileSync(fullPath)
+              const mime = matchingFile.endsWith('.png') ? 'image/png' : 'image/jpeg'
+              const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`
+              console.log(
+                `[Capture One Integration] Detected processed file by name: ${fullPath} (${buffer.length} bytes)`
+              )
+              return {
+                success: true,
+                data: {
+                  filePath: fullPath,
+                  dataUrl,
+                  sizeBytes: buffer.length,
+                },
+              }
+            }
+          }
+
+          // 2. Tìm file mới nhất xuất hiện trong exportDir (nếu C1 dùng tên tùy chỉnh)
+          if (dir === exportDir) {
+            const recentFiles = files
+              .map((f) => {
+                const p = join(dir, f)
+                try {
+                  const stat = fs.statSync(p)
+                  return { file: f, path: p, mtimeMs: stat.mtimeMs, size: stat.size }
+                } catch {
+                  return null
+                }
+              })
+              .filter(
+                (f): f is { file: string; path: string; mtimeMs: number; size: number } =>
+                  f !== null &&
+                  ['.jpg', '.jpeg', '.png'].includes(path.extname(f.file).toLowerCase()) &&
+                  f.mtimeMs >= payload.timestamp - 1500 &&
+                  f.size > 10000
+              )
+              .sort((a, b) => b.mtimeMs - a.mtimeMs)
+
+            if (recentFiles.length > 0) {
+              const newest = recentFiles[0]
+              if (checkFileReady(newest.path)) {
+                await new Promise((r) => setTimeout(r, 80))
+                const buffer = fs.readFileSync(newest.path)
+                const mime = newest.file.endsWith('.png') ? 'image/png' : 'image/jpeg'
+                const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`
+                console.log(
+                  `[Capture One Integration] Detected processed file by timestamp: ${newest.path} (${buffer.length} bytes)`
+                )
+                return {
+                  success: true,
+                  data: {
+                    filePath: newest.path,
+                    dataUrl,
+                    sizeBytes: buffer.length,
+                  },
+                }
+              }
+            }
+          }
+        } catch (readErr) {
+          console.warn('[Capture One Watcher] Read directory error:', readErr)
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 150))
+    }
+
+    return {
+      success: false,
+      error: 'TIMEOUT_WAITING_C1',
+    }
+  }
+)
 
 ipcMain.handle('storage:open-folder', async (_event, targetPath?: string) => {
   try {

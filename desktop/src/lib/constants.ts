@@ -34,6 +34,23 @@ export const SAVE_ROOT_DIR = 'F:\\Fotolism_image'
 /** Đường dẫn dự phòng thứ hai (Ổ C:\) */
 export const FALLBACK_SAVE_ROOT_DIR = 'C:\\Fotolism_image'
 
+// ── Capture One (C1) Hot Folder Integration (Chỉ Photobooth) ──
+/** Bật/tắt xử lý filter tự động qua Capture One Hot Folder */
+export const C1_INTEGRATION_ENABLED_DEFAULT = true
+
+/** Đường dẫn thư mục Hot Folder RAW đầu vào cho Capture One (F:\Fotolism_raw) */
+export const C1_RAW_FOLDER_NAME = 'Fotolism_raw'
+export const C1_DEFAULT_RAW_DIR = 'F:\\Fotolism_raw'
+export const C1_FALLBACK_RAW_DIR = 'D:\\Fotolism_raw'
+
+/** Đường dẫn thư mục Hot Folder Export đầu ra từ Capture One (F:\Fotolism_image\c1_processed) */
+export const C1_EXPORT_SUBFOLDER_NAME = 'c1_processed'
+export const C1_DEFAULT_EXPORT_DIR = 'F:\\Fotolism_image\\c1_processed'
+export const C1_FALLBACK_EXPORT_DIR = 'D:\\Fotolism_image\\c1_processed'
+
+/** Thời gian tối đa (ms) chờ Capture One export ảnh trước khi tự động fallback an toàn */
+export const C1_PROCESSING_TIMEOUT_MS = 6000
+
 /** Tiền tố tên file ảnh chụp đơn */
 export const FILE_PREFIX_SHOT = 'fotolism_shot'
 

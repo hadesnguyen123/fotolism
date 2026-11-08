@@ -9,6 +9,7 @@ import {
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
   DEFAULT_SELFBOOTH_DURATION_SECONDS,
+  C1_PROCESSING_TIMEOUT_MS,
   isRemoteTriggerEvent,
 } from '../lib/constants'
 import { BeautyCameraView, type BeautyCameraHandle } from '../components/BeautyCameraView'
@@ -119,7 +120,12 @@ export default function CaptureScreen() {
   const [isCapturingShot, setIsCapturingShot] = useState<boolean>(false)
   const [currentCountdown, setCurrentCountdown] = useState<number>(3)
   const [showFlash, setShowFlash] = useState<boolean>(false)
-  const [snapshotFlyer, setSnapshotFlyer] = useState<{ photoUrl: string; slotIndex: number; isEdsdk?: boolean } | null>(null)
+  const [snapshotFlyer, setSnapshotFlyer] = useState<{
+    photoUrl: string
+    slotIndex: number
+    isEdsdk?: boolean
+    isC1?: boolean
+  } | null>(null)
   const [justCapturedSlot, setJustCapturedSlot] = useState<number | null>(null)
   const [cameraFreezeFrame, setCameraFreezeFrame] = useState<string | null>(null)
 
@@ -745,6 +751,12 @@ export default function CaptureScreen() {
       // Lưu ảnh preview/fallback vào đĩa trong nền bất đồng bộ (không chặn giao diện người dùng)
       if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
         api.storage.savePhoto(photoDataUrl, fileName).catch((err) => console.warn('Save photo error:', err))
+        // ── CAPTURE ONE HOT FOLDER INPUT (CHỈ ÁP DỤNG VỚI PHOTOBOOTH) ──
+        if (!isSelfboothMode) {
+          api.storage.c1SaveRaw(photoDataUrl, fileName).catch((err) =>
+            console.warn('[Capture One Integration] Save raw error:', err)
+          )
+        }
       }
 
       // 6. PHƯƠNG ÁN 2: KÍCH HOẠT MÁY ẢNH CANON EOS THẬT (24MP FULL EXIF) - FOTOLISM 2.2 IDEMPOTENCY
@@ -790,22 +802,76 @@ export default function CaptureScreen() {
               setSlots((prev) => {
                 const next = [...prev]
                 if (next[targetIndex]) {
+                  const currentSlot = next[targetIndex]!
+                  // Giữ nguyên ảnh đã có từ Capture One (C1) nếu C1 đã hoàn thành trước
+                  const isAlreadyC1 = currentSlot.rawPath && currentSlot.rawPath.includes('c1_processed')
                   next[targetIndex] = {
-                    ...next[targetIndex]!,
+                    ...currentSlot,
                     rawPath: canonData.savedPath,
-                    enhancedPath: finalPhotoUrl,
-                    compositedPath: finalPhotoUrl,
+                    enhancedPath: isAlreadyC1 ? currentSlot.enhancedPath : finalPhotoUrl,
+                    compositedPath: isAlreadyC1 ? currentSlot.compositedPath : finalPhotoUrl,
                   }
                 }
                 return next
               })
               setSnapshotFlyer((prev) =>
-                prev && prev.slotIndex === targetIndex ? { ...prev, photoUrl: finalPhotoUrl, isEdsdk: true } : prev
+                prev && prev.slotIndex === targetIndex && !prev.isC1
+                  ? { ...prev, photoUrl: finalPhotoUrl, isEdsdk: true }
+                  : prev
               )
             }
           })
           .catch((err) => {
             console.warn('[Method 2] Canon hardware capture fallback:', err)
+          })
+      }
+
+      // ── CAPTURE ONE (C1) HOT FOLDER FILTER PIPELINE (CHỈ ÁP DỤNG VỚI PHOTOBOOTH) ──
+      // Lắng nghe file xuất từ Capture One Hot Folder (F:\Fotolism_image\c1_processed hoặc F:\Fotolism_image)
+      if (!isSelfboothMode) {
+        api.storage
+          .c1WaitPhoto({
+            fileName,
+            timestamp,
+            timeoutMs: C1_PROCESSING_TIMEOUT_MS,
+          })
+          .then(async (c1Res) => {
+            if (c1Res && c1Res.success && c1Res.data && c1Res.data.dataUrl) {
+              const c1Data = c1Res.data
+              console.log(`[Capture One Integration] Filtered photo ready: ${c1Data.filePath}`)
+              let finalC1Url = c1Data.dataUrl
+              try {
+                finalC1Url = await cropImageToAspect(finalC1Url, targetSlotDimensions.w, targetSlotDimensions.h)
+              } catch (cropErr) {
+                console.warn('[Capture One Integration] Crop photo error:', cropErr)
+              }
+
+              setSlots((prev) => {
+                const next = [...prev]
+                if (next[targetIndex]) {
+                  next[targetIndex] = {
+                    ...next[targetIndex]!,
+                    rawPath: c1Data.filePath,
+                    enhancedPath: finalC1Url,
+                    compositedPath: finalC1Url,
+                  }
+                }
+                return next
+              })
+
+              setSnapshotFlyer({
+                photoUrl: finalC1Url,
+                slotIndex: targetIndex,
+                isEdsdk: true,
+                isC1: true,
+              })
+              setTimeout(() => setSnapshotFlyer(null), 1200)
+            } else {
+              console.log('[Capture One Integration] C1 export timeout, keeping direct camera photo.')
+            }
+          })
+          .catch((c1Err) => {
+            console.warn('[Capture One Integration] Error waiting for photo:', c1Err)
           })
       }
 
@@ -1360,18 +1426,22 @@ export default function CaptureScreen() {
                   <div
                     className="snapshot-card-badge"
                     style={
-                      snapshotFlyer.isEdsdk
-                        ? { background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', color: '#ffffff', fontWeight: 800 }
-                        : undefined
+                      snapshotFlyer.isC1
+                        ? { background: 'linear-gradient(135deg, #d97706, #f59e0b)', color: '#ffffff', fontWeight: 800 }
+                        : snapshotFlyer.isEdsdk
+                          ? { background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', color: '#ffffff', fontWeight: 800 }
+                          : undefined
                     }
                   >
                     {isSelfboothMode
                       ? snapshotFlyer.isEdsdk
                         ? `📸 Canon R100 (24MP) • Đã lưu ảnh ${selfboothLibrary.length}`
                         : `✨ Đã thêm vào bộ sưu tập (${selfboothLibrary.length} ảnh)`
-                      : snapshotFlyer.isEdsdk
-                        ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
-                        : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
+                      : snapshotFlyer.isC1
+                        ? `🎨 Capture One Filter ➔ Ô ${snapshotFlyer.slotIndex + 1}`
+                        : snapshotFlyer.isEdsdk
+                          ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
+                          : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
                   </div>
                 </div>
               </div>

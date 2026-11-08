@@ -152,6 +152,20 @@ const api = {
     savePhoto: (dataUrl: string, fileName: string): IpcResponse<{ savedPath: string }> =>
       ipcRenderer.invoke('storage:save-photo', { dataUrl, fileName }),
 
+    // ── Capture One Integration ──
+    c1GetPaths: (): IpcResponse<{ rawDir: string; exportDir: string; mainImageDir: string }> =>
+      ipcRenderer.invoke('storage:c1-get-paths'),
+
+    c1SaveRaw: (dataUrl: string, fileName: string): IpcResponse<{ savedPath: string }> =>
+      ipcRenderer.invoke('storage:c1-save-raw', { dataUrl, fileName }),
+
+    c1WaitPhoto: (payload: {
+      fileName: string
+      timestamp: number
+      timeoutMs?: number
+    }): IpcResponse<{ filePath: string; dataUrl: string; sizeBytes: number }> =>
+      ipcRenderer.invoke('storage:c1-wait-photo', payload),
+
     openFolder: (targetPath?: string): IpcResponse =>
       ipcRenderer.invoke('storage:open-folder', targetPath),
 

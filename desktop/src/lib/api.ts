@@ -94,6 +94,13 @@ export interface FotolismAPI {
   storage: {
     getDownloadsPath: () => IpcResponse<{ path: string; baseDownloads: string }>
     savePhoto: (dataUrl: string, fileName: string) => IpcResponse<{ savedPath: string }>
+    c1GetPaths: () => IpcResponse<{ rawDir: string; exportDir: string; mainImageDir: string }>
+    c1SaveRaw: (dataUrl: string, fileName: string) => IpcResponse<{ savedPath: string }>
+    c1WaitPhoto: (payload: {
+      fileName: string
+      timestamp: number
+      timeoutMs?: number
+    }) => IpcResponse<{ filePath: string; dataUrl: string; sizeBytes: number }>
     openFolder: (targetPath?: string) => IpcResponse
     uploadDriveSession: (payload: {
       parentFolderId: string
@@ -374,6 +381,22 @@ const defaultMockApi: FotolismAPI = {
     savePhoto: async (_dataUrl: string, fileName: string) => ({
       success: true,
       data: { savedPath: `${MOCK_SAVE_BASE}/_mock_${fileName}` },
+    }),
+    c1GetPaths: async () => ({
+      success: true,
+      data: {
+        rawDir: 'F:\\Fotolism_raw',
+        exportDir: 'F:\\Fotolism_image\\c1_processed',
+        mainImageDir: 'F:\\Fotolism_image',
+      },
+    }),
+    c1SaveRaw: async (_dataUrl: string, fileName: string) => ({
+      success: true,
+      data: { savedPath: `F:\\Fotolism_raw\\${fileName}` },
+    }),
+    c1WaitPhoto: async () => ({
+      success: false,
+      error: 'TIMEOUT_WAITING_C1_MOCK',
     }),
     openFolder: async () => ({ success: true }),
     uploadDriveSession: async (payload: {
