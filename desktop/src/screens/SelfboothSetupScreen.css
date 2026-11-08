@@ -23,14 +23,11 @@
 /* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
 .selfbooth-fixed-brand-logo {
   position: absolute;
-  top: 28px;
+  top: 20px;
   left: 48px;
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: clamp(2rem, 2.5vw, 2.4rem);
-  font-weight: 800;
-  color: #502A1D;
-  letter-spacing: -0.5px;
-  line-height: 1;
+  height: clamp(44px, 3.2vw, 56px);
+  width: auto;
+  object-fit: contain;
   z-index: 50;
   pointer-events: none;
 }

@@ -460,6 +460,17 @@ class CloudSyncService {
         body: JSON.stringify(payload),
       })
 
+      if (res.status === 401) {
+        this.status.isSyncing = false
+        this.status.lastError = 'Thiết bị chưa được xác thực (HTTP 401). Vui lòng kiểm tra mã kích hoạt Kiosk.'
+        this.notify()
+        return {
+          success: false,
+          syncedCount: 0,
+          message: 'Lỗi xác thực (HTTP 401): Token không hợp lệ hoặc Kiosk chưa kích hoạt',
+        }
+      }
+
       if (!res.ok) {
         throw new Error(`Sync sessions failed: HTTP ${res.status}`)
       }

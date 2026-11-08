@@ -15,13 +15,12 @@
 
 .processing-fixed-brand {
   position: absolute;
-  top: 32px;
+  top: 20px;
   left: 48px;
-  font-family: var(--font-display, 'Baloo 2', cursive);
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #502A1D;
-  letter-spacing: -0.5px;
+  height: clamp(44px, 3.2vw, 56px);
+  width: auto;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .processing-card {

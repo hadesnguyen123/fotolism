@@ -11,6 +11,7 @@ import {
 } from '../lib/constants'
 import QRCode from 'qrcode'
 import { Loader2, CheckCircle2, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ProcessingScreen.css'
 
 export default function ProcessingScreen() {
@@ -212,7 +213,7 @@ export default function ProcessingScreen() {
 
   return (
     <div className="processing-screen-container animate-fade-in">
-      <div className="processing-fixed-brand">fotolism</div>
+      <img src={BRAND_LOGO_SRC} alt="fotolism" className="processing-fixed-brand" />
 
       <div className="processing-card animate-pop">
         <div className="processing-icon-orbit">

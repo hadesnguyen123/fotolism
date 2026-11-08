@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAppStore, type CapturedPhoto } from '../store/appStore'
 import { SlidersHorizontal, ChevronDown, X, Image as ImageIcon } from 'lucide-react'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './SelfboothPhotoSelectScreen.css'
 
 export default function SelfboothPhotoSelectScreen() {
@@ -115,7 +116,7 @@ export default function SelfboothPhotoSelectScreen() {
   return (
     <div className="selfbooth-select-screen animate-fade-in" id="selfbooth-photo-select-screen">
       {/* ── Fixed Brand Logo góc trên bên trái ── */}
-      <div className="selfbooth-fixed-brand">fotolism</div>
+      <img src={BRAND_LOGO_SRC} alt="fotolism" className="selfbooth-fixed-brand" />
 
       {/* ── Top Header: Icon Khung Ảnh + Tiêu Đề Trung Tâm ── */}
       <header className="selfbooth-select-header">

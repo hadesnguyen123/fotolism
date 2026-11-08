@@ -7,6 +7,7 @@ import {
 } from '../store/appStore'
 import { DEFAULT_SELFBOOTH_DURATION_SECONDS } from '../lib/constants'
 import { Check } from 'lucide-react'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './SelfboothSetupScreen.css'
 
 // Các mốc thời gian chụp Selfbooth tinh gọn (5, 7, 10 phút)
@@ -135,7 +136,7 @@ export default function SelfboothSetupScreen() {
   return (
     <div className="selfbooth-setup-container" id="selfbooth-setup-screen">
       {/* ── Fixed Brand Logo góc trên bên trái ── */}
-      <div className="selfbooth-fixed-brand-logo">fotolism</div>
+      <img src={BRAND_LOGO_SRC} alt="fotolism" className="selfbooth-fixed-brand-logo" />
 
       {/* ── Top Header: Icon Camera + Tiêu Đề Trung Tâm ── */}
       <header className="selfbooth-setup-header">

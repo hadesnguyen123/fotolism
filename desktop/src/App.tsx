@@ -18,6 +18,7 @@ import SelfboothPhotoSelectScreen from './screens/SelfboothPhotoSelectScreen'
 import ProcessingScreen from './screens/ProcessingScreen'
 import ErrorNotificationCenter from './components/ErrorNotificationCenter'
 import KioskLockOverlay from './components/KioskLockOverlay'
+import PhotoboothCountdownBadge from './components/PhotoboothCountdownBadge'
 import './App.css'
 
 export default function App() {
@@ -108,6 +109,9 @@ export default function App() {
 
       {/* Lệnh khóa máy từ xa từ Cloud CMS */}
       {isKioskLocked && <KioskLockOverlay />}
+
+      {/* Đồng hồ đếm ngược 4 phút phiên Photobooth ở góc phải */}
+      <PhotoboothCountdownBadge />
     </div>
   )
 }

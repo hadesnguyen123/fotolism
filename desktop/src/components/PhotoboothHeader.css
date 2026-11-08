@@ -24,7 +24,16 @@
   user-select: none;
 }
 
-/* ── Brand Title: Cố định góc bên trên trái màn hình ───────────────────── */
+/* ── Brand Logo: Cố định góc bên trên trái màn hình ────────────────────── */
+.photobooth-brand-logo {
+  position: absolute;
+  top: 20px;
+  left: 48px;
+  height: clamp(44px, 3.2vw, 56px);
+  width: auto;
+  object-fit: contain;
+}
+
 .photobooth-brand-title {
   position: absolute;
   top: 28px;

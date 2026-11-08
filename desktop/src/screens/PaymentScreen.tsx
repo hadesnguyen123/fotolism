@@ -25,6 +25,7 @@ export default function PaymentScreen() {
     setSelectedCopies,
     setSessionPayment,
     appliedCoupon: storeAppliedCoupon,
+    startPhotoboothSessionTimer,
   } = useAppStore()
 
   const is2x6 = selectedFrameSize === '2x6' || Boolean(selectedLayout?.strip)
@@ -167,6 +168,9 @@ export default function PaymentScreen() {
           })
 
           setTimeout(() => {
+            if (eventConfig.captureMode !== 'selfbooth') {
+              startPhotoboothSessionTimer()
+            }
             setScreen('capture')
           }, 1500)
         }
@@ -199,6 +203,9 @@ export default function PaymentScreen() {
       })
 
       setTimeout(() => {
+        if (eventConfig.captureMode !== 'selfbooth') {
+          startPhotoboothSessionTimer()
+        }
         setScreen('capture')
       }, 1500)
     } else {
@@ -216,6 +223,9 @@ export default function PaymentScreen() {
       discountAmount,
     })
     setTimeout(() => {
+      if (eventConfig.captureMode !== 'selfbooth') {
+        startPhotoboothSessionTimer()
+      }
       setScreen('capture')
     }, 1000)
   }

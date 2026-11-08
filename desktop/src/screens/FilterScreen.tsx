@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAppStore, COLOR_FILTERS, type ColorFilterItem } from '../store/appStore'
 import { DEFAULT_EVENT_NAME } from '../lib/constants'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { Check, Camera } from 'lucide-react'
 import './FilterScreen.css'
 
@@ -66,7 +67,7 @@ export default function FilterScreen() {
   return (
     <div className="filter-screen-container" id="filter-select-screen">
       {/* ── Fixed Brand Logo góc trên bên trái ── */}
-      <div className="filter-fixed-brand-logo">fotolism</div>
+      <img src={BRAND_LOGO_SRC} alt="fotolism" className="filter-fixed-brand-logo" />
 
       {/* ── Top Header: 3 Vòng Tròn Giao Nhau + Tiêu Đề Trung Tâm ── */}
       <header className="filter-screen-header">
@@ -77,42 +78,8 @@ export default function FilterScreen() {
               <circle cx="14" cy="25" r="10" fill="#C48E66" fillOpacity="0.88" />
               <circle cx="26" cy="25" r="10" fill="#E2BA96" fillOpacity="0.88" />
             </svg>
-            {/* ── MODAL XÁC NHẬN KẾT THÚC & NHẬN ẢNH (REQUIREMENT 1) ── */}
-      {showFinishConfirm && (
-        <div className="filter-modal-overlay animate-fade-in" onClick={() => setShowFinishConfirm(false)}>
-          <div className="filter-confirm-modal animate-pop" onClick={(e) => e.stopPropagation()}>
-            <div className="filter-modal-badge">✨</div>
-            <h2 className="filter-modal-title">Xác nhận kết thúc và nhận ảnh</h2>
-            <p className="filter-modal-desc">
-              Bạn đã hoàn toàn ưng ý với khung và bộ lọc màu này chưa? Hệ thống sẽ bắt đầu ghép dải ảnh hoàn chỉnh và in ngay sau khi xác nhận.
-            </p>
-            <div className="filter-modal-buttons">
-              <button
-                type="button"
-                className="btn-filter-modal-cancel"
-                onClick={() => setShowFinishConfirm(false)}
-              >
-                Chỉnh sửa thêm
-              </button>
-              <button
-                type="button"
-                className="btn-filter-modal-confirm"
-                onClick={() => {
-                  setShowFinishConfirm(false)
-                  setScreen('processing')
-                }}
-              >
-                Xác nhận kết thúc
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
-          <h1 className="filter-header-title">Bộ Lọc Màu</h1>
-          <p className="filter-header-subtitle">
-            Chọn tông màu phù hợp cho bộ ảnh của bạn
-          </p>
+          <h1 className="filter-header-title">Chọn Bộ Lọc</h1>
         </div>
       </header>
 
@@ -122,11 +89,11 @@ export default function FilterScreen() {
         <section className="filter-preview-column">
           <div
             className={`strip-preview-fixed-frame ${
-              selectedFrameSize === '2x6' ? 'frame-size-2x6' : 'frame-size-4x6'
-            } ${selectedTheme.id === 'theme_vintage_film' ? 'is-vintage-film' : ''}`}
+              (selectedTheme.frameSize || selectedFrameSize) === '2x6' ? 'frame-size-2x6' : 'frame-size-4x6'
+            } ${selectedTheme.overlayUrl ? 'has-custom-overlay' : ''}`}
             style={{
-              background: selectedTheme.bgGradient || selectedTheme.bgColor,
-              borderColor: selectedTheme.borderColor,
+              background: selectedTheme.overlayUrl ? 'transparent' : (selectedTheme.bgGradient || selectedTheme.bgColor),
+              borderColor: selectedTheme.overlayUrl ? 'transparent' : selectedTheme.borderColor,
             }}
           >
             {/* Hiệu ứng đục lỗ nếu là theme cuộn phim 35mm */}
@@ -138,46 +105,110 @@ export default function FilterScreen() {
             )}
 
             {/* Các ô chứa ảnh thật áp dụng trực tiếp filter đã chọn */}
-            <div
-              className={isGrid ? 'grid-preview-slots' : 'strip-preview-slots'}
-              style={
-                isGrid
-                  ? {
-                      gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
-                      gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
-                    }
-                  : undefined
-              }
-            >
-              {displayedPhotos.map((photo, index) => (
-                <div key={photo.id || index} className="theme-slot-photo">
-                  {photo.compositedPath || photo.enhancedPath || photo.rawPath ? (
-                    <img
-                      src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
-                      alt={`Photo ${index + 1}`}
-                      draggable={false}
+            {selectedTheme.slots && selectedTheme.slots.length > 0 ? (
+              <div className="theme-custom-slots-container">
+                {displayedPhotos.map((photo, index) => {
+                  const slot = selectedTheme.slots![index]
+                  if (!slot) return null
+                  const canvasW = (selectedTheme.frameSize || selectedFrameSize) === '2x6' ? 600 : 1200
+                  const canvasH = 1800
+                  return (
+                    <div
+                      key={photo.id || index}
+                      className="theme-slot-photo custom-positioned"
                       style={{
-                        filter: selectedFilter.cssFilter,
-                        transition: 'filter 0.25s ease',
+                        position: 'absolute',
+                        left: `calc(${(slot.x / canvasW) * 100}% - 1px)`,
+                        top: `calc(${(slot.y / canvasH) * 100}% - 1px)`,
+                        width: `calc(${(slot.w / canvasW) * 100}% + 2px)`,
+                        height: `calc(${(slot.h / canvasH) * 100}% + 2px)`,
+                        borderRadius: 0,
                       }}
-                    />
-                  ) : (
-                    <div className="theme-slot-placeholder">
-                      <Camera
-                        size={16}
-                        strokeWidth={2}
-                        style={{
-                          display: 'inline-block',
-                          verticalAlign: 'middle',
-                          marginRight: 4,
-                        }}
-                      />
-                      <span>Ảnh {index + 1}</span>
+                    >
+                      {photo.compositedPath || photo.enhancedPath || photo.rawPath ? (
+                        <>
+                          <img
+                            src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
+                            alt={`Photo ${index + 1}`}
+                            draggable={false}
+                            style={{
+                              borderRadius: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              filter: selectedFilter.cssFilter,
+                              transition: 'filter 0.25s ease',
+                            }}
+                          />
+                          {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
+                            <div className="retro-film-grain-overlay" />
+                          )}
+                        </>
+                      ) : (
+                        <div className="theme-slot-placeholder">
+                          <Camera
+                            size={16}
+                            strokeWidth={2}
+                            style={{
+                              display: 'inline-block',
+                              verticalAlign: 'middle',
+                              marginRight: 4,
+                            }}
+                          />
+                          <span>Ảnh {index + 1}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div
+                className={isGrid ? 'grid-preview-slots' : 'strip-preview-slots'}
+                style={
+                  isGrid
+                    ? {
+                        gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
+                        gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
+                      }
+                    : undefined
+                }
+              >
+                {displayedPhotos.map((photo, index) => (
+                  <div key={photo.id || index} className="theme-slot-photo" style={{ position: 'relative' }}>
+                    {photo.compositedPath || photo.enhancedPath || photo.rawPath ? (
+                      <>
+                        <img
+                          src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
+                          alt={`Photo ${index + 1}`}
+                          draggable={false}
+                          style={{
+                            filter: selectedFilter.cssFilter,
+                            transition: 'filter 0.25s ease',
+                          }}
+                        />
+                        {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
+                          <div className="retro-film-grain-overlay" />
+                        )}
+                      </>
+                    ) : (
+                      <div className="theme-slot-placeholder">
+                        <Camera
+                          size={16}
+                          strokeWidth={2}
+                          style={{
+                            display: 'inline-block',
+                            verticalAlign: 'middle',
+                            marginRight: 4,
+                          }}
+                        />
+                        <span>Ảnh {index + 1}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Chân dải ảnh in thương hiệu fotolism */}
             {!selectedTheme.hideFooter && (
@@ -227,7 +258,6 @@ export default function FilterScreen() {
                     {renderFilterIcon(filter.id)}
                   </div>
                   <h2 className="filter-card-name">{filter.name}</h2>
-                  <span className="filter-card-tag">{filter.tag}</span>
                 </div>
 
                 {/* Mảng lượn sóng trang trí chân card */}
@@ -265,6 +295,38 @@ export default function FilterScreen() {
           Tiếp tục
         </button>
       </footer>
+
+      {/* ── MODAL XÁC NHẬN KẾT THÚC & NHẬN ẢNH ── */}
+      {showFinishConfirm && (
+        <div className="filter-modal-overlay animate-fade-in" onClick={() => setShowFinishConfirm(false)}>
+          <div className="filter-confirm-modal animate-pop" onClick={(e) => e.stopPropagation()}>
+            <div className="filter-modal-badge">✨</div>
+            <h2 className="filter-modal-title">Xác nhận kết thúc và nhận ảnh</h2>
+            <p className="filter-modal-desc">
+              Bạn đã hoàn toàn ưng ý với khung và bộ lọc màu này chưa? Hệ thống sẽ bắt đầu ghép dải ảnh hoàn chỉnh và in ngay sau khi xác nhận.
+            </p>
+            <div className="filter-modal-buttons">
+              <button
+                type="button"
+                className="btn-filter-modal-cancel"
+                onClick={() => setShowFinishConfirm(false)}
+              >
+                Chỉnh sửa thêm
+              </button>
+              <button
+                type="button"
+                className="btn-filter-modal-confirm"
+                onClick={() => {
+                  setShowFinishConfirm(false)
+                  setScreen('processing')
+                }}
+              >
+                Xác nhận kết thúc
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -9,9 +9,11 @@ import {
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
   DEFAULT_SELFBOOTH_DURATION_SECONDS,
+  isRemoteTriggerEvent,
 } from '../lib/constants'
 import { BeautyCameraView, type BeautyCameraHandle } from '../components/BeautyCameraView'
 import { beautyEngine, type BeautyConfigSnapshot } from '../services/beautyEngine'
+import { cropImageToAspect } from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
 
@@ -45,6 +47,7 @@ export default function CaptureScreen() {
     countdownSeconds,
     setCountdownSeconds,
     selectedLayout,
+    selectedFrameSize,
     selectedCopies,
     selectedFilter,
     selectFilter,
@@ -72,6 +75,8 @@ export default function CaptureScreen() {
     rosyTone,
     glowClarity,
     getBeautyFilterCss,
+    photoboothSessionEndTime,
+    startPhotoboothSessionTimer,
   } = useAppStore()
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -87,6 +92,24 @@ export default function CaptureScreen() {
 
   const totalShots = selectedLayout.photosCount || 4
   const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
+
+  useEffect(() => {
+    if (!isSelfboothMode && !photoboothSessionEndTime) {
+      startPhotoboothSessionTimer()
+    }
+  }, [isSelfboothMode, photoboothSessionEndTime, startPhotoboothSessionTimer])
+
+  // Xác định tỉ lệ và kích thước ô chuẩn theo yêu cầu:
+  // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 1.5)
+  // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 0.7493)
+  // - Khung 9 ảnh 4x6: 381 x 580 (tỉ lệ 0.6569)
+  const is2x6 = selectedFrameSize === '2x6'
+  const is9Grid = selectedLayout.photosCount === 9
+  const targetSlotDimensions = is2x6
+    ? { w: 528, h: 352, label: '528×352' }
+    : is9Grid
+      ? { w: 381, h: 580, label: '381×580' }
+      : { w: 544, h: 726, label: '544×726' }
 
   const [hasCamera, setHasCamera] = useState<boolean>(false)
   const [activeFlyout, setActiveFlyout] = useState<'filter' | null>(null)
@@ -106,9 +129,10 @@ export default function CaptureScreen() {
   // ── Chế độ PHOTOBOOTH CỔ ĐIỂN (Có Retake / Xóa ô xấu) ──
   const [slots, setSlots] = useState<(CapturedPhoto | null)[]>(Array(totalShots).fill(null))
   const [retakeSlotIndex, setRetakeSlotIndex] = useState<number | null>(null)
-  // Giới hạn lượt chụp lại: chỉ chụp lại từ đầu tối đa 1 lần, mỗi ô chỉ được xóa và chụp lại tối đa 1 lần
+  // Số lần đã xóa chụp lại của từng ô (mỗi ô tối đa 2 lần xóa)
+  const [slotDeleteCounts, setSlotDeleteCounts] = useState<Record<number, number>>({})
+  // Giới hạn lượt chụp lại: chỉ chụp lại từ đầu tối đa 1 lần
   const [sessionResetCount, setSessionResetCount] = useState<number>(0)
-  const [slotRetakeCounts, setSlotRetakeCounts] = useState<number[]>(() => Array(totalShots).fill(0))
 
   useEffect(() => {
     // Khởi tạo phiên trong SQLite persistent session storage (FR-06)
@@ -123,11 +147,13 @@ export default function CaptureScreen() {
     }).catch(console.warn)
   }, [sessionId, totalShots, selectedLayout?.id, selectedCopies])
 
-  // ── Chế độ SELFBOOTH (Chụp tự do không giới hạn & Bấm remote 2s) ──
+  // ── Chế độ SELFBOOTH (Chụp tự do không giới hạn & Bấm remote 2.5s hồi đèn flash) ──
+  const SELFBOOTH_FLASH_RECYCLE_MS = 2500
   const [isSelfboothRunning, setIsSelfboothRunning] = useState<boolean>(false)
   const [selfboothLibrary, setSelfboothLibrary] = useState<CapturedPhoto[]>([])
   const [isCanonDaemonActive, setIsCanonDaemonActive] = useState<boolean>(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false)
+  const [isFlashCoolingDown, setIsFlashCoolingDown] = useState<boolean>(false)
 
   // Khởi động Camera thiết bị
   const startCamera = useCallback(async (deviceId?: string) => {
@@ -387,18 +413,18 @@ export default function CaptureScreen() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Lắng nghe phím Remote (Bluetooth / USB Clicker) trong chế độ Selfbooth
+  // Lắng nghe phím Remote (Rapoo R100 / USB Clicker / Bluetooth) trong chế độ Selfbooth
   useEffect(() => {
     if (!isSelfboothMode) return
 
     const handleRemoteKeyDown = (e: KeyboardEvent) => {
       // Bỏ qua nếu đang gõ text vào input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (isCapturingShot) return
+      // Chặn ngay lập tức nếu đang trong quá trình chụp hoặc đèn flash đang nạp hồi 2.5s
+      if (isCapturingShot || isFlashCoolingDown) return
 
-      // Remote clickers phổ biến gửi: Space, Enter, PageDown, PageUp, ArrowDown, ArrowRight, 'b', 'B', 'f', 'F'
-      const triggerKeys = [' ', 'Space', 'Enter', 'PageDown', 'PageUp', 'ArrowRight', 'ArrowDown', 'b', 'B', 'f', 'F']
-      if (triggerKeys.includes(e.key) || triggerKeys.includes(e.code)) {
+      // Kiểm tra phím bấm từ Remote Rapoo R100 (PageDown, PageUp, Dot, Arrows, Space, Enter...)
+      if (isRemoteTriggerEvent(e)) {
         e.preventDefault()
         handleTakeSelfboothShot()
       }
@@ -406,7 +432,7 @@ export default function CaptureScreen() {
 
     window.addEventListener('keydown', handleRemoteKeyDown)
     return () => window.removeEventListener('keydown', handleRemoteKeyDown)
-  }, [isSelfboothMode, isCapturingShot, isSelfboothRunning, handleTakeSelfboothShot])
+  }, [isSelfboothMode, isCapturingShot, isFlashCoolingDown, isSelfboothRunning, handleTakeSelfboothShot])
 
   // Chụp 1 khung hình từ video sang DataURL với bảo đảm không bao giờ trả về ảnh đen
   function grabVideoFrame(): string {
@@ -674,8 +700,10 @@ export default function CaptureScreen() {
       setTimeout(() => setShowFlash(false), 450)
 
       // 2. Chụp khung hình tại đúng 0s (người dùng đã cười tươi tạo dáng xong)
-      const photoDataUrl = grabVideoFrame()
+      let photoDataUrl = grabVideoFrame()
       if (photoDataUrl) {
+        // Cắt crop theo đúng tỉ lệ chuẩn của ô layout (528x352, 544x726, 381x580)
+        photoDataUrl = await cropImageToAspect(photoDataUrl, targetSlotDimensions.w, targetSlotDimensions.h)
         setCameraFreezeFrame(photoDataUrl)
       }
       const photoPath = photoDataUrl || `photo_${timestamp}_${targetIndex + 1}.jpg`
@@ -737,10 +765,17 @@ export default function CaptureScreen() {
               console.log(`[Method 2] Canon EOS 24MP captured: ${canonData.savedPath}`)
 
               // ── AI BEAUTY ENGINE: HIGH-QUALITY MODE (WYSIWYG GUARANTEE) ──
-              // Xử lý ảnh chụp chất lượng cao bằng cùng quy tắc biến dạng, làm mịn và lật gương như Preview
-              let finalPhotoUrl = canonData.dataUrl
+              // Cắt crop theo đúng tỉ lệ ô của layout đã chọn (528x352, 544x726 hoặc 381x580)
+              let croppedCanonUrl = canonData.dataUrl
               try {
-                const hqResult = await beautyEngine.processHighQualityPhoto(canonData.dataUrl, beautySnapshot)
+                croppedCanonUrl = await cropImageToAspect(canonData.dataUrl, targetSlotDimensions.w, targetSlotDimensions.h)
+              } catch (cropErr) {
+                console.warn('Crop canon photo error:', cropErr)
+              }
+
+              let finalPhotoUrl = croppedCanonUrl
+              try {
+                const hqResult = await beautyEngine.processHighQualityPhoto(croppedCanonUrl, beautySnapshot)
                 if (hqResult && hqResult.success && hqResult.dataUrl) {
                   finalPhotoUrl = hqResult.dataUrl
                   const beautyFileName = `beauty_${fileName}`
@@ -800,17 +835,17 @@ export default function CaptureScreen() {
     }
   }
 
-  // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (mỗi ô chỉ được xóa và chụp lại tối đa 1 lần)
+  // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (mỗi ô tối đa 2 lần xóa)
   function handleDeleteSlot(indexToDelete: number) {
-    if (isCapturingShot || isSessionActive || (!slots.every(Boolean) && slots.some(Boolean))) return
-    const usedCount = slotRetakeCounts[indexToDelete] || 0
-    if (usedCount >= 1) return
+    if (isCapturingShot) return
 
-    setSlotRetakeCounts((prev) => {
-      const next = [...prev]
-      next[indexToDelete] = usedCount + 1
-      return next
-    })
+    const currentCount = slotDeleteCounts[indexToDelete] || 0
+    if (currentCount >= 2) return
+
+    setSlotDeleteCounts((prev) => ({
+      ...prev,
+      [indexToDelete]: currentCount + 1,
+    }))
 
     const nextSlots = [...slots]
     nextSlots[indexToDelete] = null
@@ -841,7 +876,7 @@ export default function CaptureScreen() {
 
   // Bấm chụp 1 ảnh trong phiên Selfbooth (chụp tự do liên tục bằng remote hoặc nút bấm)
   async function handleTakeSelfboothShot() {
-    if (isCapturingShot) return
+    if (isCapturingShot || isFlashCoolingDown) return
     if (!isSelfboothRunning) {
       setIsSelfboothRunning(true)
       setIsSessionActive(true)
@@ -849,6 +884,7 @@ export default function CaptureScreen() {
     }
 
     setIsCapturingShot(true)
+    setIsFlashCoolingDown(true)
 
     try {
       const timestamp = Date.now()
@@ -869,7 +905,7 @@ export default function CaptureScreen() {
       setShowFlash(true)
       setTimeout(() => setShowFlash(false), 450)
 
-      const photoDataUrl = grabVideoFrame()
+      let photoDataUrl = grabVideoFrame()
       if (photoDataUrl) {
         setCameraFreezeFrame(photoDataUrl)
       }
@@ -901,19 +937,15 @@ export default function CaptureScreen() {
           savePath: canonSelfPath,
           shotIndex: photoNum,
         })
-          .then((res) => {
+          .then(async (res) => {
             if (res && res.success && res.data && res.data.dataUrl) {
               const canonData = res.data
               console.log(`[Method 2 Selfbooth] Canon 24MP captured: ${canonData.savedPath}`)
+              const fullCanon = canonData.dataUrl
               setSelfboothLibrary((prev) =>
                 prev.map((p) =>
                   p.id === newPhoto.id
-                    ? {
-                      ...p,
-                      rawPath: canonData.savedPath,
-                      enhancedPath: canonData.dataUrl,
-                      compositedPath: canonData.dataUrl,
-                    }
+                    ? { ...p, rawPath: canonData.savedPath, enhancedPath: fullCanon, compositedPath: fullCanon }
                     : p
                 )
               )
@@ -922,21 +954,23 @@ export default function CaptureScreen() {
           .catch((err) => console.warn('[Method 2] Selfbooth Canon capture fallback:', err))
       }
 
-      // Xóa khung đóng băng camera ngay sau hiệu ứng chớp flash dứt khoát (< 350ms)
-      setTimeout(() => setCameraFreezeFrame(null), 350)
+      // Giữ khung đóng băng xem lại ảnh vừa chụp trong 1.5s (Instant Review) trước khi mở lại Live View
+      setTimeout(() => setCameraFreezeFrame(null), 1500)
 
       // Hiệu ứng bay lên ngay lập tức (< 0.4s)
       setSnapshotFlyer({ photoUrl: photoPath, slotIndex: 0, isEdsdk: false })
       setTimeout(() => setSnapshotFlyer(null), 800)
 
-      // Khóa nhận lệnh trong 1.5s để Canon R100 phơi sáng & truyền USB về laptop an toàn, chống spam nghẽn buffer
-      await new Promise((r) => setTimeout(r, 1500))
+      // Khóa nhận lệnh trong đúng 2.5s để đèn Flash Studio hồi tụ điện, Canon R100 phơi sáng và truyền ảnh an toàn
+      await new Promise((r) => setTimeout(r, SELFBOOTH_FLASH_RECYCLE_MS))
 
     } catch (shootErr) {
       console.error('Error during selfbooth shot:', shootErr)
     } finally {
       setCurrentCountdown(0)
       setIsCapturingShot(false)
+      setIsFlashCoolingDown(false)
+      setCameraFreezeFrame(null)
     }
   }
 
@@ -1066,12 +1100,12 @@ export default function CaptureScreen() {
   function handleResetShootSession() {
     if (sessionResetCount >= 1) return
     setSessionResetCount((c) => c + 1)
-    setSlotRetakeCounts(Array(totalShots).fill(0))
     setIsSessionActive(false)
     setIsCapturingShot(false)
     setIsSelfboothRunning(false)
     setSlots(Array(totalShots).fill(null))
     setRetakeSlotIndex(null)
+    setSlotDeleteCounts({})
     setSelfboothLibrary([])
     setSelfboothSecondsLeft(totalDuration)
     setShowFinishConfirm(false)
@@ -1188,9 +1222,11 @@ export default function CaptureScreen() {
         {/* ── CỘT LIVE VIEW: Chiếm 9/12 trong Photobooth hoặc Chiếm trọn màn hình trong Selfbooth ── */}
         <div className={isSelfboothMode ? 'liveview-selfbooth-full' : 'liveview-grid-col-9'}>
           <div
-            className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''} ${isSelfboothMode ? 'selfbooth-clickable' : ''}`}
+            className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''} ${
+              isSelfboothMode ? (isFlashCoolingDown ? 'selfbooth-cooling-down' : 'selfbooth-clickable') : ''
+            }`}
             onClick={() => {
-              if (isSelfboothMode && !isCapturingShot) {
+              if (isSelfboothMode && !isCapturingShot && !isFlashCoolingDown) {
                 handleTakeSelfboothShot()
               }
             }}
@@ -1232,6 +1268,9 @@ export default function CaptureScreen() {
                     }}
                   />
                 )}
+                {selectedFilter?.id === 'retro_90s' && (
+                  <div className="retro-film-grain-overlay" style={{ zIndex: 3 }} />
+                )}
                 {/* Thẻ video nguồn dự phòng cấp thấp luôn phát stream camera */}
                 <video
                   ref={videoRef}
@@ -1268,11 +1307,41 @@ export default function CaptureScreen() {
               />
             )}
 
+            {/* ── Khung Giới Hạn Tỉ Lệ Chuẩn (Safe Area Viewfinder Guide) cho khách đứng đúng khuôn hình (Chỉ dùng cho Photobooth) ── */}
+            {!isSelfboothMode && (
+              <div className="capture-aspect-guide-overlay">
+                <div
+                  className="capture-aspect-guide-box"
+                  style={{
+                    aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
+                  }}
+                >
+                  <div className="guide-corner top-left" />
+                  <div className="guide-corner top-right" />
+                  <div className="guide-corner bottom-left" />
+                  <div className="guide-corner bottom-right" />
+
+                  <div className="guide-hint-text">
+                    Đứng trong khung này để không bị cắt ảnh
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Timelapse Recording Indicator */}
             {eventConfig.timelapseEnabled && (isTimelapseRecording || isSessionActive) && (
               <div className="timelapse-recording-badge">
                 <span className="rec-dot" />
                 <span>REC TIMELAPSE ({eventConfig.timelapseSpeed || 2.5}x)</span>
+              </div>
+            )}
+
+            {/* ── Màn hình Lazy Loading xoay xoay trong 2.5s hồi đèn flash cho Selfbooth ── */}
+            {isSelfboothMode && isFlashCoolingDown && (
+              <div className="selfbooth-loading-overlay animate-fade-in">
+                <div className="selfbooth-loading-spinner-box">
+                  <div className="selfbooth-spinner-ring" />
+                </div>
               </div>
             )}
 
@@ -1310,69 +1379,67 @@ export default function CaptureScreen() {
           </div>
         </div>
 
-        {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth. Xóa hoàn toàn khung bên phải trong Selfbooth ── */}
+        {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth ── */}
         {!isSelfboothMode && (
           <aside className="slots-grid-col-2 right-slots-dock">
-            <div className={`live-slots-deck vertical-slots-deck ${totalShots >= 6 ? 'multi-col-deck' : ''} shots-${totalShots}`}>
+            <div className={`live-slots-deck vertical-slots-deck ${totalShots >= 6 ? 'multi-col-deck' : ''} shots-${totalShots} frame-${selectedFrameSize}`}>
               <div className={`live-slots-list ${totalShots >= 6 ? 'slots-grid-2cols' : ''} shots-${totalShots}`}>
                 {Array.from({ length: totalShots }).map((_, index) => {
                   const slotItem = slots[index]
                   const isFilled = slotItem !== null
                   const isRetaking = retakeSlotIndex === index
                   const isJustCaptured = justCapturedSlot === index
-                  const retakesUsed = slotRetakeCounts[index] || 0
-                  const isShootingLocked = isSessionActive || isCapturingShot || (!slots.every(Boolean) && slots.some(Boolean))
-                  const canRetake = retakesUsed < 1 && !isShootingLocked
                   const isCenteredLast = totalShots === 9 && index === 8
+                  const deleteCount = slotDeleteCounts[index] || 0
+                  const canDelete = deleteCount < 2
 
                   return (
                     <div
                       key={index}
-                      className={`live-slot-thumb ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${!canRetake ? 'retake-locked' : ''} ${isCenteredLast ? 'slot-thumb-centered-last' : ''}`}
+                      className={`live-slot-thumb slot-ratio-${is2x6 ? '2x6' : is9Grid ? '4x6-9' : '4x6-4'} ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${isCenteredLast ? 'slot-thumb-centered-last' : ''}`}
                       onClick={() => {
-                        if (isFilled && !isCapturingShot && !isShootingLocked && canRetake) {
-                          handleDeleteSlot(index)
+                        if (!isCapturingShot) {
+                          if (isFilled) {
+                            if (canDelete) {
+                              handleDeleteSlot(index)
+                            }
+                          } else {
+                            setRetakeSlotIndex(index)
+                          }
                         }
                       }}
                       title={
                         isFilled
-                          ? canRetake
-                            ? `Bấm ✕ để xóa và chụp lại ô ${index + 1} (còn 1 lượt)`
-                            : `Ô ${index + 1} đã chụp lại 1 lần (không thể xóa thêm)`
-                          : undefined
+                          ? canDelete
+                            ? `Bấm ✕ để xóa ảnh ô ${index + 1} và chụp lại ảnh khác (còn ${2 - deleteCount} lần)`
+                            : `Ô ${index + 1} đã hết 2 lượt xóa chụp lại`
+                          : `Ô ${index + 1} đang chờ chụp`
                       }
                     >
                       {isFilled ? (
                         <>
                           <img src={slotItem.compositedPath || slotItem.rawPath} alt={`Slot ${index + 1}`} />
                           <span className="slot-index-badge">{index + 1}</span>
-                          {canRetake ? (
+                          {!isCapturingShot && canDelete && (
                             <button
                               className="slot-delete-btn"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDeleteSlot(index)
                               }}
-                              title={`Xóa ảnh ô ${index + 1} để chụp lại (còn 1 lượt)`}
+                              title={`Xóa ảnh ô ${index + 1} để chụp lại (còn ${2 - deleteCount} lần)`}
                               aria-label={`Xóa ảnh ô ${index + 1}`}
                             >
                               ✕
                             </button>
-                          ) : retakesUsed >= 1 ? (
-                            <span
-                              className="slot-locked-badge"
-                              title="Ô này đã dùng hết lượt chụp lại (1/1)"
-                            >
-                              ✓
-                            </span>
-                          ) : null}
+                          )}
                         </>
                       ) : (
                         <div className="slot-empty-content">
                           <span className="slot-empty-plus">+</span>
                           <span className="slot-empty-label">Ô {index + 1}</span>
-                          {retakesUsed > 0 && (
-                            <span className="slot-retake-used-tag">Lần 2</span>
+                          {isRetaking && (
+                            <span className="slot-retake-used-tag">Chụp lại</span>
                           )}
                         </div>
                       )}
@@ -1453,8 +1520,12 @@ export default function CaptureScreen() {
           /* ── SELFBOOTH MODE CONTROLS: CHỈ DUY NHẤT 1 NÚT KẾT THÚC CÓ POPUP CONFIRM ── */
           <div className="selfbooth-bottom-single-deck">
             <button
-              className="btn-selfbooth-finish-main"
-              onClick={() => setShowFinishConfirm(true)}
+              className={`btn-selfbooth-finish-main ${isCapturingShot || isFlashCoolingDown ? 'is-disabled' : ''}`}
+              disabled={isCapturingShot || isFlashCoolingDown}
+              onClick={() => {
+                if (isCapturingShot || isFlashCoolingDown) return
+                setShowFinishConfirm(true)
+              }}
               id="selfbooth-finish-button"
             >
               <span>KẾT THÚC</span>

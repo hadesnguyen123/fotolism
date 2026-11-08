@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useAppStore, type CaptureMode } from '../store/appStore'
-import { BRAND_NAME, DEFAULT_ADMIN_PIN } from '../lib/constants'
+import { DEFAULT_ADMIN_PIN } from '../lib/constants'
 import { Settings, Check } from 'lucide-react'
 import NumericKeypadModal from '../components/NumericKeypadModal'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './IdleScreen.css'
 
 export default function IdleScreen() {
@@ -156,11 +157,11 @@ export default function IdleScreen() {
       <main className="idle-main">
         {/* Brand Presentation */}
         <div className="idle-brand">
-          {eventConfig.eventLogo ? (
-            <img src={eventConfig.eventLogo} alt="Event Logo" className="idle-logo-img" />
-          ) : (
-            <h1 className="idle-brand-title">{BRAND_NAME}</h1>
-          )}
+          <img
+            src={eventConfig.eventLogo || BRAND_LOGO_SRC}
+            alt="Fotolism"
+            className="idle-logo-img"
+          />
         </div>
 
         {/* ── Selection Cards ── */}

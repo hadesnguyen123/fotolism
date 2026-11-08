@@ -21,15 +21,13 @@
 /* ── Fixed Brand Logo góc trên bên trái ── */
 .selfbooth-fixed-brand {
   position: absolute;
-  top: 28px;
+  top: 20px;
   left: 48px;
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #502A1D;
-  letter-spacing: -0.5px;
-  line-height: 1;
+  height: clamp(44px, 3.2vw, 56px);
+  width: auto;
+  object-fit: contain;
   z-index: 10;
+  pointer-events: none;
 }
 
 /* ── Top Header: Icon + Tiêu Đề Trung Tâm ── */

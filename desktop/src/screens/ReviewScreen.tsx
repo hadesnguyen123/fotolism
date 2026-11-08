@@ -15,6 +15,7 @@ import {
 import QRCode from 'qrcode'
 import { QrCode, Loader2, AlertCircle, RefreshCw, Image as ImageIcon, Film, Printer, Download } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ReviewScreen.css'
 
 export default function ReviewScreen() {
@@ -645,15 +646,30 @@ export default function ReviewScreen() {
 
     return (
       <div className="review-screen-pastel" id="review-screen">
+        {/* ── Fixed Brand Logo góc trên bên trái ── */}
+        <img src={BRAND_LOGO_SRC} alt="fotolism" className="review-fixed-brand-logo" />
+
         {/* ── Top Header: Tiêu đề trung tâm ── */}
         <header className="review-header-pastel">
-          <div style={{ width: 48 }} />
-
           <div className="review-header-center">
+            <div className="review-header-icon-box" aria-hidden="true">
+              <svg
+                width="34"
+                height="34"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#502A1D"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.5" fill="#502A1D" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+            </div>
             <h1 className="review-header-title">Ảnh Hoàn Thiện</h1>
           </div>
-
-          <div style={{ width: 48 }} />
         </header>
 
         {/* Main Content */}
@@ -791,12 +807,15 @@ export default function ReviewScreen() {
                         }
                       >
                         {photos.map((photo, index) => (
-                          <div key={photo.id || index} className="strip-photo-item">
+                          <div key={photo.id || index} className="strip-photo-item" style={{ position: 'relative' }}>
                             <img
                               src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
                               alt={`Shot ${index + 1}`}
                               style={{ filter: selectedFilter.cssFilter }}
                             />
+                            {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
+                              <div className="retro-film-grain-overlay" />
+                            )}
                           </div>
                         ))}
                       </div>
@@ -985,7 +1004,7 @@ export default function ReviewScreen() {
             {!isSelfboothMode && (
               <button
                 className="kiosk-nav-btn btn-nav-back"
-                onClick={() => setScreen('select-filter')}
+                onClick={() => setScreen('select-theme')}
                 title="Quay lại"
                 aria-label="Quay lại"
               >

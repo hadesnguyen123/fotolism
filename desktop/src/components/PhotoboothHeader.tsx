@@ -1,5 +1,6 @@
 import React from 'react'
 import { Check } from 'lucide-react'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './PhotoboothHeader.css'
 
 export interface PhotoboothHeaderProps {
@@ -16,7 +17,7 @@ export default function PhotoboothHeader({ currentStep }: PhotoboothHeaderProps)
 
   return (
     <header className="photobooth-header-unified">
-      <h1 className="photobooth-brand-title">fotolism</h1>
+      <img src={BRAND_LOGO_SRC} alt="fotolism" className="photobooth-brand-logo" />
       <nav className="photobooth-steps-bar" aria-label="Các bước Photobooth">
         {steps.map((step, idx) => {
           const isActive = currentStep === step.num

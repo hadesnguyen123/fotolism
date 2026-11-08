@@ -29,12 +29,121 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * Cắt crop ảnh về đúng tỉ lệ ô của khung (528x352, 544x726, 381x580)
+ * Giữ nguyên trung tâm ảnh, bảo đảm không bị méo tỉ lệ hoặc lộ viền trắng
+ */
+export async function cropImageToAspect(
+  sourceDataUrl: string,
+  targetW: number,
+  targetH: number
+): Promise<string> {
+  if (!sourceDataUrl || !sourceDataUrl.startsWith('data:')) {
+    return sourceDataUrl
+  }
+
+  const img = await loadImage(sourceDataUrl)
+  const srcW = img.naturalWidth || img.width
+  const srcH = img.naturalHeight || img.height
+  const srcAspect = srcW / srcH
+  const targetAspect = targetW / targetH
+
+  let cropW = srcW
+  let cropH = srcH
+  let cropX = 0
+  let cropY = 0
+
+  if (srcAspect > targetAspect) {
+    // Nguồn rộng hơn tỉ lệ target -> cắt đều 2 bên trái/phải
+    cropW = Math.round(srcH * targetAspect)
+    cropX = Math.round((srcW - cropW) / 2)
+  } else {
+    // Nguồn cao hơn tỉ lệ target -> cắt đều trên/dưới
+    cropH = Math.round(srcW / targetAspect)
+    cropY = Math.round((srcH - cropH) / 2)
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = cropW
+  canvas.height = cropH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return sourceDataUrl
+
+  ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+  return canvas.toDataURL('image/jpeg', 0.98)
+}
+
+/**
+ * Bộ đệm cache grain pattern cho hiệu ứng hạt phim cổ điển Retro 90s
+ */
+let cachedGrainPattern: CanvasPattern | null = null
+
+function getFilmGrainPattern(targetCtx: CanvasRenderingContext2D): CanvasPattern | null {
+  if (cachedGrainPattern) return cachedGrainPattern
+  try {
+    if (typeof document === 'undefined') return null
+    const grainCanvas = document.createElement('canvas')
+    const size = 256
+    grainCanvas.width = size
+    grainCanvas.height = size
+    const gCtx = grainCanvas.getContext('2d')
+    if (!gCtx || typeof gCtx.createImageData !== 'function') return null
+
+    const imgData = gCtx.createImageData(size, size)
+    const data = imgData.data
+    for (let i = 0; i < data.length; i += 4) {
+      // Hạt noise đơn sắc (Monochromatic film grain)
+      const noise = (Math.random() - 0.5) * 255
+      if (noise > 0) {
+        data[i] = 255
+        data[i + 1] = 255
+        data[i + 2] = 255
+        data[i + 3] = Math.min(255, Math.floor(noise * 0.32))
+      } else {
+        data[i] = 0
+        data[i + 1] = 0
+        data[i + 2] = 0
+        data[i + 3] = Math.min(255, Math.floor(-noise * 0.32))
+      }
+    }
+    gCtx.putImageData(imgData, 0, 0)
+    if (typeof targetCtx.createPattern === 'function') {
+      cachedGrainPattern = targetCtx.createPattern(grainCanvas, 'repeat')
+    }
+    return cachedGrainPattern
+  } catch (err) {
+    console.warn('Could not generate film grain pattern:', err)
+    return null
+  }
+}
+
+function applyFilmGrainToSlot(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  try {
+    const pattern = getFilmGrainPattern(ctx)
+    if (!pattern) return
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'overlay'
+    ctx.fillStyle = pattern
+    ctx.fillRect(x, y, w, h)
+    ctx.restore()
+  } catch (err) {
+    console.warn('Could not apply film grain to slot:', err)
+  }
+}
+
+/**
  * Tạo bản vẽ Photobooth Strip Canvas chất lượng cao (300 DPI tương đương khổ in)
  * - 2x6 inch: 600 x 1800 px
  * - 4x6 inch: 1200 x 1800 px
  */
 export async function generateStripComposite(opts: RenderOptions): Promise<string> {
-  const is2x6 = opts.frameSize === '2x6'
+  const is2x6 = (opts.theme?.frameSize || opts.frameSize) === '2x6'
   const width = is2x6 ? 600 : 1200
   const height = 1800
 
@@ -47,7 +156,10 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
   }
 
   // 1. Vẽ nền (Background Color / Gradient)
-  if (opts.theme.bgGradient) {
+  if (opts.theme.overlayUrl) {
+    // Với khung overlay đồ họa PNG, đặt nền tối để triệt tiêu hoàn toàn khoảng hắt sáng trắng
+    ctx.fillStyle = opts.theme.bgColor || '#141414'
+  } else if (opts.theme.bgGradient) {
     const colorMatches = opts.theme.bgGradient.match(/#(?:[0-9a-fA-F]{3,8})|rgba?\([^)]+\)/g)
     if (colorMatches && colorMatches.length >= 2) {
       const grad = ctx.createLinearGradient(0, 0, width, height)
@@ -77,18 +189,34 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
   const slotW = (width - padX * 2 - gap * (cols - 1)) / cols
   const slotH = (availableHeight - gap * (rows - 1)) / rows
 
-  // 3. Tải và vẽ từng ảnh theo đúng từng ô của layout đã chọn
+  // 3. Tải và vẽ từng ảnh theo đúng từng ô của layout đã chọn (hoặc theo cấu hình tọa độ slots riêng của Theme)
   for (let i = 0; i < totalSlots; i++) {
     const colIdx = i % cols
     const rowIdx = Math.floor(i / cols)
-    const sx = padX + colIdx * (slotW + gap)
-    const sy = padTop + rowIdx * (slotH + gap)
+    let sx = padX + colIdx * (slotW + gap)
+    let sy = padTop + rowIdx * (slotH + gap)
+    let curSlotW = slotW
+    let curSlotH = slotH
 
-    // Khung viền ảnh bo góc
+    if (opts.theme.slots && opts.theme.slots[i]) {
+      sx = opts.theme.slots[i].x
+      sy = opts.theme.slots[i].y
+      curSlotW = opts.theme.slots[i].w
+      curSlotH = opts.theme.slots[i].h
+    }
+
+    // Các ô trong frame là ô vuông góc 90 độ (không bo tròn góc, không để hở khoảng trắng)
+    // Mở rộng viền nhẹ 2px (bleed) để ảnh ăn sâu xuống dưới lớp overlay đồ họa
     ctx.save()
-    ctx.fillStyle = '#1A1A1A'
+    const bleed = opts.theme.overlayUrl ? 2 : 0
+    const drawX = sx - bleed
+    const drawY = sy - bleed
+    const drawW = curSlotW + bleed * 2
+    const drawH = curSlotH + bleed * 2
+
+    ctx.fillStyle = '#141414'
     ctx.beginPath()
-    ctx.roundRect(sx, sy, slotW, slotH, 12)
+    ctx.rect(drawX, drawY, drawW, drawH)
     ctx.fill()
     ctx.clip()
 
@@ -105,29 +233,34 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
 
         // Fit & Center crop (aspect fill)
         const imgAspect = img.width / img.height
-        const slotAspect = slotW / slotH
-        let dw = slotW
-        let dh = slotH
-        let dx = sx
-        let dy = sy
+        const slotAspect = drawW / drawH
+        let dw = drawW
+        let dh = drawH
+        let dx = drawX
+        let dy = drawY
 
         if (imgAspect > slotAspect) {
-          dw = slotH * imgAspect
-          dx = sx - (dw - slotW) / 2
+          dw = drawH * imgAspect
+          dx = drawX - (dw - drawW) / 2
         } else {
-          dh = slotW / imgAspect
-          dy = sy - (dh - slotH) / 2
+          dh = drawW / imgAspect
+          dy = drawY - (dh - drawH) / 2
         }
 
         ctx.drawImage(img, dx, dy, dw, dh)
+
+        // Phủ lớp hạt phim cổ điển (Film grain noise) cho màu Retro 90s
+        if (opts.filter && (opts.filter.id === 'retro_90s' || opts.filter.hasGrain)) {
+          applyFilmGrainToSlot(ctx, drawX, drawY, drawW, drawH)
+        }
       } catch (err) {
         console.warn(`Could not load photo ${i + 1}:`, err)
         ctx.fillStyle = '#333333'
-        ctx.fillRect(sx, sy, slotW, slotH)
+        ctx.fillRect(sx, sy, curSlotW, curSlotH)
       }
     } else {
       ctx.fillStyle = '#E2E8F0'
-      ctx.fillRect(sx, sy, slotW, slotH)
+      ctx.fillRect(sx, sy, curSlotW, curSlotH)
     }
 
     ctx.restore()

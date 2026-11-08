@@ -90,33 +90,41 @@ export interface GridLayoutItem {
   strip: boolean
   description: string
   previewType: '1_single' | '3_strip' | '4_strip' | '4_grid' | '6_grid' | '8_grid' | '9_grid'
+  disabled?: boolean
 }
 
 export const ALL_LAYOUTS: Record<LayoutCategory, GridLayoutItem[]> = {
   1: [
-    { id: '1_full_portrait', name: '1 ảnh Chân Dung', photosCount: 1, cols: 1, rows: 1, strip: false, description: '1 ảnh đơn phóng lớn', previewType: '1_single' },
+    { id: '1_full_portrait', name: '1 ảnh Chân Dung', photosCount: 1, cols: 1, rows: 1, strip: false, description: '1 ảnh đơn phóng lớn', previewType: '1_single', disabled: true },
   ],
   3: [
-    { id: '3_vertical_strip', name: '3 ảnh Dọc Strip', photosCount: 3, cols: 1, rows: 3, strip: true, description: '3 ảnh dải đứng (2x6)', previewType: '3_strip' },
+    { id: '3_vertical_strip', name: '3 ảnh Dọc Strip', photosCount: 3, cols: 1, rows: 3, strip: true, description: '3 ảnh dải đứng (2x6)', previewType: '3_strip', disabled: true },
   ],
   4: [
-    { id: '4_strip_classic', name: '4 ảnh Dọc Strip', photosCount: 4, cols: 1, rows: 4, strip: true, description: '4 ảnh dải đứng (2x6)', previewType: '4_strip' },
-    { id: '4_grid_2x2', name: '4 ảnh Lưới Vuông', photosCount: 4, cols: 2, rows: 2, strip: false, description: '4 ảnh lưới 2x2 (4x6)', previewType: '4_grid' },
+    { id: '4_strip_classic', name: '4 ảnh Dọc Strip (2x6)', photosCount: 4, cols: 1, rows: 4, strip: true, description: '4 ảnh dải đứng (2x6)', previewType: '4_strip', disabled: false },
+    { id: '4_grid_2x2', name: '4 ảnh Lưới Vuông (4x6)', photosCount: 4, cols: 2, rows: 2, strip: false, description: '4 ảnh lưới 2x2 (4x6)', previewType: '4_grid', disabled: false },
   ],
   6: [
-    { id: '6_grid_2x3', name: '6 ảnh Lưới Dọc (2x3)', photosCount: 6, cols: 2, rows: 3, strip: false, description: '6 ảnh lưới 2 cột 3 hàng (4x6)', previewType: '6_grid' },
-    { id: '6_grid_3x2', name: '6 ảnh Lưới Ngang (3x2)', photosCount: 6, cols: 3, rows: 2, strip: false, description: '6 ảnh lưới 3 cột 2 hàng (4x6)', previewType: '6_grid' },
+    { id: '6_grid_2x3', name: '6 ảnh Lưới Dọc (2x3)', photosCount: 6, cols: 2, rows: 3, strip: false, description: '6 ảnh lưới 2 cột 3 hàng (4x6)', previewType: '6_grid', disabled: true },
+    { id: '6_grid_3x2', name: '6 ảnh Lưới Ngang (3x2)', photosCount: 6, cols: 3, rows: 2, strip: false, description: '6 ảnh lưới 3 cột 2 hàng (4x6)', previewType: '6_grid', disabled: true },
   ],
   8: [
-    { id: '8_grid_2x4', name: '8 ảnh Lưới Mini (2x4)', photosCount: 8, cols: 2, rows: 4, strip: false, description: '8 ảnh mini siêu vui (4x6)', previewType: '8_grid' },
+    { id: '8_grid_2x4', name: '8 ảnh Lưới Mini (2x4)', photosCount: 8, cols: 2, rows: 4, strip: false, description: '8 ảnh mini siêu vui (4x6)', previewType: '8_grid', disabled: true },
   ],
   9: [
-    { id: '9_grid_3x3', name: '9 ảnh Lưới Vuông (3x3)', photosCount: 9, cols: 3, rows: 3, strip: false, description: '9 ảnh lưới 3 cột 3 hàng (4x6)', previewType: '9_grid' },
+    { id: '9_grid_3x3', name: '9 ảnh Lưới Vuông (4x6)', photosCount: 9, cols: 3, rows: 3, strip: false, description: '9 ảnh lưới 3 cột 3 hàng (4x6)', previewType: '9_grid', disabled: false },
   ],
 }
 
 // ─── Chủ Đề Khung Hình (Themes) ───────────────────────────────────────────────
 export type ThemeCategory = 'Một màu' | 'Khác' | 'Ngày lễ' | 'Thời trang' | 'Trào lưu'
+
+export interface ThemeSlot {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 export interface ThemeItem {
   id: string
@@ -129,83 +137,314 @@ export interface ThemeItem {
   overlayUrl?: string
   hideFooter?: boolean
   decorations?: string[]
+  layoutId?: string // '4_strip_classic' | '4_grid_2x2' | '9_grid_3x3'
+  frameSize?: FrameSize // '2x6' | '4x6'
+  slots?: ThemeSlot[]
 }
 
 export const THEME_OPTIONS: ThemeItem[] = [
+  // ── KHUNG 2x6 (4 ảnh - layout 4_strip_classic) ──────────────────────────────
   {
-    id: 'theme_espresso_classic',
-    name: 'Khung Nâu Cổ Điển',
-    category: 'Một màu',
-    bgColor: '#502A1D',
-    bgGradient: '#502A1D',
+    id: 'theme_2x6_black_film',
+    name: 'Film Đen Cổ Điển',
+    category: 'Thời trang',
+    bgColor: '#141414',
+    bgGradient: '#141414',
     textColor: '#FFFFFF',
-    borderColor: '#502A1D',
+    borderColor: '#1F1F1F',
+    overlayUrl: '/frames/2x6_4_BlackFilm.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 41, y: 88, w: 518, h: 342 },
+      { x: 41, y: 464, w: 518, h: 342 },
+      { x: 41, y: 840, w: 518, h: 342 },
+      { x: 41, y: 1216, w: 518, h: 342 },
+    ],
   },
   {
-    id: 'theme_white_minimal',
-    name: 'Khung Trắng Tối Giản',
+    id: 'theme_2x6_blue_stars',
+    name: 'Ngôi Sao Xanh',
+    category: 'Thời trang',
+    bgColor: '#EEF5FC',
+    bgGradient: '#EEF5FC',
+    textColor: '#1E3A8A',
+    borderColor: '#BFDBFE',
+    overlayUrl: '/frames/2x6_4_BlueStars1.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 36, y: 142, w: 528, h: 352 },
+      { x: 36, y: 518, w: 528, h: 352 },
+      { x: 36, y: 894, w: 528, h: 352 },
+      { x: 36, y: 1270, w: 528, h: 352 },
+    ],
+  },
+  {
+    id: 'theme_2x6_brown_dot',
+    name: 'Chấm Bi Nâu',
+    category: 'Khác',
+    bgColor: '#FAF6F0',
+    bgGradient: '#FAF6F0',
+    textColor: '#502A1D',
+    borderColor: '#D7C4B7',
+    overlayUrl: '/frames/2x6_4_BrownDot1.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 36, y: 142, w: 528, h: 352 },
+      { x: 36, y: 518, w: 528, h: 352 },
+      { x: 36, y: 894, w: 528, h: 352 },
+      { x: 36, y: 1270, w: 528, h: 352 },
+    ],
+  },
+  {
+    id: 'theme_2x6_brown_ren',
+    name: 'Ren Nâu Vintage',
+    category: 'Khác',
+    bgColor: '#FAF6F0',
+    bgGradient: '#FAF6F0',
+    textColor: '#502A1D',
+    borderColor: '#D7C4B7',
+    overlayUrl: '/frames/2x6_4_BrownRen1.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 36, y: 142, w: 528, h: 352 },
+      { x: 36, y: 518, w: 528, h: 352 },
+      { x: 36, y: 894, w: 528, h: 352 },
+      { x: 36, y: 1270, w: 528, h: 352 },
+    ],
+  },
+  {
+    id: 'theme_2x6_creme',
+    name: 'Kem Tối Giản',
+    category: 'Một màu',
+    bgColor: '#FAF7F2',
+    bgGradient: '#FAF7F2',
+    textColor: '#502A1D',
+    borderColor: '#E5DDD5',
+    overlayUrl: '/frames/2x6_4_Creme.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 36, y: 83, w: 528, h: 352 },
+      { x: 36, y: 459, w: 528, h: 352 },
+      { x: 36, y: 835, w: 528, h: 352 },
+      { x: 36, y: 1211, w: 528, h: 352 },
+    ],
+  },
+  {
+    id: 'theme_2x6_jean_stars',
+    name: 'Jean Ngôi Sao',
+    category: 'Trào lưu',
+    bgColor: '#2B4C7E',
+    bgGradient: '#2B4C7E',
+    textColor: '#FFFFFF',
+    borderColor: '#4A6FA5',
+    overlayUrl: '/frames/2x6_4_JeanStars.png',
+    hideFooter: true,
+    layoutId: '4_strip_classic',
+    frameSize: '2x6',
+    slots: [
+      { x: 36, y: 83, w: 528, h: 352 },
+      { x: 36, y: 459, w: 528, h: 352 },
+      { x: 36, y: 835, w: 528, h: 352 },
+      { x: 36, y: 1211, w: 528, h: 352 },
+    ],
+  },
+
+  // ── KHUNG 4x6 (4 ảnh - layout 4_grid_2x2) ──────────────────────────────────
+  {
+    id: 'theme_4x6_black_film',
+    name: 'Film Đen Cổ Điển',
+    category: 'Thời trang',
+    bgColor: '#141414',
+    bgGradient: '#141414',
+    textColor: '#FFFFFF',
+    borderColor: '#1F1F1F',
+    overlayUrl: '/frames/4x6_4_BlackFilm.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 51, y: 51, w: 534, h: 715 },
+      { x: 615, y: 51, w: 534, h: 715 },
+      { x: 51, y: 796, w: 534, h: 715 },
+      { x: 615, y: 796, w: 534, h: 715 },
+    ],
+  },
+  {
+    id: 'theme_4x6_blue_star',
+    name: 'Ngôi Sao Xanh',
+    category: 'Thời trang',
+    bgColor: '#EEF5FC',
+    bgGradient: '#EEF5FC',
+    textColor: '#1E3A8A',
+    borderColor: '#BFDBFE',
+    overlayUrl: '/frames/4x6_4_BlueStar.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 46, y: 46, w: 544, h: 726 },
+      { x: 610, y: 46, w: 544, h: 726 },
+      { x: 46, y: 792, w: 544, h: 726 },
+      { x: 610, y: 792, w: 544, h: 726 },
+    ],
+  },
+  {
+    id: 'theme_4x6_brown_dots',
+    name: 'Chấm Bi Nâu',
+    category: 'Khác',
+    bgColor: '#FAF6F0',
+    bgGradient: '#FAF6F0',
+    textColor: '#502A1D',
+    borderColor: '#D7C4B7',
+    overlayUrl: '/frames/4x6_4_BrownDots.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 46, y: 46, w: 544, h: 726 },
+      { x: 610, y: 46, w: 544, h: 726 },
+      { x: 46, y: 792, w: 544, h: 726 },
+      { x: 610, y: 792, w: 544, h: 726 },
+    ],
+  },
+  {
+    id: 'theme_4x6_brown_ren',
+    name: 'Ren Nâu Vintage',
+    category: 'Khác',
+    bgColor: '#FAF6F0',
+    bgGradient: '#FAF6F0',
+    textColor: '#502A1D',
+    borderColor: '#D7C4B7',
+    overlayUrl: '/frames/4x6_4_BrownRen2.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 46, y: 149, w: 544, h: 726 },
+      { x: 610, y: 149, w: 544, h: 726 },
+      { x: 46, y: 895, w: 544, h: 726 },
+      { x: 610, y: 895, w: 544, h: 726 },
+    ],
+  },
+  {
+    id: 'theme_4x6_creme',
+    name: 'Kem Tối Giản',
+    category: 'Một màu',
+    bgColor: '#FAF7F2',
+    bgGradient: '#FAF7F2',
+    textColor: '#502A1D',
+    borderColor: '#E5DDD5',
+    overlayUrl: '/frames/4x6_4_Creme.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 46, y: 46, w: 544, h: 726 },
+      { x: 610, y: 46, w: 544, h: 726 },
+      { x: 46, y: 792, w: 544, h: 726 },
+      { x: 610, y: 792, w: 544, h: 726 },
+    ],
+  },
+  {
+    id: 'theme_4x6_star_jeans',
+    name: 'Jean Ngôi Sao',
+    category: 'Trào lưu',
+    bgColor: '#2B4C7E',
+    bgGradient: '#2B4C7E',
+    textColor: '#FFFFFF',
+    borderColor: '#4A6FA5',
+    overlayUrl: '/frames/4x6_4_StarJeans.png',
+    hideFooter: true,
+    layoutId: '4_grid_2x2',
+    frameSize: '4x6',
+    slots: [
+      { x: 46, y: 46, w: 544, h: 726 },
+      { x: 610, y: 46, w: 544, h: 726 },
+      { x: 46, y: 792, w: 544, h: 726 },
+      { x: 610, y: 792, w: 544, h: 726 },
+    ],
+  },
+
+  // ── KHUNG 4x6 (9 ảnh - layout 9_grid_3x3) ──────────────────────────────────
+  {
+    id: 'theme_4x6_9_black',
+    name: 'Đen Tối Giản (9 ô)',
+    category: 'Một màu',
+    bgColor: '#18181B',
+    bgGradient: '#18181B',
+    textColor: '#FFFFFF',
+    borderColor: '#27272A',
+    overlayUrl: '/frames/4x6_9_Black.png',
+    hideFooter: true,
+    layoutId: '9_grid_3x3',
+    frameSize: '4x6',
+    slots: [
+      { x: 20, y: 20, w: 381, h: 581 },
+      { x: 410, y: 20, w: 381, h: 581 },
+      { x: 799, y: 20, w: 381, h: 581 },
+      { x: 20, y: 610, w: 381, h: 581 },
+      { x: 410, y: 610, w: 381, h: 581 },
+      { x: 799, y: 610, w: 381, h: 581 },
+      { x: 20, y: 1199, w: 381, h: 581 },
+      { x: 410, y: 1199, w: 381, h: 581 },
+      { x: 799, y: 1199, w: 381, h: 581 },
+    ],
+  },
+  {
+    id: 'theme_4x6_9_white',
+    name: 'Trắng Tối Giản (9 ô)',
     category: 'Một màu',
     bgColor: '#FFFFFF',
     bgGradient: '#FFFFFF',
     textColor: '#351C15',
-    borderColor: '#8C7E75',
+    borderColor: '#E5DDD5',
+    hideFooter: false,
+    layoutId: '9_grid_3x3',
+    frameSize: '4x6',
+    slots: [
+      { x: 20, y: 20, w: 381, h: 581 },
+      { x: 410, y: 20, w: 381, h: 581 },
+      { x: 799, y: 20, w: 381, h: 581 },
+      { x: 20, y: 610, w: 381, h: 581 },
+      { x: 410, y: 610, w: 381, h: 581 },
+      { x: 799, y: 610, w: 381, h: 581 },
+      { x: 20, y: 1199, w: 381, h: 581 },
+      { x: 410, y: 1199, w: 381, h: 581 },
+      { x: 799, y: 1199, w: 381, h: 581 },
+    ],
   },
   {
-    id: 'theme_pastel_pink',
-    name: 'Khung Hồng Pastel',
-    category: 'Thời trang',
-    bgColor: '#FFF0F5',
-    bgGradient: 'linear-gradient(180deg, #FFF5F7 0%, #FFE4E8 100%)',
-    textColor: '#9E3A5A',
-    borderColor: '#F8B4C4',
-  },
-  {
-    id: 'theme_pastel_blue',
-    name: 'Khung Xanh Baby',
-    category: 'Thời trang',
-    bgColor: '#F0F7FF',
-    bgGradient: 'linear-gradient(180deg, #F5FAFF 0%, #E0F0FE 100%)',
-    textColor: '#1E4E79',
-    borderColor: '#BFDBFE',
-  },
-  {
-    id: 'theme_vintage_cream',
-    name: 'Khung Vintage Kem',
-    category: 'Khác',
-    bgColor: '#FDFBF7',
-    bgGradient: 'linear-gradient(180deg, #FAF6EE 0%, #F5EFEB 100%)',
-    textColor: '#5C4033',
-    borderColor: '#C8B69B',
-  },
-  {
-    id: 'theme_vintage_film',
-    name: 'Cuộn Phim 35mm (Overlay)',
-    category: 'Trào lưu',
-    bgColor: '#141414',
-    bgGradient: '#141414',
-    textColor: '#F5F5F5',
-    borderColor: '#2D2D2D',
-    overlayUrl: '/frames/frame_vintage_film_2x6.png',
-    hideFooter: true,
-  },
-  {
-    id: 'theme_black_noir',
-    name: 'Khung Đen Sang Trọng',
+    id: 'theme_4x6_9_espresso',
+    name: 'Nâu Cổ Điển (9 ô)',
     category: 'Một màu',
-    bgColor: '#18181B',
-    bgGradient: 'linear-gradient(180deg, #27272A 0%, #18181B 100%)',
-    textColor: '#F4F4F5',
-    borderColor: '#3F3F46',
-  },
-  {
-    id: 'theme_party_sparkle',
-    name: 'Kim Tuyến Party (Overlay)',
-    category: 'Ngày lễ',
-    bgColor: '#FFFDF9',
-    bgGradient: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8EE 100%)',
-    textColor: '#B46414',
-    borderColor: '#F5A623',
-    overlayUrl: '/frames/frame_party_sparkle_2x6.png',
+    bgColor: '#502A1D',
+    bgGradient: '#502A1D',
+    textColor: '#FFFFFF',
+    borderColor: '#3D1F15',
+    hideFooter: false,
+    layoutId: '9_grid_3x3',
+    frameSize: '4x6',
+    slots: [
+      { x: 20, y: 20, w: 381, h: 581 },
+      { x: 410, y: 20, w: 381, h: 581 },
+      { x: 799, y: 20, w: 381, h: 581 },
+      { x: 20, y: 610, w: 381, h: 581 },
+      { x: 410, y: 610, w: 381, h: 581 },
+      { x: 799, y: 610, w: 381, h: 581 },
+      { x: 20, y: 1199, w: 381, h: 581 },
+      { x: 410, y: 1199, w: 381, h: 581 },
+      { x: 799, y: 1199, w: 381, h: 581 },
+    ],
   },
 ]
 
@@ -272,12 +511,13 @@ export interface ColorFilterItem {
   cssFilter: string
   tag: string
   previewColor: string
+  hasGrain?: boolean
 }
 
 export const COLOR_FILTERS: ColorFilterItem[] = [
-  { id: 'normal',       name: 'Tự nhiên',     cssFilter: 'none', tag: 'GỐC', previewColor: '#ffffff' },
-  { id: 'vintage_noir', name: 'Cổ điển B&W',  cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)', tag: 'CỔ ĐIỂN', previewColor: '#334155' },
-  { id: 'retro_90s',    name: 'Retro 90s',    cssFilter: 'sepia(0.28) contrast(1.14) brightness(1.02) saturate(1.28)', tag: 'RETRO', previewColor: '#d97706' },
+  { id: 'normal',       name: 'Tự nhiên',     cssFilter: 'none', tag: '', previewColor: '#E4D2C3' },
+  { id: 'vintage_noir', name: 'Cổ điển',      cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)', tag: '', previewColor: '#262626' },
+  { id: 'retro_90s',    name: 'Retro 90s',    cssFilter: 'sepia(0.28) contrast(1.14) brightness(1.02) saturate(1.28)', tag: '', previewColor: '#96532B', hasGrain: true },
 ]
 
 export interface CapturedPhoto {
@@ -437,6 +677,11 @@ interface AppStore {
   // Mode settings
   setCaptureMode: (mode: CaptureMode) => void
   setSelfboothDurationSeconds: (seconds: number) => void
+
+  // Photobooth Session Timer: 4 phút từ sau thanh toán tới màn review
+  photoboothSessionEndTime: number | null
+  startPhotoboothSessionTimer: (seconds?: number) => void
+  clearPhotoboothSessionTimer: () => void
 
   // Step 1: Chọn Khung Hình (2x6 inch vs 4x6 inch) & Số lượng in
   selectedFrameSize: FrameSize
@@ -857,6 +1102,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       eventConfig: { ...state.eventConfig, selfboothDurationSeconds },
     })),
 
+  photoboothSessionEndTime: null,
+  startPhotoboothSessionTimer: (seconds = 240) =>
+    set({ photoboothSessionEndTime: Date.now() + seconds * 1000 }),
+  clearPhotoboothSessionTimer: () =>
+    set({ photoboothSessionEndTime: null }),
+
   clearSession: () => {
     // 1. Thu hồi các Object URL nhị phân (Blob) để chống rò rỉ RAM (Memory Leak)
     const currentSession = get().session
@@ -871,6 +1122,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedBeauty = loadSavedBeautyConfig()
     set({
       session: null,
+      photoboothSessionEndTime: null,
       appliedCoupon: null, // Xóa bỏ triệt để mã giảm giá của phiên trước
       selectedFrameSize: '2x6',
       selectedCategory: 4,

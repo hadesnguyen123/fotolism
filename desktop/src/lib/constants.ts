@@ -78,20 +78,20 @@ export const DEFAULT_PRICE_2X6 = 70000
 /** Giá gói postcard 4x6 inch (90.000 đ) */
 export const DEFAULT_PRICE_4X6 = 90000
 
-/** Giá in thêm 2x6 inch (+1 ảnh: 30.000 đ) */
-export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 30000
+/** Giá in thêm 2x6 inch (+1 ảnh: 40.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 40000
 
-/** Giá in thêm 4x6 inch (+1 ảnh: 30.000 đ) */
-export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 30000
+/** Giá in thêm 4x6 inch (+1 ảnh: 40.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 40000
 
-/** Giá gói Selfbooth 5 phút mặc định (VND) */
-export const DEFAULT_SELFBOOTH_PRICE_5M = 50000
+/** Giá gói Selfbooth 5 phút mặc định (VND) - 1 người */
+export const DEFAULT_SELFBOOTH_PRICE_5M = 90000
 
-/** Giá gói Selfbooth 7 phút mặc định (VND) */
-export const DEFAULT_SELFBOOTH_PRICE_7M = 70000
+/** Giá gói Selfbooth 7 phút mặc định (VND) - 2-3 người */
+export const DEFAULT_SELFBOOTH_PRICE_7M = 130000
 
-/** Giá gói Selfbooth 10 phút mặc định (VND) */
-export const DEFAULT_SELFBOOTH_PRICE_10M = 100000
+/** Giá gói Selfbooth 10 phút mặc định (VND) - 3-4 người */
+export const DEFAULT_SELFBOOTH_PRICE_10M = 180000
 
 // ── 6. Session & Timeouts ──
 /** Thời gian chờ trở về màn hình chờ khi không có thao tác (giây) */
@@ -102,6 +102,85 @@ export const DEFAULT_SELFBOOTH_DURATION_SECONDS = 300
 
 /** Thời gian đếm ngược khi bấm Remote Selfbooth (giây) */
 export const DEFAULT_SELFBOOTH_CAPTURE_COUNTDOWN = 2
+
+/**
+ * Danh sách các phím Remote / Clicker hợp lệ để bấm chụp trong Selfbooth
+ * Hỗ trợ toàn diện remote Rapoo R100/XR100, clicker trình chiếu 2.4GHz, remote Bluetooth AB Shutter:
+ * - Nút Tới / Next: 'PageDown', 'ArrowDown', 'ArrowRight'
+ * - Nút Lùi / Prev: 'PageUp', 'ArrowUp', 'ArrowLeft'
+ * - Nút Màn hình đen / Black Screen: 'b', 'B', 'KeyB', '.', 'Period'
+ * - Nút Toàn màn hình / F5: 'F5', 'Escape', 'f', 'F', 'KeyF'
+ * - Nút Chọn / Enter / Space: 'Enter', 'NumpadEnter', 'Space', ' '
+ * - Nút Âm lượng (Remote Bluetooth chụp ảnh): 'AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown', 'MediaPlayPause'
+ */
+export const REMOTE_TRIGGER_KEYS: readonly string[] = [
+  // Space & Enter
+  ' ',
+  'Space',
+  'Enter',
+  'NumpadEnter',
+  // Rapoo R100 Next / Down
+  'PageDown',
+  'ArrowDown',
+  'ArrowRight',
+  // Rapoo R100 Prev / Up
+  'PageUp',
+  'ArrowUp',
+  'ArrowLeft',
+  // Rapoo R100 Black Screen button
+  'b',
+  'B',
+  'KeyB',
+  '.',
+  'Period',
+  // Rapoo R100 Fullscreen / Exit
+  'F5',
+  'Escape',
+  'f',
+  'F',
+  'KeyF',
+  // Bluetooth remote / Shutter buttons
+  'AudioVolumeUp',
+  'AudioVolumeDown',
+  'VolumeUp',
+  'VolumeDown',
+  'MediaPlayPause',
+  'MediaTrackNext',
+  'MediaTrackPrevious',
+]
+
+/**
+ * Legacy keyCode map cho thiết bị remote/bluetooth gửi keyCode thay vì key/code chuẩn.
+ * Rapoo XR100, một số remote Bluetooth không dây thường dùng keyCode số nguyên.
+ */
+export const REMOTE_TRIGGER_KEYCODES: readonly number[] = [
+  13,  // Enter
+  32,  // Space
+  33,  // PageUp  (nút Prev / Lùi)
+  34,  // PageDown (nút Next / Tiến)
+  37,  // ArrowLeft
+  38,  // ArrowUp
+  39,  // ArrowRight
+  40,  // ArrowDown
+  66,  // B (black screen)
+  70,  // F (fullscreen)
+  116, // F5
+  27,  // Escape
+]
+
+/** Kiểm tra KeyboardEvent có phải là phím kích hoạt remote chụp ảnh hay không */
+export function isRemoteTriggerEvent(e: KeyboardEvent): boolean {
+  // Kiểm tra key/code chuẩn trước
+  if (REMOTE_TRIGGER_KEYS.includes(e.key) || REMOTE_TRIGGER_KEYS.includes(e.code)) {
+    return true
+  }
+  // Fallback: thiết bị remote gửi keyCode số (Unidentified / undefined key)
+  if (e.key === 'Unidentified' || !e.key || e.key === 'undefined') {
+    return REMOTE_TRIGGER_KEYCODES.includes(e.keyCode)
+  }
+  // Fallback thêm: so sánh keyCode trực tiếp cho mọi trường hợp
+  return REMOTE_TRIGGER_KEYCODES.includes(e.keyCode)
+}
 
 export interface SelfboothPackage {
   id: '5m' | '7m' | '10m'
@@ -116,30 +195,30 @@ export interface SelfboothPackage {
 export const SELFBOOTH_PACKAGES: SelfboothPackage[] = [
   {
     id: '5m',
-    name: 'Gói 5 Phút',
+    name: 'Selfbooth 5p',
     minutes: 5,
     durationSeconds: 300,
     defaultPrice: DEFAULT_SELFBOOTH_PRICE_5M,
-    badge: 'TIÊU CHUẨN',
-    description: 'Chụp tự do không giới hạn số ảnh trong 5 phút',
+    badge: '1 NGƯỜI',
+    description: 'Dành cho 1 người (5 phút)',
   },
   {
     id: '7m',
-    name: 'Gói 7 Phút',
+    name: 'Selfbooth 7p',
     minutes: 7,
     durationSeconds: 420,
     defaultPrice: DEFAULT_SELFBOOTH_PRICE_7M,
-    badge: 'PHỔ BIẾN NHẤT',
-    description: 'Thời gian chụp lý tưởng, thoải mái tạo dáng cùng bạn bè',
+    badge: '2-3 NGƯỜI',
+    description: 'Dành cho 2-3 người (7 phút)',
   },
   {
     id: '10m',
-    name: 'Gói 10 Phút',
+    name: 'Selfbooth 10p',
     minutes: 10,
     durationSeconds: 600,
     defaultPrice: DEFAULT_SELFBOOTH_PRICE_10M,
-    badge: 'VIP KHUYẾN NGHỊ',
-    description: 'Trọn vẹn mọi khoảnh khắc, nhận toàn bộ ảnh gốc chất lượng cao',
+    badge: '3-4 NGƯỜI',
+    description: 'Dành cho 3-4 người (10 phút)',
   },
 ]
 

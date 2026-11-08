@@ -424,7 +424,7 @@
   aspect-ratio: 16 / 9;
   width: 100%;
   max-width: 100%;
-  max-height: calc(100vh - 182px);
+  max-height: calc(100vh - 155px);
   height: auto;
   margin: auto;
   position: relative;
@@ -448,6 +448,93 @@
   height: 100%;
   object-fit: cover;
   transition: filter 0.2s ease;
+}
+
+/* ── Safe Area Viewfinder Guide (Khung Giới Hạn Tỉ Lệ Chuẩn 528x352, 544x726, 381x580) ── */
+.capture-aspect-guide-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.capture-aspect-guide-box {
+  position: relative;
+  /* Ưu tiên fill chiều cao tối đa, width tự tính theo aspect-ratio */
+  height: 96%;
+  width: auto;
+  max-height: 96%;
+  max-width: 95%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42);
+  border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.guide-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #FBBF24;
+  border-style: solid;
+}
+
+.guide-corner.top-left {
+  top: -2px;
+  left: -2px;
+  border-width: 3.5px 0 0 3.5px;
+}
+
+.guide-corner.top-right {
+  top: -2px;
+  right: -2px;
+  border-width: 3.5px 3.5px 0 0;
+}
+
+.guide-corner.bottom-left {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 3.5px 3.5px;
+}
+
+.guide-corner.bottom-right {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 3.5px 3.5px 0;
+}
+
+.guide-tag-badge {
+  background: rgba(80, 42, 29, 0.85);
+  color: #FFFFFF;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.guide-hint-text {
+  background: rgba(0, 0, 0, 0.65);
+  color: #FFFFFF;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
 }
 
 /* ── Camera Connecting State (Minimalist) ── */
@@ -608,7 +695,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-6 .live-slot-thumb,
 .vertical-slots-deck.shots-6 .slots-grid-2cols .live-slot-thumb {
   width: clamp(68px, 8.8vh, 84px);
-  height: clamp(68px, 8.8vh, 84px);
+  height: auto;
   border-radius: 14px;
 }
 
@@ -616,7 +703,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-8 .live-slot-thumb,
 .vertical-slots-deck.shots-8 .slots-grid-2cols .live-slot-thumb {
   width: clamp(60px, 7.6vh, 74px);
-  height: clamp(60px, 7.6vh, 74px);
+  height: auto;
   border-radius: 12px;
 }
 
@@ -624,7 +711,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-9 .live-slot-thumb,
 .vertical-slots-deck.shots-9 .slots-grid-2cols .live-slot-thumb {
   width: clamp(56px, 7.0vh, 68px);
-  height: clamp(56px, 7.0vh, 68px);
+  height: auto;
   border-radius: 12px;
 }
 
@@ -682,7 +769,8 @@
 .live-slot-thumb {
   width: 108px;
   height: 108px;
-  border-radius: 18px;
+  border-radius: 14px;
+  cursor: pointer;
   overflow: hidden;
   background: #f1f2f5;
   display: flex;
@@ -695,7 +783,36 @@
 
 .vertical-slots-deck .live-slot-thumb {
   width: clamp(86px, 11.5vh, 108px);
-  height: clamp(86px, 11.5vh, 108px);
+  height: auto;
+}
+
+/* Tỉ lệ Khung 4 ảnh 2x6: Ô ngang 528 x 352 (tỉ lệ 1.5) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-2x6,
+.live-slot-thumb.slot-ratio-2x6 {
+  width: clamp(96px, 12.5vh, 116px);
+  height: auto;
+  aspect-ratio: 528 / 352;
+}
+
+/* Tỉ lệ Khung 4 ảnh 4x6: Ô dọc 544 x 726 (tỉ lệ 0.749) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck .live-slots-list.slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck.shots-6 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck.shots-8 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.live-slot-thumb.slot-ratio-4x6-4 {
+  width: clamp(74px, 9.8vh, 88px);
+  height: auto;
+  aspect-ratio: 544 / 726;
+}
+
+/* Tỉ lệ Khung 9 ảnh 4x6: Ô dọc 381 x 580 (tỉ lệ 0.657) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-4x6-9,
+.vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-9 .live-slot-thumb.slot-ratio-4x6-9,
+.vertical-slots-deck.shots-9 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-9,
+.live-slot-thumb.slot-ratio-4x6-9 {
+  width: clamp(52px, 7.0vh, 64px);
+  height: auto;
+  aspect-ratio: 381 / 580;
 }
 
 .live-slot-thumb.filled {
@@ -1608,16 +1725,17 @@
   min-width: 0;
 }
 
-/* Khung hình phóng to tối đa theo kích thước màn hình */
+/* Khung hình phóng to full tối đa theo kích thước màn hình trong Selfbooth */
 .liveview-selfbooth-full .camera-viewfinder-wrapper {
   width: 100%;
-  max-width: min(1560px, 96vw);
+  max-width: 100%;
   height: 100%;
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh - 130px);
   aspect-ratio: 16 / 9;
-  border-radius: 28px;
+  border-radius: 20px;
   margin: auto;
-  box-shadow: 0 16px 48px rgba(80, 42, 29, 0.16), 0 0 0 2px var(--border-default, #E6D9CF);
+  box-shadow: 0 16px 48px rgba(80, 42, 29, 0.2);
+  border: none;
 }
 
 /* ── Top-Left Elapsed Timer Badge (Đồng hồ góc trái tăng dần) ── */
@@ -1823,4 +1941,68 @@
 
 .camera-viewfinder-wrapper.selfbooth-clickable {
   cursor: pointer;
+}
+
+.camera-viewfinder-wrapper.selfbooth-cooling-down {
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* ── Màn hình Lazy Loading xoay xoay trong 2.5s hồi đèn flash cho Selfbooth ── */
+.selfbooth-loading-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(18, 14, 12, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.selfbooth-loading-spinner-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+}
+
+.selfbooth-spinner-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #FFFFFF;
+  border-right-color: #FFFFFF;
+  animation: selfboothSpinRing 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes selfboothSpinRing {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Disabled State cho nút KẾT THÚC khi Flash đang hồi ── */
+.btn-selfbooth-finish-main.is-disabled,
+.btn-selfbooth-finish-main:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(0.2);
 }
