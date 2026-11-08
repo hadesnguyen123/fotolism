@@ -570,6 +570,7 @@ async function ensureCanonDaemon(): Promise<boolean> {
   const daemonPaths = [
     path.join(__dirname, '../electron/fotolism_canon_daemon.exe'),
     path.join(app.getAppPath(), 'electron/fotolism_canon_daemon.exe'),
+    'F:/Fotolism/desktop/electron/fotolism_canon_daemon.exe',
     'F:/JoyBooth/desktop/electron/fotolism_canon_daemon.exe',
   ]
   const daemonExe = daemonPaths.find((p) => fs.existsSync(p))
@@ -1218,7 +1219,13 @@ ipcMain.handle(
     const startTime = Date.now()
     const exportDir = getFotolismC1ExportDir()
     const mainDir = getFotolismDir()
-    const searchDirs = [exportDir, mainDir]
+    const searchDirs = [
+      exportDir,
+      mainDir,
+      'F:\\Capture1_image\\Intergration\\Output',
+      'D:\\Capture1_image\\Intergration\\Output',
+      'C:\\Capture1_image\\Intergration\\Output',
+    ]
 
     const baseStem = path.parse(payload.fileName).name
 

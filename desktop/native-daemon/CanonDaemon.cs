@@ -80,6 +80,8 @@ namespace FotolismCanonDaemon {
         public const uint kEdsSaveTo_Host = 2;
         public const uint kEdsSaveTo_Both = 3;
         public const uint kEdsPropID_Evf_OutputDevice = 0x00000500;
+        public const uint kEdsPropID_Evf_Mode = 0x00000501;
+        public const uint kEdsEvfOutputDevice_TFT = 1;
         public const uint kEdsEvfOutputDevice_PC = 2;
 
         public const uint kEdsPropID_AEModeSelect = 0x00000400;
@@ -475,6 +477,25 @@ namespace FotolismCanonDaemon {
                 Log("INFO", "SHUTTER_RETRY_RESULT", "Shutter retry returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
             }
 
+            // If AF failed (0x61 AF_NG) or shutter didn't fire with Completely_NonAF, fallback to AF Halfway + Completely
+            if (errShoot == 0x00000061 || (errShoot != 0 && errShoot != 0x00000081)) {
+                Log("WARN", "SHUTTER_AF_FALLBACK", "Completely_NonAF returned 0x" + errShoot.ToString("X8") + ". Retrying with Halfway (AF) + Completely...", job.SessionId, job.CaptureId);
+                EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
+                Thread.Sleep(30);
+                EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Halfway);
+                Thread.Sleep(200);
+                EdsGetEvent();
+                errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely);
+                Log("INFO", "SHUTTER_AF_RESULT", "Halfway+Completely returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
+
+                if (errShoot != 0) {
+                    EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
+                    Thread.Sleep(30);
+                    errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_TakePicture, 0);
+                    Log("INFO", "SHUTTER_TAKEPIC_RESULT", "TakePicture command returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
+                }
+            }
+
             shutterSw.Stop();
             job.ShutterLatencyMs = shutterSw.ElapsedMilliseconds;
 
@@ -555,12 +576,8 @@ namespace FotolismCanonDaemon {
                         ReconnectCount++;
                         backoffMs = 200; // Reset backoff
 
-                        uint saveTo = kEdsSaveTo_Both;
-                        uint stErr = EdsSetPropertyData(cam, kEdsPropID_SaveTo, 0, sizeof(uint), ref saveTo);
-                        if (stErr != 0) {
-                            saveTo = kEdsSaveTo_Host;
-                            EdsSetPropertyData(cam, kEdsPropID_SaveTo, 0, sizeof(uint), ref saveTo);
-                        }
+                        uint saveTo = kEdsSaveTo_Host;
+                        EdsSetPropertyData(cam, kEdsPropID_SaveTo, 0, sizeof(uint), ref saveTo);
 
                         EdsCapacity cap = new EdsCapacity { numberOfFreeClusters = 0x7FFFFFFF, bytesPerSector = 0x1000, reset = 1 };
                         EdsSetCapacity(cam, cap);
@@ -568,8 +585,16 @@ namespace FotolismCanonDaemon {
                         HandlerRef = new EdsObjectEventHandler(HandleObjectEvent);
                         EdsSetObjectEventHandler(cam, kEdsObjectEvent_All, HandlerRef, IntPtr.Zero);
 
-                        uint dev = kEdsEvfOutputDevice_PC;
-                        EdsSetPropertyData(cam, kEdsPropID_Evf_OutputDevice, 0, sizeof(uint), ref dev);
+                        // Kích hoạt chế độ EVF (Live View) theo chuẩn Canon EDSDK
+                        uint evfMode = 1;
+                        uint modeErr = EdsSetPropertyData(cam, kEdsPropID_Evf_Mode, 0, sizeof(uint), ref evfMode);
+                        Log("INFO", "EVF_MODE_SET", "Set Evf_Mode=1 returned: 0x" + modeErr.ToString("X8"));
+
+                        uint currentDev = 0;
+                        EdsGetPropertyData(cam, kEdsPropID_Evf_OutputDevice, 0, sizeof(uint), out currentDev);
+                        uint dev = currentDev | kEdsEvfOutputDevice_PC;
+                        uint devErr = EdsSetPropertyData(cam, kEdsPropID_Evf_OutputDevice, 0, sizeof(uint), ref dev);
+                        Log("INFO", "EVF_OUTPUT_SET", "Set Evf_OutputDevice returned: 0x" + devErr.ToString("X8") + " (current=" + currentDev + ", new=" + dev + ")");
 
                         CurrentState = CameraState.READY;
                         Log("INFO", "CAMERA_CONNECTED", "Canon EOS R100 session initialized and EVF PC mode enabled");
@@ -627,6 +652,10 @@ namespace FotolismCanonDaemon {
                         CurrentState = CameraState.RECOVERING;
                         try { EdsCloseSession(CameraRef); EdsRelease(CameraRef); } catch {}
                         CameraRef = IntPtr.Zero;
+                    } else {
+                        if (DateTime.Now.Millisecond < 40) {
+                            Log("DEBUG", "EVF_DOWNLOAD_ERR", string.Format("EdsDownloadEvfImage returned: 0x{0:X8}", dlErr));
+                        }
                     }
                     EdsRelease(evfRef);
                 }
