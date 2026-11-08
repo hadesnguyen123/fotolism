@@ -347,6 +347,20 @@ namespace FotolismCanonDaemon {
                         job.SizeBytes = bytesWritten;
                         job.CompletedAt = DateTime.Now;
                         Log("INFO", "CAPTURE_SAVED", string.Format("Atomic rename to {0} succeeded ({1} bytes)", job.FinalPath, bytesWritten), job.SessionId, job.CaptureId, job.TransferLatencyMs);
+
+                        // ── TỰ ĐỘNG SAO CHÉP SANG THƯ MỤC HOT FOLDER CỦA CAPTURE ONE (F:\Fotolism_raw) ──
+                        try {
+                            string rawDir = @"F:\Fotolism_raw";
+                            if (!Directory.Exists(rawDir)) {
+                                Directory.CreateDirectory(rawDir);
+                            }
+                            string rawFileName = Path.GetFileName(job.FinalPath);
+                            string rawDest = Path.Combine(rawDir, rawFileName);
+                            File.Copy(job.FinalPath, rawDest, true);
+                            Log("INFO", "C1_RAW_COPIED", string.Format("Copied 24MP RAW image to Capture One folder: {0}", rawDest), job.SessionId, job.CaptureId);
+                        } catch (Exception c1Ex) {
+                            Log("WARN", "C1_RAW_ERR", "Copy to raw folder failed: " + c1Ex.Message, job.SessionId, job.CaptureId);
+                        }
                     } catch (Exception ex) {
                         job.Status = CaptureStatus.FAILED;
                         job.ErrorMessage = "Atomic move error: " + ex.Message;
