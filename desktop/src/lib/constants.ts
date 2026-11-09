@@ -245,3 +245,27 @@ export const CAMERA_SHUTTER_TIMEOUT_MS = 15000
 
 /** Thời gian timeout khi gửi lệnh in (ms) */
 export const PRINT_JOB_TIMEOUT_MS = 10000
+
+// ── 9. Asset & Resource Resolution ──
+/**
+ * Chuẩn hóa đường dẫn tài nguyên tĩnh (frames, overlays, icons)
+ * Đảm bảo tương thích 100% trên cả Electron (file:// protocol) lẫn Vite Dev Server (http://127.0.0.1:5173).
+ * Biến đổi các đường dẫn tuyệt đối /frames/... thành relative ./frames/...
+ */
+export function resolveAssetUrl(url?: string): string {
+  if (!url) return ''
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:') ||
+    url.startsWith('file://')
+  ) {
+    return url
+  }
+  if (url.startsWith('./')) {
+    return url
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url
+  return `./${clean}`
+}

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useAppStore, THEME_OPTIONS, COLOR_FILTERS, type ThemeItem, type ColorFilterItem } from '../store/appStore'
-import { DEFAULT_EVENT_NAME } from '../lib/constants'
+import { DEFAULT_EVENT_NAME, resolveAssetUrl } from '../lib/constants'
 import { Check, Camera, Layers, Palette, ChevronLeft, ChevronRight } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ThemeSelectScreen.css'
@@ -357,7 +357,7 @@ export default function ThemeSelectScreen() {
             {/* Lớp Khung Đồ Họa PNG Trong Suốt (Overlay nếu có) */}
             {selectedTheme.overlayUrl && (
               <img
-                src={selectedTheme.overlayUrl}
+                src={resolveAssetUrl(selectedTheme.overlayUrl)}
                 alt={selectedTheme.name}
                 className="theme-frame-overlay-img"
               />
@@ -433,7 +433,7 @@ export default function ThemeSelectScreen() {
                           {/* Hiển thị hình ảnh khung đồ họa nếu có */}
                           {theme.overlayUrl ? (
                             <img
-                              src={theme.overlayUrl}
+                              src={resolveAssetUrl(theme.overlayUrl)}
                               alt={theme.name}
                               className="frame-mini-overlay-img"
                             />

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAppStore, COLOR_FILTERS, type ColorFilterItem } from '../store/appStore'
-import { DEFAULT_EVENT_NAME } from '../lib/constants'
+import { DEFAULT_EVENT_NAME, resolveAssetUrl } from '../lib/constants'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { Check, Camera } from 'lucide-react'
 import './FilterScreen.css'
@@ -222,7 +222,7 @@ export default function FilterScreen() {
             {/* Lớp Khung Đồ Họa PNG Trong Suốt (Overlay nếu có) */}
             {selectedTheme.overlayUrl && (
               <img
-                src={selectedTheme.overlayUrl}
+                src={resolveAssetUrl(selectedTheme.overlayUrl)}
                 alt={selectedTheme.name}
                 className="theme-frame-overlay-img"
               />

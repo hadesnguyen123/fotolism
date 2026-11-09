@@ -7,7 +7,6 @@ import {
   DEFAULT_GDRIVE_WEBHOOK_URL,
   FILE_PREFIX_FINAL,
   FILE_PREFIX_SHOT,
-  FILE_PREFIX_TIMELAPSE,
 } from '../lib/constants'
 import QRCode from 'qrcode'
 import { Loader2, CheckCircle2, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react'
@@ -113,17 +112,6 @@ export default function ProcessingScreen() {
             })
           }
         })
-
-        const effectiveTimelapse =
-          session?.timelapseDataUrl ||
-          (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-
-        if (effectiveTimelapse) {
-          filesToUpload.push({
-            name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-            dataUrl: effectiveTimelapse,
-          })
-        }
 
         console.log('[ProcessingScreen] Uploading session media to Drive...', filesToUpload.length, 'files')
 

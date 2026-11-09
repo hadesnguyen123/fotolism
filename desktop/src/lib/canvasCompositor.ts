@@ -5,7 +5,7 @@ import type {
   ColorFilterItem,
   FrameSize,
 } from '../store/appStore'
-import { DEFAULT_EVENT_NAME } from './constants'
+import { DEFAULT_EVENT_NAME, resolveAssetUrl } from './constants'
 
 interface RenderOptions {
   photos: string[] // data URLs or image URLs
@@ -286,7 +286,7 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
   // 5. Vẽ Lớp Khung Đồ Họa PNG Trong Suốt (Frame Overlay) nếu có
   if (opts.theme.overlayUrl) {
     try {
-      const overlayImg = await loadImage(opts.theme.overlayUrl)
+      const overlayImg = await loadImage(resolveAssetUrl(opts.theme.overlayUrl))
       ctx.drawImage(overlayImg, 0, 0, width, height)
     } catch (err) {
       console.warn('Could not load frame overlay image:', err)

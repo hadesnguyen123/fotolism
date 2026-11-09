@@ -5,7 +5,6 @@ import { generateStripComposite, preparePrintImageForDNP } from '../lib/canvasCo
 import {
   FILE_PREFIX_SHOT,
   FILE_PREFIX_FINAL,
-  FILE_PREFIX_TIMELAPSE,
   SESSION_FOLDER_PREFIX,
   BRAND_NAME,
   DEFAULT_GDRIVE_FOLDER_ID,
@@ -13,7 +12,7 @@ import {
   DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
 import QRCode from 'qrcode'
-import { QrCode, Loader2, AlertCircle, RefreshCw, Image as ImageIcon, Film, Printer, Download } from 'lucide-react'
+import { QrCode, Loader2, AlertCircle, RefreshCw, Printer } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ReviewScreen.css'
@@ -44,10 +43,10 @@ export default function ReviewScreen() {
 
   const defaultCopies = session?.paidCopies || selectedCopies || (selectedFrameSize === '2x6' ? 2 : 1)
 
-  const [activeMediaView, setActiveMediaView] = useState<'strip' | 'timelapse'>('strip')
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
   const [printCopies, setPrintCopies] = useState<number>(defaultCopies)
   const [isPrinting, setIsPrinting] = useState<boolean>(false)
+  const [printError, setPrintError] = useState<string | null>(null)
   const [compositeStripUrl, setCompositeStripUrl] = useState<string>('')
   const [isGeneratingComposite, setIsGeneratingComposite] = useState<boolean>(true)
 
@@ -125,16 +124,6 @@ export default function ReviewScreen() {
                 })
               }
             })
-
-            const effectiveSelfTimelapse =
-              session?.timelapseDataUrl ||
-              (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-            if (effectiveSelfTimelapse) {
-              filesToUpload.push({
-                name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-                dataUrl: effectiveSelfTimelapse,
-              })
-            }
 
             const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
             const api = isBrowser ? mockApi : fotolismApi
@@ -252,33 +241,6 @@ export default function ReviewScreen() {
             }
           })
 
-          // 3. Video Timelapse nếu có dữ liệu dataUrl hoặc blob
-          let effectiveTimelapse =
-            session?.timelapseDataUrl ||
-            (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-
-          if (!effectiveTimelapse && session?.timelapseUrl?.startsWith('blob:')) {
-            try {
-              const blobRes = await fetch(session.timelapseUrl)
-              const blob = await blobRes.blob()
-              effectiveTimelapse = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onloadend = () => resolve(reader.result as string)
-                reader.onerror = reject
-                reader.readAsDataURL(blob)
-              })
-            } catch (blobErr) {
-              console.warn('[ReviewScreen] Blob to dataUrl conversion fallback failed:', blobErr)
-            }
-          }
-
-          if (effectiveTimelapse) {
-            filesToUpload.push({
-              name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-              dataUrl: effectiveTimelapse,
-            })
-          }
-
           const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
           console.log('[ReviewScreen] Uploading Photobooth to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
 
@@ -361,7 +323,6 @@ export default function ReviewScreen() {
     selectedFilter,
     eventConfig,
     subfolderName,
-    session?.timelapseUrl,
     setGdriveUrl,
   ])
 
@@ -474,12 +435,11 @@ export default function ReviewScreen() {
   }
 
   async function handlePrint() {
-    // Lệnh in chỉ được thực hiện 1 lần trong 1 phiên chụp:
-    // Chặn tuyệt đối nếu đang in hoặc phiên này đã từng in!
+    // Lệnh in chỉ được thực hiện khi chưa in thành công và không trong tiến trình in
     if (isPrinting || session?.hasPrinted) return
 
     setIsPrinting(true)
-    setSessionPrinted()
+    setPrintError(null)
 
     try {
       const api = isBrowser ? mockApi : fotolismApi
@@ -494,13 +454,18 @@ export default function ReviewScreen() {
 
       const res = await api.print.send(pathToPrint, physicalSheets)
       if (res && res.success) {
+        setSessionPrinted()
         setIsPrinting(false)
+        setPrintError(null)
       } else {
-        console.error('Print failed:', res?.error)
+        const errorMsg = res?.error || 'Máy in không phản hồi hoặc lệnh in bị từ chối.'
+        console.error('Print failed:', errorMsg)
+        setPrintError(errorMsg)
         setIsPrinting(false)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Print failed:', err)
+      setPrintError(err?.message || 'Lỗi kết nối máy in.')
       setIsPrinting(false)
     }
   }
@@ -528,32 +493,6 @@ export default function ReviewScreen() {
             })
           }
         })
-
-        let effectiveTimelapse =
-          session?.timelapseDataUrl ||
-          (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-
-        if (!effectiveTimelapse && session?.timelapseUrl?.startsWith('blob:')) {
-          try {
-            const blobRes = await fetch(session.timelapseUrl)
-            const blob = await blobRes.blob()
-            effectiveTimelapse = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onloadend = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(blob)
-            })
-          } catch (blobErr) {
-            console.warn('[ReviewScreen] Retry blob to dataUrl conversion fallback failed:', blobErr)
-          }
-        }
-
-        if (effectiveTimelapse) {
-          filesToUpload.push({
-            name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-            dataUrl: effectiveTimelapse,
-          })
-        }
 
         const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
         console.log('[ReviewScreen] Retrying upload to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
@@ -617,17 +556,6 @@ export default function ReviewScreen() {
         setDriveSyncDone(false)
         setSyncError(err.message || 'Lỗi kết nối tải ảnh lên Drive.')
       }
-    }
-
-    function handleDownloadTimelapse() {
-      const videoSrc = session?.timelapseUrl || session?.timelapseDataUrl
-      if (!videoSrc) return
-      const a = document.createElement('a')
-      a.href = videoSrc
-      a.download = `${FILE_PREFIX_TIMELAPSE}_${Date.now()}.webm`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
     }
 
     function handleOpenDriveBrowser() {
@@ -740,138 +668,77 @@ export default function ReviewScreen() {
         ) : (
           /* Main 2-Column Content CHO PHOTOBOOTH */
           <main className="review-content-pastel">
-            {/* Left: Photobooth Strip Frame & Timelapse Media View */}
+            {/* Left: Photobooth Strip Frame */}
             <section className="strip-frame-container">
-              {/* Media View Mode Selector */}
-              <div className="review-media-tabs">
-                <button
-                  className={`review-media-tab-btn ${activeMediaView === 'strip' ? 'active' : ''}`}
-                  onClick={() => setActiveMediaView('strip')}
-                >
-                  <ImageIcon size={18} strokeWidth={2.2} />
-                  <span>Dải Ảnh In ({selectedFrameSize.toUpperCase()})</span>
-                </button>
-                <button
-                  className={`review-media-tab-btn ${activeMediaView === 'timelapse' ? 'active' : ''}`}
-                  onClick={() => setActiveMediaView('timelapse')}
-                >
-                  <Film size={18} strokeWidth={2.2} />
-                  <span>Video Timelapse ({eventConfig.timelapseSpeed || 2.5}x)</span>
-                </button>
-              </div>
+              <div className="frame-preview-wrapper fade-in">
+                {isGeneratingComposite ? (
+                  <div className="composite-generating-loader">
+                    <span className="loader-spinner-pink" />
+                    <span style={{ fontWeight: 700, color: 'var(--color-pink-primary)' }}>
+                      Đang hoàn thiện dải ảnh in...
+                    </span>
+                  </div>
+                ) : compositeStripUrl ? (
+                  <div className="final-rendered-strip-box animate-pop">
+                    <img
+                      src={compositeStripUrl}
+                      alt={`${BRAND_NAME} Final Print`}
+                      className={`final-rendered-strip-img ${selectedFrameSize === '2x6' ? 'strip-2x6-view' : 'postcard-4x6-view'}`}
+                    />
+                  </div>
+                ) : (
+                  /* Fallback preview nếu chưa tải xong canvas */
+                  <div
+                    className={`photobooth-strip-paper ${selectedFrameSize === '4x6' ? 'frame-4x6-postcard' : 'frame-2x6-strip'}`}
+                    style={{
+                      background: selectedTheme.bgGradient || selectedTheme.bgColor,
+                      borderColor: selectedTheme.borderColor,
+                    }}
+                  >
+                    <div className="strip-header-deco">
+                      <span>{selectedTheme.decorations ? selectedTheme.decorations[0] : '🌸'}</span>
+                      <span className="strip-event-tag" style={{ color: selectedTheme.textColor }}>
+                        {eventConfig.eventName}
+                      </span>
+                      <span>{selectedTheme.decorations ? selectedTheme.decorations[1] : '✨'}</span>
+                    </div>
 
-              {/* VIEW 1: DẢI ẢNH IN */}
-              {activeMediaView === 'strip' && (
-                <div className="frame-preview-wrapper fade-in">
-                  {isGeneratingComposite ? (
-                    <div className="composite-generating-loader">
-                      <span className="loader-spinner-pink" />
-                      <span style={{ fontWeight: 700, color: 'var(--color-pink-primary)' }}>
-                        Đang hoàn thiện dải ảnh in...
+                    <div
+                      className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}
+                      style={
+                        isGrid
+                          ? {
+                              gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
+                              gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
+                            }
+                          : undefined
+                      }
+                    >
+                      {photos.map((photo, index) => (
+                        <div key={photo.id || index} className="strip-photo-item" style={{ position: 'relative' }}>
+                          <img
+                            src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
+                            alt={`Shot ${index + 1}`}
+                            style={{ filter: selectedFilter.cssFilter }}
+                          />
+                          {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
+                            <div className="retro-film-grain-overlay" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="strip-footer-deco">
+                      <span className="strip-logo-text" style={{ color: selectedTheme.textColor }}>
+                        {BRAND_NAME}
+                      </span>
+                      <span className="strip-date-text" style={{ color: selectedTheme.textColor }}>
+                        {eventConfig.date}
                       </span>
                     </div>
-                  ) : compositeStripUrl ? (
-                    <div className="final-rendered-strip-box animate-pop">
-                      <img
-                        src={compositeStripUrl}
-                        alt={`${BRAND_NAME} Final Print`}
-                        className={`final-rendered-strip-img ${selectedFrameSize === '2x6' ? 'strip-2x6-view' : 'postcard-4x6-view'}`}
-                      />
-                    </div>
-                  ) : (
-                    /* Fallback preview nếu chưa tải xong canvas */
-                    <div
-                      className={`photobooth-strip-paper ${selectedFrameSize === '4x6' ? 'frame-4x6-postcard' : 'frame-2x6-strip'}`}
-                      style={{
-                        background: selectedTheme.bgGradient || selectedTheme.bgColor,
-                        borderColor: selectedTheme.borderColor,
-                      }}
-                    >
-                      <div className="strip-header-deco">
-                        <span>{selectedTheme.decorations ? selectedTheme.decorations[0] : '🌸'}</span>
-                        <span className="strip-event-tag" style={{ color: selectedTheme.textColor }}>
-                          {eventConfig.eventName}
-                        </span>
-                        <span>{selectedTheme.decorations ? selectedTheme.decorations[1] : '✨'}</span>
-                      </div>
-
-                      <div
-                        className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}
-                        style={
-                          isGrid
-                            ? {
-                                gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
-                                gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
-                              }
-                            : undefined
-                        }
-                      >
-                        {photos.map((photo, index) => (
-                          <div key={photo.id || index} className="strip-photo-item" style={{ position: 'relative' }}>
-                            <img
-                              src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
-                              alt={`Shot ${index + 1}`}
-                              style={{ filter: selectedFilter.cssFilter }}
-                            />
-                            {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
-                              <div className="retro-film-grain-overlay" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="strip-footer-deco">
-                        <span className="strip-logo-text" style={{ color: selectedTheme.textColor }}>
-                          {BRAND_NAME}
-                        </span>
-                        <span className="strip-date-text" style={{ color: selectedTheme.textColor }}>
-                          {eventConfig.date}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* VIEW 2: VIDEO TIMELAPSE */}
-              {activeMediaView === 'timelapse' && (
-                <div className="timelapse-preview-wrapper fade-in">
-                  {session?.timelapseUrl || session?.timelapseDataUrl ? (
-                    <div className="timelapse-player-card">
-                      <video
-                        src={session?.timelapseUrl || session?.timelapseDataUrl || ''}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        controls
-                        className="timelapse-video-element"
-                        ref={(el) => {
-                          if (el) el.playbackRate = eventConfig.timelapseSpeed || 2.5
-                        }}
-                      />
-                      <div className="timelapse-meta-bar">
-                        <span>Tốc độ: {eventConfig.timelapseSpeed || 2.5}x</span>
-                      </div>
-                      <button
-                        className="download-strip-btn"
-                        style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                        onClick={handleDownloadTimelapse}
-                      >
-                        <Download size={18} strokeWidth={2.2} />
-                        <span>Tải Video Timelapse</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="timelapse-empty-state">
-                      <Film size={54} strokeWidth={1.8} color="var(--brand-primary, #502A1D)" />
-                      <h3 style={{ margin: '10px 0 6px', color: 'var(--color-pink-primary)' }}>
-                        Video Timelapse
-                      </h3>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* Right: Instant QR & Print */}
@@ -991,8 +858,24 @@ export default function ReviewScreen() {
                   disabled={Boolean(session?.hasPrinted) || isPrinting || isGeneratingComposite}
                   onClick={handlePrint}
                 >
-                  In ảnh
+                  {isPrinting ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Đang in ảnh...
+                    </>
+                  ) : session?.hasPrinted ? (
+                    'Đã in ảnh'
+                  ) : printError ? (
+                    'Thử in lại'
+                  ) : (
+                    'In ảnh'
+                  )}
                 </button>
+                {printError && (
+                  <p style={{ color: '#EF4444', fontSize: '0.85rem', marginTop: '8px', textAlign: 'center', fontWeight: 600 }}>
+                    {printError}
+                  </p>
+                )}
               </div>
             </section>
           </main>

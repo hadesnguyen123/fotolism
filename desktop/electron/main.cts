@@ -168,13 +168,23 @@ function getFotolismDir(): string {
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
 
 // AI Service Handlers
-ipcMain.handle('ai:enhance', async (_event, payload: { imagePath: string; beautyLevel: number }) => {
-  const res = await fetch(`${AI_SERVICE_URL}/enhance`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return res.json()
+ipcMain.handle('ai:enhance', async (_event, payload: { imagePath: string; beautyLevel?: number; presetId?: string }) => {
+  try {
+    await ensureAiService()
+    const res = await fetch(`${AI_SERVICE_URL}/enhance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imagePath: payload.imagePath,
+        beautyLevel: payload.beautyLevel ?? 50,
+        presetId: payload.presetId || 'korean_soft_beauty',
+      }),
+    })
+    return res.json()
+  } catch (err: any) {
+    console.warn('[AI Service] Enhance IPC error:', err.message)
+    return { success: false, error: err.message }
+  }
 })
 
 ipcMain.handle('ai:composite', async (_event, payload: { imagePath: string; framePath: string }) => {
@@ -251,9 +261,24 @@ try {
 
   $doc = New-Object System.Drawing.Printing.PrintDocument
   $doc.PrinterSettings.PrinterName = $printer
+  if (-not $doc.PrinterSettings.IsValid) {
+    throw "Máy in '$printer' không khả dụng hoặc chưa kết nối!"
+  }
   $doc.PrinterSettings.Copies = $copies
   $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
   $doc.OriginAtMargins = $false
+
+  # Chọn khổ giấy chuẩn PR (4x6) cho máy in DNP/Dye-Sub
+  $targetPaper = $null
+  foreach ($ps in $doc.PrinterSettings.PaperSizes) {
+    if ($ps.PaperName -eq 'PR (4x6)') {
+      $targetPaper = $ps
+      break
+    }
+  }
+  if ($targetPaper -ne $null) {
+    $doc.DefaultPageSettings.PaperSize = $targetPaper
+  }
 
   $img = [System.Drawing.Image]::FromFile($file)
   if ($img.Width -gt $img.Height) {
@@ -266,8 +291,10 @@ try {
     param($s, $ev)
     $ev.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $ev.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $ev.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
     $bounds = $ev.PageBounds
     $ev.Graphics.DrawImage($img, $bounds.X, $bounds.Y, $bounds.Width, $bounds.Height)
+    $ev.HasMorePages = $false
   })
 
   $doc.Print()
