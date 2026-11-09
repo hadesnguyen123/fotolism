@@ -58,19 +58,19 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
   },
   {
     id: 'natural',
-    name: 'Tự Nhiên (Natural)',
-    icon: '🌿',
-    description: 'Làm đẹp nhẹ nhàng, giữ trọn đường nét mộc mạc và chân thật (Mặc định chuẩn K-Beauty)',
+    name: 'Tự Nhiên (Studio C1 Style)',
+    icon: '✨',
+    description: 'Chất ảnh Studio Capture One: Mịn màng 100%, xóa mụn 80%, sáng bọng mắt 80% và tone trắng hồng',
     slimFace: 18,
     vLine: 16,
     bigEyes: 12,
-    skinSmoothing: 35,
-    smoothing: 35,
-    whiteningTone: 20,
-    rosyTone: 15,
-    glowClarity: 15,
-    brightness: 102,
-    contrast: 100,
+    skinSmoothing: 80,
+    smoothing: 80,
+    whiteningTone: 45,
+    rosyTone: 35,
+    glowClarity: 38,
+    brightness: 104,
+    contrast: 94,
   },
   {
     id: 'radiant',
@@ -246,12 +246,14 @@ void main() {
 
     vec3 centerColor = texture2D(u_image, uv).rgb;
 
-    // ── 3. NHẬN DIỆN MẶT NẠ DA NGƯỜI (DUAL YCBCR + RGB ADAPTIVE) ──
+    // ── 3. NHẬN DIỆN MẶT NẠ DA NGƯỜI (DUAL YCBCR + RGB ADAPTIVE & EXCLUDE RED FABRIC) ──
     float Cb = -0.168736 * centerColor.r - 0.331264 * centerColor.g + 0.5 * centerColor.b + 0.5;
     float Cr = 0.5 * centerColor.r - 0.418688 * centerColor.g - 0.081312 * centerColor.b + 0.5;
     bool colorIsSkinYCbCr = (Cb >= 0.22 && Cb <= 0.64 && Cr >= 0.43 && Cr <= 0.82);
     bool colorIsSkinRGB = (centerColor.r > centerColor.g * 0.95) && (centerColor.g > centerColor.b * 0.85) && (centerColor.r > 0.12) && ((centerColor.r - centerColor.b) > 0.02);
-    bool isLikelySkin = colorIsSkinYCbCr || colorIsSkinRGB;
+    // Loại trừ triệt để vải rèm nhung đỏ có sắc đỏ và độ bão hòa cực lớn
+    bool isRedFabric = (centerColor.r > centerColor.g * 1.65) && (centerColor.r > centerColor.b * 2.1);
+    bool isLikelySkin = (colorIsSkinYCbCr || colorIsSkinRGB) && !isRedFabric;
 
     float isSkin = 0.0;
     if (u_numFaces > 0) {
@@ -260,23 +262,16 @@ void main() {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
             vec2 fCenter = vec2(bounds.x, bounds.y);
-            float fRad = max(bounds.z, bounds.w) * 0.85;
+            float fRad = max(bounds.z, bounds.w) * 0.62;
             float dFace = distance(uv, fCenter);
             if (dFace < fRad) {
-                faceProx = max(faceProx, smoothstep(fRad, fRad * 0.5, dFace));
+                faceProx = max(faceProx, smoothstep(fRad, fRad * 0.6, dFace));
             }
         }
-        if (isLikelySkin) {
-            isSkin = max(0.85, faceProx);
-        } else {
-            isSkin = faceProx * 0.7;
-        }
+        // CHỈ XÁC NHẬN VÙNG DA BÊN TRONG BÁN KÍNH KHUÔN MẶT, HOÀN TOÀN KHÔNG LEM RA PHÔNG NỀN
+        isSkin = faceProx * (isLikelySkin ? 1.0 : 0.3);
     } else {
-        if (isLikelySkin) {
-            isSkin = 1.0;
-        } else {
-            isSkin = 0.75;
-        }
+        isSkin = isLikelySkin ? 0.85 : 0.0;
     }
 
     // ── 4. LÀM MỊN DA BILATERAL FILTER GIỮ NGUYÊN CHI TIẾT (SKIN SMOOTHING) ──
@@ -309,39 +304,43 @@ void main() {
 
     // ── 5. NÂNG TONE TRẮNG SÁNG TỰ NHIÊN (SKIN WHITENING) ──
     vec3 result = smoothedColor;
-    if (u_whitening > 0.0) {
-        float whiteEff = u_whitening * max(isSkin, 0.30);
+    if (u_whitening > 0.0 && isSkin > 0.01) {
+        float whiteEff = u_whitening * isSkin;
         result = mix(result, 1.0 - (1.0 - result) * (1.0 - result), whiteEff * 0.30);
         result += vec3(whiteEff * 0.07);
     }
 
     // ── 6. TRẮNG HỒNG MÁ ĐÀO (ROSY TONE) ──
-    if (u_rosyTone > 0.0) {
-        float rosyEff = u_rosyTone * max(isSkin, 0.35);
+    if (u_rosyTone > 0.0 && isSkin > 0.01) {
+        float rosyEff = u_rosyTone * isSkin;
         result.r += rosyEff * 0.045;
         result.b += rosyEff * 0.022;
         result.g -= rosyEff * 0.016;
     }
 
     // ── 7. SÁNG NÉT CHI TIẾT (CLARITY - BẢO VỆ MẮT, LÔNG MI, TÓC) ──
-    if (u_clarity > 0.0) {
+    if (u_clarity > 0.0 && isSkin > 0.01) {
         vec3 detail = centerColor - smoothedColor;
-        result += detail * (u_clarity * 0.50);
+        result += detail * (u_clarity * 0.50 * isSkin);
     }
 
-    // ── 8. ĐỘ SÁNG, TƯƠNG PHẢN & ĐỘ BÃO HÒA (BRIGHTNESS / CONTRAST / SATURATION) ──
+    // ── 8. ĐỘ SÁNG, TƯƠNG PHẢN & ĐỘ BÃO HÒA (CHỈ TÁC ĐỘNG TRONG VÙNG DA MẶT, BẢO TOÀN PHÔNG NỀN) ──
+    vec3 adjusted = result;
     if (u_brightness != 1.0) {
-        result *= u_brightness;
+        adjusted *= u_brightness;
     }
     if (u_contrast != 1.0) {
-        result = (result - 0.5) * u_contrast + 0.5;
+        adjusted = (adjusted - 0.5) * u_contrast + 0.5;
     }
     if (u_saturation != 1.0) {
-        float gray = dot(result, vec3(0.299, 0.587, 0.114));
-        result = mix(vec3(gray), result, u_saturation);
+        float gray = dot(adjusted, vec3(0.299, 0.587, 0.114));
+        adjusted = mix(vec3(gray), adjusted, u_saturation);
     }
+    result = mix(result, adjusted, isSkin);
 
-    gl_FragColor = vec4(clamp(result, 0.0, 1.0), 1.0);
+    // KẾT HỢP ALPHA BLEND: NGOÀI VÙNG MẶT (isSkin == 0.0) BẢO TOÀN 100% centerColor CỦA MÁY ẢNH
+    vec3 finalColor = mix(centerColor, result, smoothstep(0.0, 0.15, isSkin));
+    gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
 }
 `
 
