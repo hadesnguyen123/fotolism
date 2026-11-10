@@ -1,7 +1,7 @@
 /**
  * Google Apps Script Webhook để kết nối Fotolism với Google Drive
  * Folder ID đích: 1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU
- * 
+ *
  * HƯỚNG DẪN CÀI ĐẶT (Chỉ mất 1 phút):
  * 1. Mở https://script.google.com/
  * 2. Bấm "Dự án mới" (New project)

@@ -7,408 +7,422 @@
    ========================================================================== */
 
 .payment-screen-container {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: #FAF7F2;
-  user-select: none;
-  overflow: hidden;
-  position: relative;
-  padding: 0;
-  box-sizing: border-box;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #faf7f2;
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 /* ── Nội dung chính Bước 3: Khớp hoàn hảo giữa Fixed Header (120px) và Fixed Footer (90px) ── */
 .payment-stage-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  margin-top: 120px;
-  margin-bottom: 90px;
-  padding: 0 40px;
-  box-sizing: border-box;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 120px;
+    margin-bottom: 90px;
+    padding: 0 40px;
+    box-sizing: border-box;
 }
 
 /* ── Hàng Đếm Ngược: 🕒 01:28 ở góc trên bên phải khung card ── */
 .payment-timer-row {
-  width: 100%;
-  max-width: 980px;
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
+    width: 100%;
+    max-width: 980px;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 14px;
 }
 
 .payment-timer-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: monospace;
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #351A10;
-  padding: 4px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: monospace;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #351a10;
+    padding: 4px 12px;
 }
 
 .payment-timer-badge svg {
-  color: #351A10;
+    color: #351a10;
 }
 
 /* ── Khung 2 Thẻ Ngang Nhau Chuẩn Tỉ Lệ ── */
 .payment-cards-container {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 36px;
-  max-width: 980px;
-  width: 100%;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 36px;
+    max-width: 980px;
+    width: 100%;
 }
 
 /* ── THẺ TRÁI: "QR chỉ hiển thị mình ảnh" (Thẻ trắng sạch chỉ chứa duy nhất ảnh QR SePay) ── */
 .payment-qr-card {
-  flex: 1;
-  max-width: 460px;
-  min-height: 420px;
-  background: #FFFFFF;
-  border-radius: 28px;
-  padding: 24px;
-  box-shadow: 0 10px 32px rgba(53, 26, 16, 0.05);
-  border: 1.5px solid #F0E6DE;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+    flex: 1;
+    max-width: 460px;
+    min-height: 420px;
+    background: #ffffff;
+    border-radius: 28px;
+    padding: 24px;
+    box-shadow: 0 10px 32px rgba(53, 26, 16, 0.05);
+    border: 1.5px solid #f0e6de;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .sepay-qr-img {
-  max-height: 380px;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  display: block;
-  border-radius: 12px;
+    max-height: 380px;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 12px;
 }
 
 /* Fallback class aliases */
 .qr-code-standalone-col,
 .qr-code-card {
-  display: contents;
+    display: contents;
 }
 
 /* ── THẺ PHẢI: Thông Tin Chuyển Khoản & Trạng Thái Live ── */
 .payment-bank-card,
 .qr-bank-details-card {
-  flex: 1;
-  max-width: 460px;
-  min-height: 420px;
-  background: #FFFFFF;
-  border-radius: 28px;
-  padding: 38px 34px;
-  box-shadow: 0 10px 32px rgba(53, 26, 16, 0.05);
-  border: 1.5px solid #F0E6DE;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-sizing: border-box;
+    flex: 1;
+    max-width: 460px;
+    min-height: 420px;
+    background: #ffffff;
+    border-radius: 28px;
+    padding: 38px 34px;
+    box-shadow: 0 10px 32px rgba(53, 26, 16, 0.05);
+    border: 1.5px solid #f0e6de;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
 }
 
 .payment-bank-name {
-  font-family: var(--font-display, inherit);
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #351A10;
-  margin: 0 0 24px 0;
-  line-height: 1.2;
+    font-family: var(--font-display, inherit);
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #351a10;
+    margin: 0 0 24px 0;
+    line-height: 1.2;
 }
 
 .payment-bank-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1;
 }
 
 .bank-field-item {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  font-size: 1.15rem;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    font-size: 1.15rem;
 }
 
 .bank-field-label {
-  color: #70594F;
-  font-weight: 600;
-  min-width: 125px;
-  flex-shrink: 0;
+    color: #70594f;
+    font-weight: 600;
+    min-width: 125px;
+    flex-shrink: 0;
 }
 
 .bank-field-value {
-  color: #351A10;
-  font-weight: 700;
+    color: #351a10;
+    font-weight: 700;
 }
 
 .text-uppercase {
-  text-transform: uppercase;
+    text-transform: uppercase;
 }
 
 .text-bold {
-  font-weight: 800;
+    font-weight: 800;
 }
 
 .font-mono {
-  font-family: monospace;
-  font-size: 1.25rem;
-  letter-spacing: 0.5px;
+    font-family: monospace;
+    font-size: 1.25rem;
+    letter-spacing: 0.5px;
 }
 
 /* Trạng thái Live Chờ thanh toán... */
 .payment-live-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 1.08rem;
-  font-weight: 700;
-  color: #16A34A;
-  padding-top: 14px;
-  cursor: pointer;
-  width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: #16a34a;
+    padding-top: 14px;
+    cursor: pointer;
+    width: fit-content;
 }
 
 .status-pulsing-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #16A34A;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.25);
-  animation: pulse-ring 1.8s infinite;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.25);
+    animation: pulse-ring 1.8s infinite;
 }
 
 @keyframes pulse-ring {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 8px rgba(22, 163, 74, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+    }
 }
-
 
 /* ── MODAL NHẬP MÃ PIN NHÂN VIÊN ── */
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
 }
 
 .staff-pin-modal {
-  background: #FFFFFF;
-  border-radius: 24px;
-  padding: 28px 24px;
-  width: 360px;
-  max-width: 90vw;
-  text-align: center;
-  box-shadow: 0 20px 48px rgba(53, 26, 16, 0.25);
-  box-sizing: border-box;
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 28px 24px;
+    width: 360px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 20px 48px rgba(53, 26, 16, 0.25);
+    box-sizing: border-box;
 }
 
 .modal-header-icon {
-  margin-bottom: 8px;
+    margin-bottom: 8px;
 }
 
 .staff-pin-modal h3 {
-  margin: 0 0 6px 0;
-  font-family: var(--font-display, inherit);
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #351A10;
+    margin: 0 0 6px 0;
+    font-family: var(--font-display, inherit);
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #351a10;
 }
 
 .staff-pin-modal p {
-  color: #70594F;
-  font-size: 0.95rem;
-  margin: 0 0 16px 0;
+    color: #70594f;
+    font-size: 0.95rem;
+    margin: 0 0 16px 0;
 }
 
 .staff-pin-display-box {
-  width: 100%;
-  height: 56px;
-  border: 2px solid #E6D9CF;
-  border-radius: 14px;
-  background: #FAF7F2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-  box-sizing: border-box;
+    width: 100%;
+    height: 56px;
+    border: 2px solid #e6d9cf;
+    border-radius: 14px;
+    background: #faf7f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    box-sizing: border-box;
 }
 
 .pin-dots {
-  font-size: 2.2rem;
-  letter-spacing: 8px;
-  color: #351A10;
-  font-weight: 900;
-  line-height: 1;
+    font-size: 2.2rem;
+    letter-spacing: 8px;
+    color: #351a10;
+    font-weight: 900;
+    line-height: 1;
 }
 
 .pin-placeholder {
-  font-size: 1.15rem;
-  color: #A38F85;
-  font-weight: 600;
-  letter-spacing: 1px;
+    font-size: 1.15rem;
+    color: #a38f85;
+    font-weight: 600;
+    letter-spacing: 1px;
 }
 
 .pin-err {
-  color: #DC2626;
-  font-size: 0.88rem;
-  font-weight: 700;
-  margin: 4px 0 10px 0;
+    color: #dc2626;
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin: 4px 0 10px 0;
 }
 
 .staff-pin-numpad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 16px;
 }
 
 .numpad-key-btn {
-  height: 52px;
-  border-radius: 14px;
-  border: 1.5px solid #E6D9CF;
-  background: #FAF7F2;
-  color: #351A10;
-  font-family: var(--font-display, inherit);
-  font-size: 1.55rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
-  box-shadow: 0 2px 6px rgba(53, 26, 16, 0.04);
+    height: 52px;
+    border-radius: 14px;
+    border: 1.5px solid #e6d9cf;
+    background: #faf7f2;
+    color: #351a10;
+    font-family: var(--font-display, inherit);
+    font-size: 1.55rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    box-shadow: 0 2px 6px rgba(53, 26, 16, 0.04);
 }
 
 .numpad-key-btn:hover {
-  background: #FFFFFF;
-  border-color: #502A1D;
-  transform: scale(1.03);
+    background: #ffffff;
+    border-color: #502a1d;
+    transform: scale(1.03);
 }
 
 .numpad-key-btn:active {
-  background: #502A1D;
-  color: #FFFFFF;
-  transform: scale(0.96);
+    background: #502a1d;
+    color: #ffffff;
+    transform: scale(0.96);
 }
 
 .numpad-action-clear {
-  color: #B43F3F;
-  font-size: 1.35rem;
-  font-weight: 900;
+    color: #b43f3f;
+    font-size: 1.35rem;
+    font-weight: 900;
 }
 
 .numpad-action-backspace {
-  color: #502A1D;
+    color: #502a1d;
 }
 
 .modal-actions {
-  display: flex;
-  gap: 12px;
-  width: 100%;
+    display: flex;
+    gap: 12px;
+    width: 100%;
 }
 
 .btn-cancel,
 .btn-confirm-pin {
-  flex: 1;
-  height: 50px;
-  border-radius: 14px;
-  font-family: var(--font-display, inherit);
-  font-size: 1.15rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    flex: 1;
+    height: 50px;
+    border-radius: 14px;
+    font-family: var(--font-display, inherit);
+    font-size: 1.15rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-cancel {
-  background: #FAF7F2;
-  border: 1.5px solid #E6D9CF;
-  color: #502A1D;
+    background: #faf7f2;
+    border: 1.5px solid #e6d9cf;
+    color: #502a1d;
 }
 
 .btn-cancel:hover {
-  background: #FFFFFF;
-  border-color: #502A1D;
+    background: #ffffff;
+    border-color: #502a1d;
 }
 
 .btn-confirm-pin {
-  background: #502A1D;
-  border: none;
-  color: #FFFFFF;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.25);
+    background: #502a1d;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(53, 26, 16, 0.25);
 }
 
 .btn-confirm-pin:hover:not(:disabled) {
-  background: #3D2017;
-  transform: translateY(-1px);
+    background: #3d2017;
+    transform: translateY(-1px);
 }
 
 .btn-confirm-pin:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 /* ── OVERLAY THANH TOÁN THÀNH CÔNG ── */
 .payment-success-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 150;
-  animation: fadeIn 0.3s ease;
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+    animation: fadeIn 0.3s ease;
 }
 
 .success-content-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
 }
 
 .success-content-box h2 {
-  font-family: var(--font-display, inherit);
-  font-size: 2.2rem;
-  color: #16A34A;
-  margin: 0;
+    font-family: var(--font-display, inherit);
+    font-size: 2.2rem;
+    color: #16a34a;
+    margin: 0;
 }
 
 .success-content-box p {
-  font-size: 1.18rem;
-  font-weight: 700;
-  color: #502A1D;
-  margin: 0;
+    font-size: 1.18rem;
+    font-weight: 700;
+    color: #502a1d;
+    margin: 0;
 }
 
 .success-content-box span {
-  font-size: 0.95rem;
-  color: #70594F;
+    font-size: 0.95rem;
+    color: #70594f;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }

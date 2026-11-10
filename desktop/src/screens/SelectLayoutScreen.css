@@ -9,367 +9,376 @@
    ========================================================================== */
 
 .layout-poster-container {
-  width: 100vw;
-  height: 100vh;
-  max-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  background: #FAF7F2;
-  user-select: none;
-  overflow: hidden;
-  position: relative;
-  padding: 0;
-  box-sizing: border-box;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    background: #faf7f2;
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 /* ── Showcase Bảng Giá: 1 Hàng Cân Đối Gồm 3 Bố Cục Duy Nhất ──────────────── */
 .poster-board-main {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  max-width: 1200px;
-  box-sizing: border-box;
-  margin-top: 120px; /* Khớp với fixed top header */
-  margin-bottom: 90px; /* Khớp với fixed bottom footer */
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px;
+    box-sizing: border-box;
+    margin-top: 120px; /* Khớp với fixed top header */
+    margin-bottom: 90px; /* Khớp với fixed bottom footer */
 }
 
 .poster-board-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .poster-board-row.row-3 {
-  gap: clamp(54px, 7vw, 100px);
+    gap: clamp(54px, 7vw, 100px);
 }
 
 /* ── Item Bố Cục (Các layout không được chọn sẽ mờ nhẹ để nổi bật layout đang chọn) ── */
 .poster-layout-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  outline: none;
-  position: relative;
-  transition: opacity 0.25s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    outline: none;
+    position: relative;
+    transition:
+        opacity 0.25s ease,
+        transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 0.25s ease;
 }
 
 /* Layout không được chọn: Mờ đi để tập trung thị giác */
 .poster-layout-item:not(.selected) {
-  opacity: 0.42;
-  filter: grayscale(10%);
+    opacity: 0.42;
+    filter: grayscale(10%);
 }
 
 .poster-layout-item:not(.selected):hover {
-  opacity: 0.85;
-  filter: none;
-  transform: translateY(-3px);
+    opacity: 0.85;
+    filter: none;
+    transform: translateY(-3px);
 }
 
 /* Layout đang được chọn: Rõ nét 100%, nổi bật */
 .poster-layout-item.selected {
-  opacity: 1;
-  filter: none;
-  transform: translateY(-4px);
+    opacity: 1;
+    filter: none;
+    transform: translateY(-4px);
 }
 
 /* ── Khung Mockup Đồ Họa 2 Lớp (Tăng kích thước lên chuẩn màn hình Kiosk) ────────── */
 .poster-frame-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Khổ nhỏ 2x6: Tỉ lệ 1:3 (Chuẩn màn hình Kiosk 1 hàng) */
 .poster-frame-wrapper.ratio-2x6 {
-  height: clamp(230px, 32vh, 310px);
-  aspect-ratio: 1 / 3;
-  width: auto;
+    height: clamp(230px, 32vh, 310px);
+    aspect-ratio: 1 / 3;
+    width: auto;
 }
 
 /* Khổ lớn 4x6: Tỉ lệ 2:3 (Chuẩn màn hình Kiosk 1 hàng) */
 .poster-frame-wrapper.ratio-4x6 {
-  height: clamp(230px, 32vh, 310px);
-  aspect-ratio: 2 / 3;
-  width: auto;
+    height: clamp(230px, 32vh, 310px);
+    aspect-ratio: 2 / 3;
+    width: auto;
 }
 
 /* ── Tấm Nghiêng Phía Sau (Bản in thứ 2 trong gói 1+1) ───────────────────── */
 .poster-sheet-back {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: #D5AFA3;
-  border-radius: 5px;
-  transform: rotate(6.5deg) translate(10px, -6px);
-  display: flex;
-  flex-direction: column;
-  padding: 8px 6px 16px 6px;
-  box-sizing: border-box;
-  pointer-events: none;
-  overflow: hidden;
-  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.1);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #d5afa3;
+    border-radius: 5px;
+    transform: rotate(6.5deg) translate(10px, -6px);
+    display: flex;
+    flex-direction: column;
+    padding: 8px 6px 16px 6px;
+    box-sizing: border-box;
+    pointer-events: none;
+    overflow: hidden;
+    box-shadow: 0 6px 16px rgba(80, 42, 29, 0.1);
 }
 
 .ratio-4x6 .poster-sheet-back {
-  padding: 8px 8px 18px 8px;
+    padding: 8px 8px 18px 8px;
 }
 
 .poster-sheet-back .poster-slots-grid {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: grid;
-  gap: 4px;
-  box-sizing: border-box;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: grid;
+    gap: 4px;
+    box-sizing: border-box;
 }
 
 .ratio-4x6 .poster-sheet-back .poster-slots-grid {
-  gap: 5px;
+    gap: 5px;
 }
 
 .poster-slot-back {
-  width: 100%;
-  height: 100%;
-  background: #FAF2EC;
-  border-radius: 2px;
-  box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    background: #faf2ec;
+    border-radius: 2px;
+    box-sizing: border-box;
 }
 
 .poster-footer-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 16px;
-  margin-top: 4px;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 16px;
+    margin-top: 4px;
+    flex-shrink: 0;
 }
 
 .poster-footer-back .poster-brand-text {
-  font-family: var(--font-display, inherit);
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.85);
-  letter-spacing: 1.2px;
-  text-transform: lowercase;
+    font-family: var(--font-display, inherit);
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.85);
+    letter-spacing: 1.2px;
+    text-transform: lowercase;
 }
 
 /* ── Tấm Chính Phía Trước (Khung Ngoài In Thật Màu Nâu #502A1D) ───────────── */
 .poster-sheet-front {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: #502A1D;
-  border-radius: 5px;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 6px 16px 6px;
-  box-sizing: border-box;
-  overflow: hidden;
-  box-shadow: 0 8px 22px rgba(80, 42, 29, 0.18);
-  transition: box-shadow 0.2s ease;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #502a1d;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 6px 16px 6px;
+    box-sizing: border-box;
+    overflow: hidden;
+    box-shadow: 0 8px 22px rgba(80, 42, 29, 0.18);
+    transition: box-shadow 0.2s ease;
 }
 
 .ratio-4x6 .poster-sheet-front {
-  padding: 8px 8px 18px 8px;
+    padding: 8px 8px 18px 8px;
 }
 
 .poster-layout-item.selected .poster-sheet-front {
-  box-shadow: 0 12px 32px rgba(80, 42, 29, 0.4);
+    box-shadow: 0 12px 32px rgba(80, 42, 29, 0.4);
 }
 
 .poster-slots-grid {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: grid;
-  gap: 4.5px;
-  box-sizing: border-box;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: grid;
+    gap: 4.5px;
+    box-sizing: border-box;
 }
 
 .ratio-4x6 .poster-slots-grid {
-  gap: 5.5px;
+    gap: 5.5px;
 }
 
 /* Ô trống ảnh: Nền trắng, bo góc 2px */
 .poster-slot-front {
-  width: 100%;
-  height: 100%;
-  background: #FFFFFF;
-  border-radius: 2px;
-  box-sizing: border-box;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
-  position: relative;
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    border-radius: 2px;
+    box-sizing: border-box;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    position: relative;
 }
 
 /* Footer fotolism trên khung ảnh */
 .poster-footer-front {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 16px;
-  margin-top: 4px;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 16px;
+    margin-top: 4px;
+    flex-shrink: 0;
 }
 
 .poster-footer-front .poster-brand-text {
-  font-family: var(--font-display, inherit);
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: #E8DDD6;
-  letter-spacing: 1.4px;
-  text-transform: lowercase;
+    font-family: var(--font-display, inherit);
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: #e8ddd6;
+    letter-spacing: 1.4px;
+    text-transform: lowercase;
 }
 
 /* Checkmark góc trên bên phải khi được chọn (Tăng kích thước lên 30px) */
 .poster-check-badge {
-  position: absolute;
-  top: -9px;
-  right: -9px;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #351A10;
-  border: 2px solid #FFFFFF;
-  color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.45);
-  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #351a10;
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 4px 14px rgba(53, 26, 16, 0.45);
+    animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes popIn {
-  from { transform: scale(0.4); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+    from {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 /* ── Thông Tin Mô Tả Layout ────────────────────────────────────────────── */
 .poster-meta-block {
-  margin-top: 14px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+    margin-top: 14px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
 }
 
 .poster-layout-name {
-  font-family: var(--font-display, inherit);
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #351C15;
-  letter-spacing: -0.2px;
+    font-family: var(--font-display, inherit);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #351c15;
+    letter-spacing: -0.2px;
 }
 
 .poster-layout-sub {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #8C6D60;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #8c6d60;
 }
 
 /* ── Nút Giá Tiền Nâu Đậm Dạng Khối (Tăng kích thước Touch-Friendly) ─────── */
 .poster-price-btn {
-  margin-top: 10px;
-  height: 44px;
-  padding: 0 20px;
-  min-width: 120px;
-  background: #351A10;
-  color: #FFFFFF;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.2);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-sizing: border-box;
+    margin-top: 10px;
+    height: 44px;
+    padding: 0 20px;
+    min-width: 120px;
+    background: #351a10;
+    color: #ffffff;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(53, 26, 16, 0.2);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
 }
 
 .ratio-4x6 + .poster-price-btn {
-  min-width: 140px;
+    min-width: 140px;
 }
 
 .poster-price-btn span {
-  font-family: var(--font-display, inherit);
-  font-size: 1.35rem;
-  font-weight: 900;
-  letter-spacing: 0.5px;
+    font-family: var(--font-display, inherit);
+    font-size: 1.35rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
 }
 
 .poster-layout-item.selected .poster-price-btn {
-  background: #1A0B06;
-  box-shadow: 0 6px 20px rgba(53, 26, 16, 0.45);
-  transform: scale(1.05);
+    background: #1a0b06;
+    box-shadow: 0 6px 20px rgba(53, 26, 16, 0.45);
+    transform: scale(1.05);
 }
 
 /* ── Banner Giá In Thêm ở giữa thanh Footer cố định ───────────────────────── */
 .poster-fixed-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .poster-extra-banner {
-  background: #F2D8D0;
-  border-radius: 9999px;
-  height: 54px;
-  padding: 0 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.08);
-  border: 1px solid rgba(53, 26, 16, 0.12);
-  box-sizing: border-box;
-  white-space: nowrap;
-  flex-shrink: 0;
+    background: #f2d8d0;
+    border-radius: 9999px;
+    height: 54px;
+    padding: 0 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    box-shadow: 0 4px 14px rgba(53, 26, 16, 0.08);
+    border: 1px solid rgba(53, 26, 16, 0.12);
+    box-sizing: border-box;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .extra-banner-label {
-  font-family: var(--font-display, inherit);
-  font-size: 1.15rem;
-  font-weight: 900;
-  color: #351A10;
-  letter-spacing: 0.8px;
-  white-space: nowrap;
+    font-family: var(--font-display, inherit);
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #351a10;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
 }
 
 .extra-banner-vbar {
-  width: 2px;
-  height: 24px;
-  background: #351A10;
-  opacity: 0.35;
-  border-radius: 1px;
+    width: 2px;
+    height: 24px;
+    background: #351a10;
+    opacity: 0.35;
+    border-radius: 1px;
 }
 
 .extra-banner-val-group {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-family: var(--font-body, inherit);
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #351A10;
-  white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--font-body, inherit);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #351a10;
+    white-space: nowrap;
 }
 
 .extra-banner-val-group .extra-item strong {
-  font-weight: 900;
-  color: #1A0B06;
+    font-weight: 900;
+    color: #1a0b06;
 }
 
 .extra-banner-dot {
-  opacity: 0.45;
-  font-size: 1.15rem;
-  line-height: 1;
+    opacity: 0.45;
+    font-size: 1.15rem;
+    line-height: 1;
 }

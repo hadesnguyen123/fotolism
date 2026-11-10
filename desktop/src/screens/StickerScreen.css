@@ -1,277 +1,286 @@
 /* ── Fotolism Sticker Customization Screen (CHỌN STICKER) ───── */
 
 .sticker-screen-container {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--color-cream-bg);
-  user-select: none;
-  overflow: hidden;
-  position: relative;
-  padding: 16px 40px;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-cream-bg);
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+    padding: 16px 40px;
 }
 
 .sticker-main-split {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 460px 1fr;
-  gap: 36px;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  align-items: center;
-  overflow: hidden;
+    flex: 1;
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    gap: 36px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    align-items: center;
+    overflow: hidden;
 }
 
 /* Left Canvas Stage with Stickers */
 .sticker-canvas-column {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
 }
 
 .sticker-interactive-frame {
-  position: relative;
-  padding: 14px 14px 20px;
-  border-radius: 16px;
-  box-shadow: 0 16px 45px rgba(45, 36, 38, 0.15), 0 0 0 2px rgba(45, 36, 38, 0.08);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  max-height: calc(100vh - 220px);
-  user-select: none;
-  touch-action: none;
+    position: relative;
+    padding: 14px 14px 20px;
+    border-radius: 16px;
+    box-shadow:
+        0 16px 45px rgba(45, 36, 38, 0.15),
+        0 0 0 2px rgba(45, 36, 38, 0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-height: calc(100vh - 220px);
+    user-select: none;
+    touch-action: none;
 }
 
 /* Placed Sticker Element & Dragging */
 .placed-sticker-element {
-  position: absolute;
-  cursor: grab;
-  z-index: 25;
-  user-select: none;
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border-radius: 14px;
-  border: 2px dashed transparent;
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    position: absolute;
+    cursor: grab;
+    z-index: 25;
+    user-select: none;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 14px;
+    border: 2px dashed transparent;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .placed-sticker-element:hover {
-  border-color: rgba(244, 114, 154, 0.45);
+    border-color: rgba(244, 114, 154, 0.45);
 }
 
 .placed-sticker-element.active {
-  border-color: #f4729a;
-  background-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 0 0 3px rgba(244, 114, 154, 0.25), 0 6px 18px rgba(0, 0, 0, 0.15);
-  z-index: 40;
+    border-color: #f4729a;
+    background-color: rgba(255, 255, 255, 0.35);
+    box-shadow:
+        0 0 0 3px rgba(244, 114, 154, 0.25),
+        0 6px 18px rgba(0, 0, 0, 0.15);
+    z-index: 40;
 }
 
 .placed-sticker-element.dragging {
-  cursor: grabbing !important;
-  opacity: 0.95;
-  box-shadow: 0 10px 28px rgba(244, 114, 154, 0.4);
-  transition: none !important;
+    cursor: grabbing !important;
+    opacity: 0.95;
+    box-shadow: 0 10px 28px rgba(244, 114, 154, 0.4);
+    transition: none !important;
 }
 
 .placed-sticker-icon {
-  font-size: 2.4rem;
-  line-height: 1;
-  pointer-events: none;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
+    font-size: 2.4rem;
+    line-height: 1;
+    pointer-events: none;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
 }
 
 /* Sticker Control Handles */
 .sticker-controls-overlay {
-  position: absolute;
-  inset: -14px;
-  pointer-events: none;
+    position: absolute;
+    inset: -14px;
+    pointer-events: none;
 }
 
 .sticker-ctrl-btn {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  pointer-events: auto;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, filter 0.15s ease;
-  user-select: none;
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+    transition:
+        transform 0.15s ease,
+        filter 0.15s ease;
+    user-select: none;
 }
 
 .sticker-ctrl-btn:hover {
-  transform: scale(1.22);
-  filter: brightness(1.1);
+    transform: scale(1.22);
+    filter: brightness(1.1);
 }
 
 .sticker-ctrl-btn:active {
-  transform: scale(0.95);
+    transform: scale(0.95);
 }
 
 /* Top-right: Xóa (Đỏ) */
 .sticker-ctrl-btn.btn-del {
-  top: -2px;
-  right: -2px;
-  background: #ef4444;
+    top: -2px;
+    right: -2px;
+    background: #ef4444;
 }
 
 /* Top-left: Xoay (Tím) */
 .sticker-ctrl-btn.btn-rot {
-  top: -2px;
-  left: -2px;
-  background: #8b5cf6;
+    top: -2px;
+    left: -2px;
+    background: #8b5cf6;
 }
 
 /* Bottom-right: Phóng to (Xanh lá) */
 .sticker-ctrl-btn.btn-scale-up {
-  bottom: -2px;
-  right: -2px;
-  background: #10b981;
+    bottom: -2px;
+    right: -2px;
+    background: #10b981;
 }
 
 /* Bottom-left: Thu nhỏ (Xanh dương) */
 .sticker-ctrl-btn.btn-scale-down {
-  bottom: -2px;
-  left: -2px;
-  background: #3b82f6;
+    bottom: -2px;
+    left: -2px;
+    background: #3b82f6;
 }
 
 /* Action hints and clear button underneath frame */
 .sticker-action-hints {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  max-width: 420px;
-  margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    max-width: 420px;
+    margin-top: 10px;
 }
 
 .sticker-guide-text {
-  font-size: 0.78rem;
-  color: #4b5563;
-  background: rgba(255, 255, 255, 0.75);
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid rgba(45, 36, 38, 0.08);
+    font-size: 0.78rem;
+    color: #4b5563;
+    background: rgba(255, 255, 255, 0.75);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(45, 36, 38, 0.08);
 }
 
 .video-notice-text {
-  font-size: 0.72rem;
-  color: var(--color-text-secondary);
-  font-style: italic;
-  margin-top: 8px;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    margin-top: 8px;
 }
 
 /* Right Sticker Selector Panel */
 .sticker-selector-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-  justify-content: center;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+    justify-content: center;
 }
 
 .sticker-tabs-nav {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .sticker-tab-pill {
-  padding: 8px 22px;
-  border-radius: var(--radius-full);
-  background: var(--color-white);
-  border: 1.5px solid rgba(45, 36, 38, 0.1);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--color-dark-text);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--transition-fast);
+    padding: 8px 22px;
+    border-radius: var(--radius-full);
+    background: var(--color-white);
+    border: 1.5px solid rgba(45, 36, 38, 0.1);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-dark-text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
 }
 
 .sticker-tab-pill:hover {
-  border-color: var(--color-pink-primary);
-  color: var(--color-pink-primary);
+    border-color: var(--color-pink-primary);
+    color: var(--color-pink-primary);
 }
 
 .sticker-tab-pill.active {
-  background: var(--color-pink-primary);
-  border-color: var(--color-pink-primary);
-  color: var(--color-white);
-  box-shadow: var(--shadow-pink);
+    background: var(--color-pink-primary);
+    border-color: var(--color-pink-primary);
+    color: var(--color-white);
+    box-shadow: var(--shadow-pink);
 }
 
 /* Stickers Grid Cards */
 .stickers-grid-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  max-height: 400px;
-  overflow-y: auto;
-  padding: 6px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 6px;
 }
 
 .sticker-option-card {
-  height: 105px;
-  background: var(--color-white);
-  border: 1.5px solid rgba(45, 36, 38, 0.1);
-  border-radius: var(--radius-md);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(45, 36, 38, 0.05);
-  transition: all var(--transition-fast);
-  user-select: none;
+    height: 105px;
+    background: var(--color-white);
+    border: 1.5px solid rgba(45, 36, 38, 0.1);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(45, 36, 38, 0.05);
+    transition: all var(--transition-fast);
+    user-select: none;
 }
 
 .sticker-option-card:hover {
-  border-color: var(--color-pink-primary);
-  background: var(--color-pink-soft);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(244, 114, 154, 0.2);
+    border-color: var(--color-pink-primary);
+    background: var(--color-pink-soft);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(244, 114, 154, 0.2);
 }
 
 .sticker-option-card:active {
-  transform: scale(0.97);
+    transform: scale(0.97);
 }
 
 .sticker-big-icon {
-  font-size: 2.2rem;
+    font-size: 2.2rem;
 }
 
 .sticker-label-text {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
 }
 
 /* Bottom Bar */
 .sticker-bottom-bar {
-  height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
 }

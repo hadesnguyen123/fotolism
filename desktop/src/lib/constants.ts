@@ -114,39 +114,39 @@ export const DEFAULT_SELFBOOTH_CAPTURE_COUNTDOWN = 2
  * - Nút Âm lượng (Remote Bluetooth chụp ảnh): 'AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown', 'MediaPlayPause'
  */
 export const REMOTE_TRIGGER_KEYS: readonly string[] = [
-  // Space & Enter
-  ' ',
-  'Space',
-  'Enter',
-  'NumpadEnter',
-  // Rapoo R100 Next / Down
-  'PageDown',
-  'ArrowDown',
-  'ArrowRight',
-  // Rapoo R100 Prev / Up
-  'PageUp',
-  'ArrowUp',
-  'ArrowLeft',
-  // Rapoo R100 Black Screen button
-  'b',
-  'B',
-  'KeyB',
-  '.',
-  'Period',
-  // Rapoo R100 Fullscreen / Exit
-  'F5',
-  'Escape',
-  'f',
-  'F',
-  'KeyF',
-  // Bluetooth remote / Shutter buttons
-  'AudioVolumeUp',
-  'AudioVolumeDown',
-  'VolumeUp',
-  'VolumeDown',
-  'MediaPlayPause',
-  'MediaTrackNext',
-  'MediaTrackPrevious',
+    // Space & Enter
+    ' ',
+    'Space',
+    'Enter',
+    'NumpadEnter',
+    // Rapoo R100 Next / Down
+    'PageDown',
+    'ArrowDown',
+    'ArrowRight',
+    // Rapoo R100 Prev / Up
+    'PageUp',
+    'ArrowUp',
+    'ArrowLeft',
+    // Rapoo R100 Black Screen button
+    'b',
+    'B',
+    'KeyB',
+    '.',
+    'Period',
+    // Rapoo R100 Fullscreen / Exit
+    'F5',
+    'Escape',
+    'f',
+    'F',
+    'KeyF',
+    // Bluetooth remote / Shutter buttons
+    'AudioVolumeUp',
+    'AudioVolumeDown',
+    'VolumeUp',
+    'VolumeDown',
+    'MediaPlayPause',
+    'MediaTrackNext',
+    'MediaTrackPrevious',
 ]
 
 /**
@@ -154,72 +154,75 @@ export const REMOTE_TRIGGER_KEYS: readonly string[] = [
  * Rapoo XR100, một số remote Bluetooth không dây thường dùng keyCode số nguyên.
  */
 export const REMOTE_TRIGGER_KEYCODES: readonly number[] = [
-  13,  // Enter
-  32,  // Space
-  33,  // PageUp  (nút Prev / Lùi)
-  34,  // PageDown (nút Next / Tiến)
-  37,  // ArrowLeft
-  38,  // ArrowUp
-  39,  // ArrowRight
-  40,  // ArrowDown
-  66,  // B (black screen)
-  70,  // F (fullscreen)
-  116, // F5
-  27,  // Escape
+    13, // Enter
+    32, // Space
+    33, // PageUp  (nút Prev / Lùi)
+    34, // PageDown (nút Next / Tiến)
+    37, // ArrowLeft
+    38, // ArrowUp
+    39, // ArrowRight
+    40, // ArrowDown
+    66, // B (black screen)
+    70, // F (fullscreen)
+    116, // F5
+    27, // Escape
 ]
 
 /** Kiểm tra KeyboardEvent có phải là phím kích hoạt remote chụp ảnh hay không */
 export function isRemoteTriggerEvent(e: KeyboardEvent): boolean {
-  // Kiểm tra key/code chuẩn trước
-  if (REMOTE_TRIGGER_KEYS.includes(e.key) || REMOTE_TRIGGER_KEYS.includes(e.code)) {
-    return true
-  }
-  // Fallback: thiết bị remote gửi keyCode số (Unidentified / undefined key)
-  if (e.key === 'Unidentified' || !e.key || e.key === 'undefined') {
+    // Kiểm tra key/code chuẩn trước
+    if (
+        REMOTE_TRIGGER_KEYS.includes(e.key) ||
+        REMOTE_TRIGGER_KEYS.includes(e.code)
+    ) {
+        return true
+    }
+    // Fallback: thiết bị remote gửi keyCode số (Unidentified / undefined key)
+    if (e.key === 'Unidentified' || !e.key || e.key === 'undefined') {
+        return REMOTE_TRIGGER_KEYCODES.includes(e.keyCode)
+    }
+    // Fallback thêm: so sánh keyCode trực tiếp cho mọi trường hợp
     return REMOTE_TRIGGER_KEYCODES.includes(e.keyCode)
-  }
-  // Fallback thêm: so sánh keyCode trực tiếp cho mọi trường hợp
-  return REMOTE_TRIGGER_KEYCODES.includes(e.keyCode)
 }
 
 export interface SelfboothPackage {
-  id: '5m' | '7m' | '10m'
-  name: string
-  minutes: number
-  durationSeconds: number
-  defaultPrice: number
-  badge: string
-  description: string
+    id: '5m' | '7m' | '10m'
+    name: string
+    minutes: number
+    durationSeconds: number
+    defaultPrice: number
+    badge: string
+    description: string
 }
 
 export const SELFBOOTH_PACKAGES: SelfboothPackage[] = [
-  {
-    id: '5m',
-    name: 'Selfbooth 5p',
-    minutes: 5,
-    durationSeconds: 300,
-    defaultPrice: DEFAULT_SELFBOOTH_PRICE_5M,
-    badge: '1 NGƯỜI',
-    description: 'Dành cho 1 người (5 phút)',
-  },
-  {
-    id: '7m',
-    name: 'Selfbooth 7p',
-    minutes: 7,
-    durationSeconds: 420,
-    defaultPrice: DEFAULT_SELFBOOTH_PRICE_7M,
-    badge: '2-3 NGƯỜI',
-    description: 'Dành cho 2-3 người (7 phút)',
-  },
-  {
-    id: '10m',
-    name: 'Selfbooth 10p',
-    minutes: 10,
-    durationSeconds: 600,
-    defaultPrice: DEFAULT_SELFBOOTH_PRICE_10M,
-    badge: '3-4 NGƯỜI',
-    description: 'Dành cho 3-4 người (10 phút)',
-  },
+    {
+        id: '5m',
+        name: 'Selfbooth 5p',
+        minutes: 5,
+        durationSeconds: 300,
+        defaultPrice: DEFAULT_SELFBOOTH_PRICE_5M,
+        badge: '1 NGƯỜI',
+        description: 'Dành cho 1 người (5 phút)',
+    },
+    {
+        id: '7m',
+        name: 'Selfbooth 7p',
+        minutes: 7,
+        durationSeconds: 420,
+        defaultPrice: DEFAULT_SELFBOOTH_PRICE_7M,
+        badge: '2-3 NGƯỜI',
+        description: 'Dành cho 2-3 người (7 phút)',
+    },
+    {
+        id: '10m',
+        name: 'Selfbooth 10p',
+        minutes: 10,
+        durationSeconds: 600,
+        defaultPrice: DEFAULT_SELFBOOTH_PRICE_10M,
+        badge: '3-4 NGƯỜI',
+        description: 'Dành cho 3-4 người (10 phút)',
+    },
 ]
 
 /** Tốc độ tua video timelapse hậu trường (VD: 2.5x) */
@@ -230,11 +233,12 @@ export const DEFAULT_TIMELAPSE_SPEED = 2.5
 export const DEFAULT_GDRIVE_FOLDER_ID = '1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
 
 /** Đường dẫn thư mục Google Drive mặc định */
-export const DEFAULT_GDRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
+export const DEFAULT_GDRIVE_FOLDER_URL =
+    'https://drive.google.com/drive/folders/1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
 
 /** Webhook Google Apps Script mặc định để tự động tạo subfolder */
 export const DEFAULT_GDRIVE_WEBHOOK_URL =
-  'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
+    'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
 
 // ── 8. Hardware & Camera Specifications ──
 /** USB Vendor ID của Canon EOS */
@@ -253,19 +257,19 @@ export const PRINT_JOB_TIMEOUT_MS = 10000
  * Biến đổi các đường dẫn tuyệt đối /frames/... thành relative ./frames/...
  */
 export function resolveAssetUrl(url?: string): string {
-  if (!url) return ''
-  if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('blob:') ||
-    url.startsWith('file://')
-  ) {
-    return url
-  }
-  if (url.startsWith('./')) {
-    return url
-  }
-  const clean = url.startsWith('/') ? url.slice(1) : url
-  return `./${clean}`
+    if (!url) return ''
+    if (
+        url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('data:') ||
+        url.startsWith('blob:') ||
+        url.startsWith('file://')
+    ) {
+        return url
+    }
+    if (url.startsWith('./')) {
+        return url
+    }
+    const clean = url.startsWith('/') ? url.slice(1) : url
+    return `./${clean}`
 }
