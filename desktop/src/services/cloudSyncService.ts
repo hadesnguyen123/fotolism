@@ -186,6 +186,7 @@ class CloudSyncService {
     // Chạy đồng bộ ngay khi khởi động
     this.sendHeartbeat().catch(console.warn)
     this.syncPendingSessions().catch(console.warn)
+    this.purgeOldSessions(7)
 
     this.timer = window.setInterval(async () => {
       try {
@@ -208,13 +209,39 @@ class CloudSyncService {
   // 1. HEARTBEAT & CONFIG VERSION CHECK
   // ──────────────────────────────────────────────────────────────────────────
 
+  public async checkCmsHealth(): Promise<boolean> {
+    const cmsUrl = this.getCmsUrl()
+    try {
+      const res = await fetch(`${cmsUrl}/api/system/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(2500),
+      })
+      const isOk = res.ok
+      if (!this.getBearerToken()) {
+        this.status.isOnline = isOk
+        if (isOk) this.status.lastError = null
+        this.notify()
+      }
+      return isOk
+    } catch {
+      if (!this.getBearerToken()) {
+        this.status.isOnline = false
+        this.notify()
+      }
+      return false
+    }
+  }
+
   public async sendHeartbeat(): Promise<boolean> {
     const token = this.getBearerToken()
     if (!token) {
-      this.status.isOnline = false
-      this.status.lastError = 'Thiết bị chưa được kích hoạt với Cloud CMS'
-      this.notify()
-      return false
+      const isAlive = await this.checkCmsHealth()
+      if (!isAlive) {
+        this.status.isOnline = false
+        this.status.lastError = 'Thiết bị chưa được kích hoạt với Cloud CMS'
+        this.notify()
+      }
+      return isAlive
     }
 
     const cmsUrl = this.getCmsUrl()
@@ -338,6 +365,24 @@ class CloudSyncService {
     }
   }
 
+  /**
+   * Tự động xóa các phiên chụp đã cũ quá `days` ngày (mặc định 7 ngày theo cronjob)
+   */
+  public purgeOldSessions(days: number = 7): { removedCount: number; remainingCount: number } {
+    const cutoff = Date.now() - days * 24 * 3600 * 1000
+    const sessions = this.getOutboxSessions()
+    const kept = sessions.filter((s) => {
+      const time = new Date(s.created_at).getTime()
+      return isNaN(time) || time >= cutoff
+    })
+    const removedCount = sessions.length - kept.length
+    if (removedCount > 0) {
+      this.saveOutboxSessions(kept)
+      console.log(`[CloudSyncService] Tự động dọn dẹp ${removedCount} phiên chụp quá ${days} ngày.`)
+    }
+    return { removedCount, remainingCount: kept.length }
+  }
+
   public saveOutboxSessions(sessions: KioskOutboxSession[]) {
     localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(sessions))
     this.refreshPendingCount()
@@ -414,6 +459,17 @@ class CloudSyncService {
         },
         body: JSON.stringify(payload),
       })
+
+      if (res.status === 401) {
+        this.status.isSyncing = false
+        this.status.lastError = 'Thiết bị chưa được xác thực (HTTP 401). Vui lòng kiểm tra mã kích hoạt Kiosk.'
+        this.notify()
+        return {
+          success: false,
+          syncedCount: 0,
+          message: 'Lỗi xác thực (HTTP 401): Token không hợp lệ hoặc Kiosk chưa kích hoạt',
+        }
+      }
 
       if (!res.ok) {
         throw new Error(`Sync sessions failed: HTTP ${res.status}`)
@@ -534,9 +590,9 @@ class CloudSyncService {
     const devCfg: DeviceConfig = {
       device_token: 'jb_tok_dev_888888_test',
       kiosk_id: 'kiosk_01',
-      kiosk_name: 'Kiosk 01 — Vincom Mega Mall (Dev / Test Mode)',
+      kiosk_name: 'Kiosk #01',
       branch_id: 'branch_01',
-      branch_name: 'Chi Nhánh 01 — Vincom Thảo Điền (Dev Lab)',
+      branch_name: 'Chi Nhánh Fotolism',
       cms_url: cmsUrl,
       activated_at: new Date().toISOString(),
     }

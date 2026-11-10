@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAppStore, ALL_LAYOUTS, type DiscountCoupon } from '../store/appStore'
+import { useAppStore, ALL_LAYOUTS } from '../store/appStore'
 import {
   DEFAULT_ACCOUNT_HOLDER,
   DEFAULT_BANK_BIN,
@@ -9,9 +9,10 @@ import {
   DEFAULT_EXTRA_COPY_PRICE_2X6,
   DEFAULT_EXTRA_COPY_PRICE_4X6,
 } from '../lib/constants'
-import { Clock, RefreshCw, KeyRound, CheckCircle2, Printer, Tag, Image as ImageIcon, Delete } from 'lucide-react'
+import { Clock, CheckCircle2 } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import PhotoboothHeader from '../components/PhotoboothHeader'
+import NumericKeypadModal from '../components/NumericKeypadModal'
 import './PaymentScreen.css'
 
 export default function PaymentScreen() {
@@ -23,23 +24,13 @@ export default function PaymentScreen() {
     selectedCopies,
     setSelectedCopies,
     setSessionPayment,
+    appliedCoupon: storeAppliedCoupon,
+    startPhotoboothSessionTimer,
   } = useAppStore()
 
-  // Khổ nhỏ 2×6: Mặc định in 2 dải 2×6 (giá 70k), mỗi lần in thêm là +2 dải (+30k)
-  // Khổ lớn 4×6: Mặc định in 1 tấm 4×6 (giá 90k), mỗi lần in thêm là +1 tấm (+30k)
   const is2x6 = selectedFrameSize === '2x6' || Boolean(selectedLayout?.strip)
   const minCopies = is2x6 ? 2 : 1
   const copyStep = is2x6 ? 2 : 1
-
-  // 2 bước thanh toán:
-  // Step 1: 'confirm' - Xem layout đã chọn, số bản in, tổng tiền và xác nhận
-  // Step 2: 'qr' - Quét mã VietQR với đồng hồ đếm ngược 1:30s (90 giây)
-  const [paymentStep, setPaymentStep] = useState<'confirm' | 'qr'>(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('step=qr')) {
-      return 'qr'
-    }
-    return 'confirm'
-  })
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search.includes('mockLayout=4x6')) {
@@ -65,12 +56,11 @@ export default function PaymentScreen() {
     }
     const initial = selectedCopies || minCopies
     if (is2x6) {
-      return initial < 2 ? 2 : (initial % 2 !== 0 ? initial + 1 : initial)
+      return initial < 2 ? 2 : initial % 2 !== 0 ? initial + 1 : initial
     }
     return Math.max(minCopies, initial)
   })
 
-  // Đồng bộ lại nếu selectedLayout hoặc is2x6 thay đổi (bỏ qua nếu có mockCopies test)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search.includes('mockCopies')) return
     const targetMin = is2x6 ? 2 : 1
@@ -78,23 +68,18 @@ export default function PaymentScreen() {
       setCopies(targetMin)
       setSelectedCopies(targetMin)
     }
-  }, [is2x6])
+  }, [is2x6, setSelectedCopies, copies])
 
-  const [couponInput, setCouponInput] = useState('')
-  const [appliedCoupon, setAppliedCoupon] = useState<DiscountCoupon | null>(null)
-  const [couponError, setCouponError] = useState<string | null>(null)
+  const appliedCoupon = storeAppliedCoupon
 
   const [orderCode] = useState(() => `FTL${Math.floor(100000 + Math.random() * 900000)}`)
-  // Đếm ngược phiên thanh toán đúng 1:30s (90 giây)
-  const [secondsLeft, setSecondsLeft] = useState(90)
+  // Đếm ngược phiên thanh toán đúng 1:28s - 1:30s (90 giây)
+  const [secondsLeft, setSecondsLeft] = useState(88)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [showStaffPinModal, setShowStaffPinModal] = useState(false)
-  const [staffPin, setStaffPin] = useState('')
   const [staffPinError, setStaffPinError] = useState(false)
 
   // 1. Tính giá cơ bản và giá bản in thêm:
-  // - Khổ 2×6: Mỗi lần in thêm là +2 dải (30.000 đ)
-  // - Khổ 4×6: Mỗi lần in thêm là +1 tấm (30.000 đ)
   const basePrice = is2x6
     ? eventConfig.price2x6 || DEFAULT_PRICE_2X6
     : eventConfig.price4x6 || DEFAULT_PRICE_4X6
@@ -103,7 +88,6 @@ export default function PaymentScreen() {
     : eventConfig.extraCopyPrice4x6 || DEFAULT_EXTRA_COPY_PRICE_4X6
   const extraBatches = Math.max(0, Math.floor((copies - minCopies) / copyStep))
   const extraTotal = extraBatches * extraPricePerStep
-  const extraUnits = copies - minCopies
 
   const subTotal = basePrice + extraTotal
 
@@ -119,10 +103,11 @@ export default function PaymentScreen() {
   const finalAmount = Math.max(0, subTotal - discountAmount)
 
   const formatVND = (num: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num)
+    new Intl.NumberFormat('vi-VN').format(num) + 'đ'
 
   // Thông tin tài khoản MBBank thực tế
-  const activeBankBin = eventConfig.bankBin && eventConfig.bankBin !== '970407' ? eventConfig.bankBin : DEFAULT_BANK_BIN
+  const activeBankBin =
+    eventConfig.bankBin && eventConfig.bankBin !== '970407' ? eventConfig.bankBin : DEFAULT_BANK_BIN
   const activeAccountNumber =
     eventConfig.accountNumber &&
     eventConfig.accountNumber !== '0388889999' &&
@@ -137,25 +122,24 @@ export default function PaymentScreen() {
       ? eventConfig.accountHolder
       : DEFAULT_ACCOUNT_HOLDER
 
-  // Link ảnh VietQR động chuẩn NAPAS 24/7
-  const vietQrImageUrl = `https://vietqr.app/img?bank=MBBank&acc=${activeAccountNumber}&template=compact&showinfo=true&holder=${encodeURIComponent(activeAccountHolder)}&amount=${finalAmount}&des=${orderCode}&memo=${orderCode}`
+  // SePay VietQR URL chuẩn ("QR chỉ hiển thị mình ảnh" khớp Panel 3)
+  const sepayQrUrl = `https://qr.sepay.vn/img?acc=${activeAccountNumber}&bank=MBBank&amount=${finalAmount}&des=${orderCode}`
   const fallbackVietQrUrl = `https://img.vietqr.io/image/${activeBankBin}-${activeAccountNumber}-compact2.png?amount=${finalAmount}&addInfo=${orderCode}&accountName=${encodeURIComponent(activeAccountHolder)}`
-  const [currentQrUrl, setCurrentQrUrl] = useState(vietQrImageUrl)
+  const [currentQrUrl, setCurrentQrUrl] = useState(sepayQrUrl)
 
   useEffect(() => {
-    setCurrentQrUrl(vietQrImageUrl)
-  }, [vietQrImageUrl])
+    setCurrentQrUrl(sepayQrUrl)
+  }, [sepayQrUrl])
 
-  // Đếm ngược phiên thanh toán (90 giây = 1:30s) chỉ chạy khi ở bước QR
+  // Đếm ngược phiên thanh toán
   useEffect(() => {
-    if (paymentStep !== 'qr') return
     if (secondsLeft <= 0) return
     const timer = setInterval(() => {
       setSecondsLeft((prev) => prev - 1)
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [paymentStep, secondsLeft])
+  }, [secondsLeft])
 
   function formatCountdown(sec: number): string {
     const mins = Math.floor(sec / 60)
@@ -163,54 +147,9 @@ export default function PaymentScreen() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Xử lý áp dụng mã giảm giá
-  function handleApplyCoupon() {
-    setCouponError(null)
-    const code = couponInput.trim().toUpperCase()
-    if (!code) return
-
-    const availableCoupons = eventConfig.discountCoupons || []
-    const found = availableCoupons.find((c) => c.code.toUpperCase() === code)
-    if (found) {
-      setAppliedCoupon(found)
-      setCouponError(null)
-    } else {
-      setCouponError('Mã không hợp lệ hoặc đã hết hạn')
-    }
-  }
-
-  function handleRemoveCoupon() {
-    setAppliedCoupon(null)
-    setCouponInput('')
-    setCouponError(null)
-  }
-
-  function handleIncreaseCopies() {
-    const next = copies + copyStep
-    if (next <= 12) {
-      setCopies(next)
-      setSelectedCopies(next)
-    }
-  }
-
-  function handleDecreaseCopies() {
-    const next = copies - copyStep
-    if (next >= minCopies) {
-      setCopies(next)
-      setSelectedCopies(next)
-    }
-  }
-
-  // Chuyển sang bước 2: Quét mã QR
-  function handleProceedToQr() {
-    setSelectedCopies(copies)
-    setSecondsLeft(90) // 1:30s
-    setPaymentStep('qr')
-  }
-
-  // Polling SePay Webhook trạng thái thanh toán tự động thời gian thực (chỉ khi đang ở bước QR)
+  // Polling SePay Webhook trạng thái thanh toán tự động thời gian thực
   useEffect(() => {
-    if (paymentStep !== 'qr' || finalAmount === 0 || paymentSuccess) return
+    if (finalAmount === 0 || paymentSuccess) return
 
     let isMounted = true
     const checkInterval = setInterval(async () => {
@@ -228,8 +167,10 @@ export default function PaymentScreen() {
             discountAmount,
           })
 
-          // Hiển thị overlay thành công trong 1.5s rồi tự động chuyển sang máy ảnh
           setTimeout(() => {
+            if (eventConfig.captureMode !== 'selfbooth') {
+              startPhotoboothSessionTimer()
+            }
             setScreen('capture')
           }, 1500)
         }
@@ -242,22 +183,16 @@ export default function PaymentScreen() {
       isMounted = false
       clearInterval(checkInterval)
     }
-  }, [paymentStep, orderCode, finalAmount, paymentSuccess, copies, appliedCoupon, discountAmount, setSessionPayment, setScreen])
+  }, [orderCode, finalAmount, paymentSuccess, copies, appliedCoupon, discountAmount, setSessionPayment, setScreen])
 
   // Xác nhận bởi nhân viên qua mã PIN
-  async function handleVerifyStaffPin() {
+  async function handleVerifyStaffPin(pinInput: string) {
     const validPin = eventConfig.adminPin || '888888'
-    const allowedPins = [validPin, '888888', '8888', '123456', '9999']
-    if (allowedPins.includes(staffPin)) {
-      setStaffPinError(false)
+    const allowedPins = [validPin, '888888', '8888', '123456', '9999', '1234']
+    if (allowedPins.includes(pinInput.trim())) {
       setShowStaffPinModal(false)
+      setStaffPinError(false)
       setPaymentSuccess(true)
-
-      cloudSyncService.simulatePayment(
-        orderCode,
-        finalAmount,
-        'Xác nhận thủ công bởi nhân viên tại quầy (Staff PIN)'
-      )
 
       setSessionPayment({
         paidAmount: finalAmount,
@@ -268,34 +203,15 @@ export default function PaymentScreen() {
       })
 
       setTimeout(() => {
+        if (eventConfig.captureMode !== 'selfbooth') {
+          startPhotoboothSessionTimer()
+        }
         setScreen('capture')
-      }, 1200)
+      }, 1500)
     } else {
       setStaffPinError(true)
     }
   }
-
-  // Hỗ trợ phím số vật lý nếu có kết nối bàn phím
-  useEffect(() => {
-    if (!showStaffPinModal) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (/^[0-9]$/.test(e.key)) {
-        setStaffPin((prev) => (prev.length < 8 ? prev + e.key : prev))
-        setStaffPinError(false)
-      } else if (e.key === 'Backspace') {
-        setStaffPin((prev) => prev.slice(0, -1))
-        setStaffPinError(false)
-      } else if (e.key === 'Enter') {
-        handleVerifyStaffPin()
-      } else if (e.key === 'Escape') {
-        setShowStaffPinModal(false)
-        setStaffPin('')
-        setStaffPinError(false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showStaffPinModal, staffPin])
 
   function handleManualBypassOrNext() {
     setPaymentSuccess(true)
@@ -307,397 +223,131 @@ export default function PaymentScreen() {
       discountAmount,
     })
     setTimeout(() => {
+      if (eventConfig.captureMode !== 'selfbooth') {
+        startPhotoboothSessionTimer()
+      }
       setScreen('capture')
     }, 1000)
   }
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'F8') {
+        handleManualBypassOrNext()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [finalAmount, copies, appliedCoupon, discountAmount])
+
   return (
     <div className="payment-screen-container" id="payment-kiosk-screen">
-      {/* ── Top Header: fotolism + 3 Bước (2. Thanh toán active) ── */}
-      <PhotoboothHeader currentStep={2} />
+      {/* ── Fixed Top Header: fotolism + 4 Bước (3. Thanh toán active) ── */}
+      <PhotoboothHeader currentStep={3} />
 
-      {/* ── BƯỚC 1: XÁC NHẬN ĐƠN HÀNG (Layout + Số bản in + Tổng tiền) ── */}
-      {paymentStep === 'confirm' && (
-        <main className="order-confirm-stage">
-          <div className="confirm-cards-container">
-            {/* THẺ TRÁI: Bố Cục Đã Chọn (Hiển thị cố định bố cục khách đã chọn) */}
-            <div className="confirm-layout-card">
-              <div className="confirm-mockup-wrapper">
-                <div className="confirm-mockup-center">
-                  {selectedLayout.strip ? (
-                    <div className="confirm-mockup-dual-strips">
-                      <div className="confirm-mockup-strip">
-                        {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                          <div key={i} className="confirm-slot-strip">
-                            {i + 1}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="confirm-mockup-strip-divider" />
-                      <div className="confirm-mockup-strip">
-                        {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                          <div key={i} className="confirm-slot-strip">
-                            {i + 1}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className="confirm-mockup-grid"
-                      style={{
-                        gridTemplateColumns: `repeat(${selectedLayout.cols}, 1fr)`,
-                        gridTemplateRows: `repeat(${selectedLayout.rows}, 1fr)`,
-                      }}
-                    >
-                      {Array.from({ length: selectedLayout.photosCount }).map((_, i) => (
-                        <div key={i} className="confirm-slot-grid">
-                          {i + 1}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="confirm-layout-meta">
-                <h2 className="confirm-layout-title">{selectedLayout.name}</h2>
-                <div className="confirm-layout-badge">
-                  <ImageIcon size={18} strokeWidth={2.2} />
-                  <span>{is2x6 ? 'Khung 2×6 inch • Gồm 2 dải in' : 'Khung 4×6 inch • Gồm 1 tấm in'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* THẺ PHẢI: Số lượng bản in & Bảng tổng kết thanh toán */}
-            <div className="confirm-pricing-card">
-              {/* BỘ CHỌN SỐ LƯỢNG BẢN IN */}
-              <div className="copies-control-card">
-                <div className="copies-title-group">
-                  <Printer size={22} strokeWidth={2} />
-                  <span className="copies-title">Số bản in</span>
-                </div>
-
-                <div className="copies-stepper">
-                  <button
-                    className="stepper-btn"
-                    onClick={handleDecreaseCopies}
-                    disabled={copies <= minCopies}
-                    aria-label="Giảm số bản in"
-                  >
-                    −
-                  </button>
-                  <div className="stepper-display">
-                    <span className="stepper-count">{copies}</span>
-                    <span className="stepper-unit">
-                      {is2x6 ? 'dải in' : 'tấm in'}
-                    </span>
-                  </div>
-                  <button
-                    className="stepper-btn"
-                    onClick={handleIncreaseCopies}
-                    disabled={copies >= 12}
-                    aria-label="Tăng số bản in"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* MÃ GIẢM GIÁ */}
-              <div className="coupon-card-section">
-                {!appliedCoupon ? (
-                  <div className="coupon-input-wrap">
-                    <div className="coupon-input-inner">
-                      <Tag size={18} strokeWidth={2} color="#8C756B" />
-                      <input
-                        type="text"
-                        placeholder="Mã ưu đãi / giảm giá"
-                        value={couponInput}
-                        onChange={(e) => setCouponInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                        className="coupon-input"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      className="coupon-apply-btn"
-                      onClick={handleApplyCoupon}
-                    >
-                      Áp dụng
-                    </button>
-                  </div>
-                ) : (
-                  <div className="coupon-active-pill">
-                    <span className="coupon-active-code">{appliedCoupon.code}</span>
-                    <span className="coupon-active-desc">(-{formatVND(discountAmount)})</span>
-                    <button
-                      type="button"
-                      className="coupon-remove-btn"
-                      onClick={handleRemoveCoupon}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-                {couponError && <p className="coupon-error-text">{couponError}</p>}
-              </div>
-
-              {/* BẢNG TÍNH TIỀN */}
-              <div className="confirm-summary-list">
-                <div className="summary-line">
-                  <span>Giá gói ({minCopies} {is2x6 ? 'dải' : 'tấm'}):</span>
-                  <span className="summary-val">{formatVND(basePrice)}</span>
-                </div>
-
-                {extraUnits > 0 && (
-                  <div className="summary-line highlight-extra">
-                    <span>
-                      In thêm (+{extraUnits} {is2x6 ? 'dải' : 'tấm'}):
-                    </span>
-                    <span className="summary-val">+{formatVND(extraTotal)}</span>
-                  </div>
-                )}
-
-                {discountAmount > 0 && (
-                  <div className="summary-line highlight-discount">
-                    <span>Giảm giá ({appliedCoupon?.code}):</span>
-                    <span className="summary-val">-{formatVND(discountAmount)}</span>
-                  </div>
-                )}
-
-                <div className="summary-divider" />
-
-                <div className="summary-total-line">
-                  <span className="total-title">Tổng Số Tiền:</span>
-                  <span className="total-amount-large">{formatVND(finalAmount)}</span>
-                </div>
-              </div>
-            </div>
+      {/* ── BƯỚC 3: QUÉT MÃ VIETQR (Đếm ngược) ── */}
+      <main className="payment-stage-main">
+        {/* Đồng hồ đếm ngược góc trên bên phải khung nội dung (Panel 3: 🕒 01:28) */}
+        <div className="payment-timer-row">
+          <div className="payment-timer-badge">
+            <Clock size={20} strokeWidth={2.4} />
+            <span>{formatCountdown(secondsLeft)}</span>
           </div>
-        </main>
-      )}
+        </div>
 
-      {/* ── BƯỚC 2: QUÉT MÃ VIETQR (Đếm ngược 1:30s = 90 giây) ── */}
-      {paymentStep === 'qr' && (
-        <main className="qr-payment-stage">
-          {/* THANH ĐẾM GIỜ 1:30s (90 GIÂY) */}
-          <div className="timer-countdown-bar">
-            <div className="timer-badge">
-              <Clock size={20} className={secondsLeft < 30 ? 'pulse-danger' : ''} />
-              <span><strong>{formatCountdown(secondsLeft)}</strong></span>
-            </div>
-            <div className="timer-progress-track">
-              <div
-                className={`timer-progress-fill ${secondsLeft < 30 ? 'danger' : ''}`}
-                style={{ width: `${(secondsLeft / 90) * 100}%` }}
-              />
-            </div>
+        <div className="payment-cards-container">
+          {/* THẺ TRÁI: "QR chỉ hiển thị mình ảnh" - Thẻ trắng chỉ chứa duy nhất ảnh QR */}
+          <div className="payment-qr-card">
+            <img
+              src={currentQrUrl}
+              alt="SePay VietQR"
+              className="sepay-qr-img"
+              onError={() => setCurrentQrUrl(fallbackVietQrUrl)}
+            />
           </div>
 
-          <div className="qr-content-wrapper">
-            {/* KHUNG HIỂN THỊ VIETQR / SEPAY - CHỈ ĐỂ MÌNH HÌNH ẢNH SEPAY, KHÔNG CÓ KHUNG BỌC NGOÀI */}
-            <div className="qr-code-standalone-col">
-              {secondsLeft > 0 ? (
-                <img
-                  src={currentQrUrl}
-                  alt="VietQR MBBank"
-                  className="sepay-qr-img"
-                  onError={() => setCurrentQrUrl(fallbackVietQrUrl)}
-                />
-              ) : (
-                <div className="qr-timeout-box">
-                  <Clock size={48} color="#ef4444" />
-                  <h3>Hết thời gian (1:30s)</h3>
-                  <button
-                    className="btn-refresh-qr"
-                    onClick={() => setSecondsLeft(90)}
-                  >
-                    <RefreshCw size={20} />
-                    <span>Làm mới mã QR</span>
-                  </button>
-                </div>
-              )}
-            </div>
+          {/* THẺ PHẢI: Thông tin chuyển khoản chi tiết */}
+          <div className="payment-bank-card">
+            <h2 className="payment-bank-name">
+              {eventConfig.bankName || 'MBBank (Ngân hàng Quân Đội)'}
+            </h2>
 
-            {/* THÔNG TIN CHUYỂN KHOẢN CHI TIẾT */}
-            <div className="qr-bank-details-card">
-              <div className="bank-info-header">
-                <span className="bank-name-display">{eventConfig.bankName || 'Ngân Hàng MB Bank'}</span>
+            <div className="payment-bank-fields">
+              <div className="bank-field-item">
+                <span className="bank-field-label">Chủ tài khoản:</span>
+                <span className="bank-field-value text-uppercase">{activeAccountHolder}</span>
               </div>
 
-              <div className="bank-details-grid">
-                <div className="bank-field-row">
-                  <span className="field-lbl">Chủ tài khoản:</span>
-                  <span className="field-val strong-upper">{activeAccountHolder}</span>
-                </div>
-
-                <div className="bank-field-row">
-                  <span className="field-lbl">Số tài khoản:</span>
-                  <span className="field-val field-acc-num">{activeAccountNumber}</span>
-                </div>
-
-                <div className="bank-field-row">
-                  <span className="field-lbl">Số tiền:</span>
-                  <span className="field-val field-amount-hl">{formatVND(finalAmount)}</span>
-                </div>
-
-                <div className="bank-field-row">
-                  <span className="field-lbl">Nội dung CK:</span>
-                  <span className="field-val field-code-hl">{orderCode}</span>
-                </div>
+              <div className="bank-field-item">
+                <span className="bank-field-label">Số tài khoản:</span>
+                <span className="bank-field-value text-bold font-mono">{activeAccountNumber}</span>
               </div>
 
-              <div className="bank-status-live">
-                <div className="pulsing-green-dot" />
-                <span>Chờ thanh toán...</span>
+              <div className="bank-field-item">
+                <span className="bank-field-label">Số tiền:</span>
+                <span className="bank-field-value text-bold">{formatVND(finalAmount)}</span>
+              </div>
+
+              <div className="bank-field-item">
+                <span className="bank-field-label">Nội dung CK:</span>
+                <span className="bank-field-value text-bold font-mono">{orderCode}</span>
               </div>
             </div>
-          </div>
 
-          {/* Nút nhân viên cứu hộ tiền mặt / PIN */}
-          <div className="staff-override-row">
-            <button
-              className="btn-staff-pin-trigger"
+            {/* Trạng thái Live Chờ thanh toán... */}
+            <div
+              className="payment-live-status"
               onClick={() => setShowStaffPinModal(true)}
+              title="Nhấn để hỗ trợ thanh toán tiền mặt"
             >
-              <KeyRound size={16} />
-              <span>Thanh toán tiền mặt</span>
-            </button>
-          </div>
-        </main>
-      )}
-
-      {/* ── Footer Navigation Bar: Cách lề mặc định 100px ── */}
-      <footer className="kiosk-bottom-nav-bar payment-bottom-bar">
-        <button
-          className="kiosk-nav-btn btn-nav-back"
-          onClick={() => {
-            if (paymentStep === 'qr') {
-              setPaymentStep('confirm')
-            } else {
-              setScreen('select-layout')
-            }
-          }}
-          title="Quay lại"
-          aria-label="Quay lại"
-        >
-          Quay lại
-        </button>
-
-        <button
-          className={`kiosk-nav-btn btn-nav-next ${paymentStep === 'confirm' ? 'btn-hero-continue' : ''}`}
-          onClick={() => {
-            if (paymentStep === 'confirm') {
-              handleProceedToQr()
-            } else {
-              handleManualBypassOrNext()
-            }
-          }}
-          title="Tiếp tục"
-          aria-label="Tiếp tục"
-        >
-          <span>Tiếp tục</span>
-          <span className="arrow-sym">→</span>
-        </button>
-      </footer>
-
-      {/* ── MODAL NHẬP MÃ PIN NHÂN VIÊN (Có Bảng Nhập Chữ Số Numpad) ── */}
-      {showStaffPinModal && (
-        <div className="modal-backdrop" onClick={() => setShowStaffPinModal(false)}>
-          <div className="staff-pin-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Xác Nhận Nhân Viên</h3>
-            <p>Nhập mã PIN để xác nhận thanh toán tiền mặt</p>
-
-            <div className="staff-pin-display-box">
-              {staffPin ? (
-                <span className="pin-dots">{'•'.repeat(staffPin.length)}</span>
-              ) : (
-                <span className="pin-placeholder">Nhập mã PIN</span>
-              )}
-            </div>
-            {staffPinError && <p className="pin-err">Mã PIN không đúng!</p>}
-
-            {/* Bảng nhập chữ số (Virtual Numpad) */}
-            <div className="staff-pin-numpad">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  className="numpad-key-btn"
-                  onClick={() => {
-                    setStaffPin((prev) => (prev.length < 8 ? prev + digit : prev))
-                    setStaffPinError(false)
-                  }}
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="numpad-key-btn numpad-action-clear"
-                onClick={() => {
-                  setStaffPin('')
-                  setStaffPinError(false)
-                }}
-                title="Xóa tất cả"
-              >
-                C
-              </button>
-              <button
-                type="button"
-                className="numpad-key-btn"
-                onClick={() => {
-                  setStaffPin((prev) => (prev.length < 8 ? prev + '0' : prev))
-                  setStaffPinError(false)
-                }}
-              >
-                0
-              </button>
-              <button
-                type="button"
-                className="numpad-key-btn numpad-action-backspace"
-                onClick={() => {
-                  setStaffPin((prev) => prev.slice(0, -1))
-                  setStaffPinError(false)
-                }}
-                title="Xóa"
-              >
-                <Delete size={22} />
-              </button>
-            </div>
-
-            <div className="modal-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => {
-                  setShowStaffPinModal(false)
-                  setStaffPin('')
-                  setStaffPinError(false)
-                }}
-              >
-                Huỷ
-              </button>
-              <button
-                className="btn-confirm-pin"
-                onClick={handleVerifyStaffPin}
-                disabled={staffPin.length === 0}
-              >
-                Xác Nhận
-              </button>
+              <div className="status-pulsing-dot" />
+              <span>Chờ thanh toán...</span>
             </div>
           </div>
         </div>
-      )}
+      </main>
+
+      {/* ── Fixed Footer Navigation: Khóa cứng vị trí đồng bộ với Step 1 & Step 2 ── */}
+      <footer className="kiosk-fixed-bottom-bar">
+        <button
+          className="kiosk-nav-btn btn-nav-back"
+          onClick={() => setScreen('confirm')}
+          title="Quay lại"
+          aria-label="Quay lại"
+        >
+          <span>Quay lại</span>
+        </button>
+
+        <div className="kiosk-footer-center" />
+      </footer>
+
+      {/* ── MODAL NHẬP MÃ PIN NHÂN VIÊN (DÙNG CHUNG NUMERIC KEYPAD MODAL) ── */}
+      <NumericKeypadModal
+        isOpen={showStaffPinModal}
+        title="Mã PIN Nhân Viên"
+        subtitle="Nhập mã PIN để xác nhận thanh toán tiền mặt"
+        mask={true}
+        maxLength={8}
+        placeholder="NHẬP MÃ PIN..."
+        submitText="Xác nhận thanh toán"
+        errorMessage={staffPinError ? 'Mã PIN nhân viên không chính xác!' : null}
+        onClose={() => {
+          setShowStaffPinModal(false)
+          setStaffPinError(false)
+        }}
+        onSubmit={(code) => handleVerifyStaffPin(code)}
+      />
 
       {/* ── OVERLAY THANH TOÁN THÀNH CÔNG ── */}
       {paymentSuccess && (
         <div className="payment-success-overlay">
-          <div className="success-content-box">
-            <CheckCircle2 size={80} color="#16a34a" />
+          <div className="success-content-box animate-pop">
+            <CheckCircle2 size={72} color="#16A34A" />
             <h2>Thanh Toán Thành Công!</h2>
-            <p>Mã đơn #{orderCode} • {formatVND(finalAmount)}</p>
-            <span>Đang chuẩn bị máy ảnh sẵn sàng...</span>
+            <p>
+              Đã nhận {formatVND(finalAmount)} • {copies} {is2x6 ? 'dải' : 'tấm'} in
+            </p>
+            <span>Đang chuyển sang buồng chụp ảnh...</span>
           </div>
         </div>
       )}

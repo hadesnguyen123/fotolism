@@ -4,7 +4,7 @@ description: Kỹ sư tích hợp phần cứng máy ảnh Canon EOS R100 (C#/.N
 skills:
   - camera-integration
   - print-manager
-  - joybooth-system-verifier
+  - system-verifier
 ---
 
 # 📷 Hardware & Camera Integration Specialist — Fotolism 3.0

@@ -54,6 +54,13 @@ ai-service/data/composited/*
 ai-service/data/qr/*
 ai-service/data/logs/*
 !ai-service/data/**/.gitkeep
+desktop/ai-service/data/raw/*
+desktop/ai-service/data/enhanced/*
+desktop/ai-service/data/composited/*
+desktop/ai-service/data/qr/*
+desktop/ai-service/data/logs/*
+!desktop/ai-service/data/**/.gitkeep
+scratch/
 
 # Environment variables & Local Credentials
 .env

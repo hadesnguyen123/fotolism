@@ -37,7 +37,7 @@ export interface EdsdkCaptureResult {
 
 export interface FotolismAPI {
   ai: {
-    enhance: (imagePath: string, beautyLevel: number) => IpcResponse<{ enhancedPath: string }>
+    enhance: (imagePath: string, beautyLevel?: number, presetId?: string, styleId?: string) => IpcResponse<{ enhancedPath: string }>
     composite: (imagePath: string, framePath: string) => IpcResponse<{ compositedPath: string }>
     generateQr: (sessionId: string, imagePath: string) => IpcResponse<{ qrDataUrl: string; downloadUrl: string }>
   }
@@ -108,6 +108,34 @@ export interface FotolismAPI {
       filesCount: number
     }>
     testDriveWebhook: (webhookUrl: string) => IpcResponse<{ message: string; statusCode?: number }>
+    getUploadStatus: () => IpcResponse<{
+      concurrency: number
+      activeStreams: number
+      pendingTasks: number
+      uploadingTasks: number
+      uploadedTasks: number
+      failedTasks: number
+      isProcessing: boolean
+    }>
+    setConcurrency: (concurrency: number) => IpcResponse<{ concurrency: number }>
+    retryFailedUploads: () => IpcResponse<{ retriedCount: number }>
+    enqueueR2Session: (payload: {
+      sessionId: string
+      customerName?: string
+      sessionType?: string
+      cmsUrl?: string
+      files: Array<{
+        imageId: string
+        filePath: string
+        isFinal?: boolean
+        sizeBytes?: number
+      }>
+    }) => IpcResponse<{
+      sessionId: string
+      folderKey: string
+      enqueuedCount: number
+    }>
+    onUploadProgress: (callback: (event: any) => void) => () => void
   }
 }
 
@@ -130,9 +158,9 @@ const mockCaptures = new Map<string, any[]>()
 // Fallback implementation khi chạy trong browser dev mode (không có Electron)
 const defaultMockApi: FotolismAPI = {
   ai: {
-    enhance: async (_imagePath: string, level: number) => ({
+    enhance: async (_imagePath: string, level?: number) => ({
       success: true,
-      data: { enhancedPath: `${MOCK_SAVE_BASE}/mock_enhanced_lvl${level}.jpg` },
+      data: { enhancedPath: `${MOCK_SAVE_BASE}/mock_enhanced_lvl${level ?? 50}.jpg` },
     }),
     composite: async () => ({
       success: true,
@@ -155,10 +183,7 @@ const defaultMockApi: FotolismAPI = {
     listPrinters: async () => ({
       success: true,
       data: {
-        printers: [
-          { name: 'Canon SELPHY CP1500 (Dye-Sub)', isDefault: true },
-          { name: 'DNP DS-RX1HS', isDefault: false },
-        ],
+        printers: [],
       },
     }),
   },
@@ -412,6 +437,35 @@ const defaultMockApi: FotolismAPI = {
         return { success: false, error: err.message }
       }
     },
+    getUploadStatus: async () => ({
+      success: true,
+      data: {
+        concurrency: 4,
+        activeStreams: 0,
+        pendingTasks: 0,
+        uploadingTasks: 0,
+        uploadedTasks: 12,
+        failedTasks: 0,
+        isProcessing: false,
+      },
+    }),
+    setConcurrency: async (concurrency: number) => ({
+      success: true,
+      data: { concurrency },
+    }),
+    retryFailedUploads: async () => ({
+      success: true,
+      data: { retriedCount: 0 },
+    }),
+    enqueueR2Session: async (payload) => ({
+      success: true,
+      data: {
+        sessionId: payload.sessionId,
+        folderKey: `fotolism-photos/mock_${payload.sessionId}`,
+        enqueuedCount: payload.files.length,
+      },
+    }),
+    onUploadProgress: () => () => {},
   },
 }
 

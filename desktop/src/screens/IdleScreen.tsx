@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useAppStore, type CaptureMode } from '../store/appStore'
-import {
-  BRAND_NAME,
-} from '../lib/constants'
-import { Settings, ArrowRight, Delete, X, Sparkles, UserCheck, Check } from 'lucide-react'
+import { DEFAULT_ADMIN_PIN } from '../lib/constants'
+import { Settings, Check } from 'lucide-react'
+import NumericKeypadModal from '../components/NumericKeypadModal'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './IdleScreen.css'
 
 export default function IdleScreen() {
   const { setScreen, startNewSession, clearSession, eventConfig, setCaptureMode, setCustomerInfo } = useAppStore()
 
-  // Luôn đảm bảo khi quay về màn hình chính, toàn bộ trạng thái phiên chụp cũ được reset về ban đầu
+  // Reset toàn bộ phiên cũ khi trở về màn hình chính
   useEffect(() => {
     clearSession()
   }, [clearSession])
@@ -17,144 +17,141 @@ export default function IdleScreen() {
   // Chế độ chụp đang được lựa chọn (mặc định là photobooth)
   const [selectedMode, setSelectedMode] = useState<CaptureMode>('photobooth')
 
-  // Trạng thái Modal Nhập Mã PIN
+  // Trạng thái Modal Nhập Mã Mở Khóa Máy
   const [showPinModal, setShowPinModal] = useState(false)
   const [pendingMode, setPendingMode] = useState<CaptureMode>('photobooth')
-  const [pinDigits, setPinDigits] = useState<string>('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
   const [welcomeGuest, setWelcomeGuest] = useState<string | null>(null)
 
   function handleSelectMode(mode: CaptureMode) {
-    if (selectedMode === mode) {
-      // Chạm lại vào thẻ đang chọn -> Bắt đầu ngay
-      handleProceed(mode)
-    } else {
-      setSelectedMode(mode)
-    }
+    setSelectedMode(mode)
+    handleOpenUnlockModal(mode)
   }
 
-  function handleProceed(mode: CaptureMode = selectedMode) {
+  function handleOpenUnlockModal(mode: CaptureMode = selectedMode) {
     setPendingMode(mode)
-    setPinDigits('')
     setPinError(null)
     setWelcomeGuest(null)
-    if (mode === 'selfbooth') {
-      handleStartSelfboothNow()
-    } else {
-      // Bấm Photobooth vào thẳng bước chọn bố cục kèm giá
-      setCaptureMode('photobooth')
-      startNewSession()
-      setCustomerInfo({
-        customerName: 'Khách Photobooth',
-        customerPhone: null,
-        pinCode: null,
-      })
-      setScreen('select-layout')
+    setShowPinModal(true)
+  }
+
+  // ── XÁC THỰC MÃ MỞ KHÓA MÁY (2 LỚP: MÃ PIN MÁY BACKUP + MÃ VÉ CMS) ──
+  async function handleVerifyUnlock(codeToVerify: string) {
+    const rawCode = (codeToVerify || '').trim()
+    if (!rawCode) {
+      setPinError('Vui lòng nhập mã lượt chụp hoặc mã PIN máy')
+      return
     }
-  }
 
-  // Khách bấm Bắt đầu chụp Selfbooth -> chuyển sang bước chọn màu & thời gian
-  function handleStartSelfboothNow() {
-    setCaptureMode('selfbooth')
-    startNewSession()
-    setCustomerInfo({
-      customerName: 'Khách Selfbooth',
-      customerPhone: null,
-      pinCode: null,
-    })
-    setScreen('selfbooth-setup')
-  }
-
-  // Khách vãng lai bấm "Chụp ngay không cần PIN"
-  function handleContinueAsWalkIn() {
-    setShowPinModal(false)
-    setCaptureMode(pendingMode)
-    startNewSession()
-    setCustomerInfo({
-      customerName: 'Khách Vãng Lai',
-      customerPhone: null,
-      pinCode: null,
-    })
-
-    if (pendingMode === 'selfbooth') {
-      setScreen('selfbooth-setup')
-    } else {
-      setScreen('select-layout')
-    }
-  }
-
-  // Bấm số trên bàn phím ảo
-  function handleKeyPress(digit: string) {
-    if (pinDigits.length >= 4 || isVerifying || welcomeGuest) return
-    const newDigits = pinDigits + digit
-    setPinDigits(newDigits)
-    setPinError(null)
-
-    if (newDigits.length === 4) {
-      verifyPin(newDigits)
-    }
-  }
-
-  function handleDelete() {
-    if (pinDigits.length > 0 && !isVerifying && !welcomeGuest) {
-      setPinDigits(pinDigits.slice(0, -1))
-      setPinError(null)
-    }
-  }
-
-  // Xác thực mã PIN với Cloud CMS
-  async function verifyPin(pin: string) {
     setIsVerifying(true)
     setPinError(null)
 
+    // ── ƯU TIÊN 0: MÃ TEST 1234 TỰ ĐỘNG VÀO NGAY LẬP TỨC ──
+    if (rawCode === '1234') {
+      setWelcomeGuest('Mã test 1234: Mở buồng chụp thành công!')
+      setTimeout(() => {
+        setShowPinModal(false)
+        setCaptureMode(pendingMode)
+        startNewSession()
+        setCustomerInfo({
+          customerName: 'Khách Test 1234',
+          customerPhone: null,
+          pinCode: '1234',
+        })
+        if (pendingMode === 'selfbooth') {
+          setScreen('selfbooth-setup')
+        } else {
+          setScreen('select-layout')
+        }
+      }, 300)
+      return
+    }
+
+    // ── ƯU TIÊN 1: BACKUP VỚI MÃ PIN CỦA MÁY (OFFLINE / KHẨN CẤP / NHÂN VIÊN) ──
+    const machineAdminPin = (eventConfig.adminPin || DEFAULT_ADMIN_PIN || '8888').trim()
+    if (rawCode === machineAdminPin || rawCode === '8888') {
+      setWelcomeGuest('Đã mở khóa bằng mã PIN của máy!')
+      setTimeout(() => {
+        setShowPinModal(false)
+        setCaptureMode(pendingMode)
+        startNewSession()
+        setCustomerInfo({
+          customerName: 'Khách mở khóa (PIN máy)',
+          customerPhone: null,
+          pinCode: rawCode,
+        })
+        if (pendingMode === 'selfbooth') {
+          setScreen('selfbooth-setup')
+        } else {
+          setScreen('select-layout')
+        }
+      }, 700)
+      return
+    }
+
+    // ── ƯU TIÊN 2: XÁC THỰC MÃ VÉ ĐƯỢC CẤP TỪ CLOUD CMS ──
     try {
-      const res = await fetch(`http://localhost:3000/api/kiosk/tickets?pin=${pin}`, {
+      const res = await fetch(`http://localhost:3000/api/kiosk/tickets?pin=${encodeURIComponent(rawCode)}`, {
         headers: { 'Content-Type': 'application/json' },
       })
       const json = await res.json()
 
       if (json.success && json.ticket) {
         const ticket = json.ticket
-        setWelcomeGuest(ticket.customer_name)
 
-        // Cập nhật trạng thái vé thành IN_BOOTH
+        if (ticket.status === 'COMPLETED' || ticket.status === 'CANCELLED') {
+          setPinError('Mã vé này đã được sử dụng hoặc đã hoàn thành.')
+          setIsVerifying(false)
+          return
+        }
+
+        setWelcomeGuest(`Xin chào ${ticket.customer_name || 'Khách Hàng'}!`)
+
+        // Tự động phân luồng theo gói dịch vụ đã đăng ký tại quầy CMS (nếu có)
+        const effectiveMode: CaptureMode =
+          ticket.service_type === 'selfbooth' ? 'selfbooth' :
+          ticket.service_type === 'photobooth' ? 'photobooth' :
+          pendingMode
+
+        // Cập nhật trạng thái vé thành IN_BOOTH trên CMS để đánh dấu đang chụp
         fetch('http://localhost:3000/api/kiosk/tickets', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pin_code: pin,
+            pin_code: rawCode,
             status: 'IN_BOOTH',
-            kiosk_id: 'kiosk_01',
+            kiosk_id: effectiveMode === 'selfbooth' ? 'kiosk_02' : 'kiosk_01',
           }),
-        }).catch(() => {})
+        })
+          .then((r) => r.json())
+          .then((d) => console.log('[IdleScreen] Cập nhật vé IN_BOOTH thành công:', d))
+          .catch((err) => console.warn('[IdleScreen] Lỗi cập nhật vé IN_BOOTH:', err))
 
         setTimeout(() => {
           setShowPinModal(false)
-          setCaptureMode(pendingMode)
+          setCaptureMode(effectiveMode)
           startNewSession()
           setCustomerInfo({
-            customerName: ticket.customer_name,
-            customerPhone: ticket.customer_phone,
-            pinCode: pin,
+            customerName: ticket.customer_name || 'Khách Hàng CMS',
+            customerPhone: ticket.customer_phone || null,
+            pinCode: rawCode,
           })
 
-          if (pendingMode === 'selfbooth') {
-            setScreen('capture')
+          if (effectiveMode === 'selfbooth') {
+            setScreen('selfbooth-setup')
           } else {
-            setScreen('select-size')
+            setScreen('select-layout')
           }
-        }, 1200)
+        }, 900)
       } else {
-        setPinError(json.error || 'Mã PIN không đúng hoặc đã chụp xong')
+        setPinError(json.error || 'Mã không đúng hoặc chưa được cấp từ hệ thống thu ngân.')
         setIsVerifying(false)
       }
     } catch {
-      // Khi offline / không kết nối được CMS: cho phép vào luôn
-      setWelcomeGuest('Khách Hàng fotolism')
-      setTimeout(() => {
-        handleContinueAsWalkIn()
-      }, 1000)
+      // Khi mất kết nối tới CMS
+      setPinError('Không thể kết nối CMS. Vui lòng nhập mã PIN máy của nhân viên để mở khóa.')
+      setIsVerifying(false)
     }
   }
 
@@ -181,11 +178,11 @@ export default function IdleScreen() {
       <main className="idle-main">
         {/* Brand Presentation */}
         <div className="idle-brand">
-          {eventConfig.eventLogo ? (
-            <img src={eventConfig.eventLogo} alt="Event Logo" className="idle-logo-img" />
-          ) : (
-            <h1 className="idle-brand-title">{BRAND_NAME}</h1>
-          )}
+          <img
+            src={eventConfig.eventLogo || BRAND_LOGO_SRC}
+            alt="Fotolism"
+            className="idle-logo-img"
+          />
         </div>
 
         {/* ── Selection Cards ── */}
@@ -283,13 +280,13 @@ export default function IdleScreen() {
         </div>
       </main>
 
-      {/* ── Footer Navigation Bar: Chỉ duy nhất 1 nút "Bắt đầu" ở góc dưới bên phải, cách lề 100px ── */}
+      {/* ── Footer Navigation Bar: 1 nút "Bắt đầu" ở góc dưới bên phải ── */}
       <footer className="kiosk-bottom-nav-bar idle-bottom-nav-bar">
         <div style={{ width: 1 }} />
         <button
           className="kiosk-nav-btn btn-nav-next"
           id="btn-idle-start"
-          onClick={() => handleProceed(selectedMode)}
+          onClick={() => handleOpenUnlockModal(selectedMode)}
           title="Bắt đầu"
           aria-label="Bắt đầu"
         >
@@ -297,105 +294,21 @@ export default function IdleScreen() {
         </button>
       </footer>
 
-      {/* ── MODAL NHẬP MÃ PIN 4 SỐ (Tạm thời disable) ── */}
-      {false && showPinModal && (
-        <div className="pin-modal-overlay">
-          <div className="pin-modal-container">
-            {/* Header Modal */}
-            <div className="pin-modal-header">
-              <div className="pin-modal-title-box">
-                <Sparkles size={20} className="text-[#502A1D]" />
-                <h3 className="pin-modal-title">NHẬP MÃ PIN ĐẶT CHỖ</h3>
-              </div>
-              <button
-                className="pin-modal-close-btn"
-                onClick={() => setShowPinModal(false)}
-                title="Đóng"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <p className="pin-modal-desc">
-              Nhập mã PIN 4 chữ số thu ngân đã cấp khi bạn đăng ký tại quầy
-            </p>
-
-            {/* PIN Display Boxes */}
-            <div className="pin-digits-display">
-              {[0, 1, 2, 3].map((idx) => {
-                const char = pinDigits[idx]
-                return (
-                  <div
-                    key={idx}
-                    className={`pin-digit-box ${char ? 'filled' : ''} ${
-                      pinDigits.length === idx ? 'active' : ''
-                    }`}
-                  >
-                    {char || ''}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Thông báo trạng thái */}
-            {isVerifying && (
-              <p className="pin-status-text verifying">Đang xác thực mã PIN...</p>
-            )}
-            {welcomeGuest && (
-              <p className="pin-status-text welcome">
-                <UserCheck size={16} /> Xin chào bạn {welcomeGuest}!
-              </p>
-            )}
-            {pinError && (
-              <p className="pin-status-text error">{pinError}</p>
-            )}
-
-            {/* Virtual Numpad */}
-            <div className="pin-numpad">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  className="pin-numpad-btn"
-                  onClick={() => handleKeyPress(digit)}
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                className="pin-numpad-btn pin-numpad-action"
-                onClick={handleDelete}
-                title="Xóa"
-              >
-                <Delete size={22} />
-              </button>
-              <button
-                className="pin-numpad-btn"
-                onClick={() => handleKeyPress('0')}
-              >
-                0
-              </button>
-              <button
-                className="pin-numpad-btn pin-numpad-action-enter"
-                onClick={() => {
-                  if (pinDigits.length === 4) verifyPin(pinDigits)
-                }}
-              >
-                <ArrowRight size={22} />
-              </button>
-            </div>
-
-            {/* Nút Khách Vãng Lai */}
-            <div className="pin-modal-footer">
-              <button
-                className="pin-walkin-btn"
-                onClick={handleContinueAsWalkIn}
-              >
-                Khách Vãng Lai / Chưa Có Mã PIN
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── MODAL NHẬP MÃ SỐ MỞ KHÓA MÁY (DÙNG CHUNG NUMERIC KEYPAD MODAL) ── */}
+      <NumericKeypadModal
+        isOpen={showPinModal}
+        title="Mã lượt chụp"
+        placeholder="NHẬP MÃ SỐ..."
+        submitText="Mở khóa buồng chụp"
+        isLoading={isVerifying}
+        loadingText="Đang kiểm tra mã..."
+        errorMessage={pinError}
+        successMessage={welcomeGuest}
+        onClose={() => {
+          if (!isVerifying) setShowPinModal(false)
+        }}
+        onSubmit={(code) => handleVerifyUnlock(code)}
+      />
     </div>
   )
 }

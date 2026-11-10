@@ -1,19 +1,21 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
-import { generateStripComposite, preparePrintImageForDNP } from '../lib/canvasCompositor'
+import { generateStripComposite, preparePrintImageForDNP, type SlotOffset } from '../lib/canvasCompositor'
 import {
   FILE_PREFIX_SHOT,
   FILE_PREFIX_FINAL,
-  FILE_PREFIX_TIMELAPSE,
   SESSION_FOLDER_PREFIX,
-  BRAND_NAME,
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
+  DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
 import QRCode from 'qrcode'
-import { QrCode, Loader2, AlertCircle, RefreshCw, Image as ImageIcon, Film, Printer, Download } from 'lucide-react'
+import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
+import { InteractiveStripPreview } from '../components/review/InteractiveStripPreview'
+import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import './ReviewScreen.css'
 
 export default function ReviewScreen() {
@@ -38,14 +40,15 @@ export default function ReviewScreen() {
     setDriveSyncError: setSyncError,
     cloudFolderUrl,
     setCloudFolderUrl,
+    deviceConfig,
   } = useAppStore()
 
   const defaultCopies = session?.paidCopies || selectedCopies || (selectedFrameSize === '2x6' ? 2 : 1)
 
-  const [activeMediaView, setActiveMediaView] = useState<'strip' | 'timelapse'>('strip')
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
   const [printCopies, setPrintCopies] = useState<number>(defaultCopies)
   const [isPrinting, setIsPrinting] = useState<boolean>(false)
+  const [printError, setPrintError] = useState<string | null>(null)
   const [compositeStripUrl, setCompositeStripUrl] = useState<string>('')
   const [isGeneratingComposite, setIsGeneratingComposite] = useState<boolean>(true)
 
@@ -65,15 +68,147 @@ export default function ReviewScreen() {
 
   const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
 
-  // Link đích của mã QR: Ưu tiên link thư mục Google Drive vừa được tạo khi bật gdriveEnabled
-  const webGalleryUrl = `http://localhost:3000/gallery/${session?.sessionId || subfolderName}`
-  const targetCloudUrl = (eventConfig.gdriveEnabled && cloudFolderUrl)
-    ? cloudFolderUrl
-    : (session?.storageUrl || (isSelfboothMode ? webGalleryUrl : `https://pub-r2.fotolism.vn/sessions/${subfolderName}/${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`))
+  // ── Offset cân chỉnh vị trí ảnh từng ô (Normalized Offset -1.0 đến +1.0) ──
+  const [slotOffsets, setSlotOffsets] = useState<SlotOffset[]>(() =>
+    Array(photos.length).fill({ x: 0, y: 0 })
+  )
+  const slotOffsetsRef = useRef<SlotOffset[]>(slotOffsets)
+  slotOffsetsRef.current = slotOffsets
 
-  // Tạo mã QR Code CHỈ KHI link hợp lệ và đã đồng bộ xong hoàn toàn
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null)
+  const dragStartRef = useRef<{
+    index: number
+    startX: number
+    startY: number
+    initOffset: SlotOffset
+    slotPixelWidth: number
+    slotPixelHeight: number
+  } | null>(null)
+
+  const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
+  const totalW = is2x6 ? 600 : 1200
+  const totalH = 1800
+
+  const frameSlots = useMemo(() => {
+    if (selectedTheme?.slots && selectedTheme.slots.length > 0) {
+      return selectedTheme.slots.map((s: { x: number; y: number; w: number; h: number }) => ({
+        xPercent: (s.x / totalW) * 100,
+        yPercent: (s.y / totalH) * 100,
+        wPercent: (s.w / totalW) * 100,
+        hPercent: (s.h / totalH) * 100,
+        slotW: s.w,
+        slotH: s.h,
+        aspectRatio: s.w / s.h,
+      }))
+    }
+    const totalSlots = selectedLayout.photosCount || 4
+    const cols = selectedLayout.cols || (is2x6 ? 1 : 2)
+    const rows = selectedLayout.rows || Math.max(1, Math.ceil(totalSlots / cols))
+    const footerHeight = selectedTheme?.hideFooter ? 0 : 150
+    const padX = is2x6 ? 36 : 50
+    const padTop = 40
+    const gap = 20
+    const availableHeight = totalH - padTop - footerHeight
+    const defW = (totalW - padX * 2 - gap * (cols - 1)) / cols
+    const defH = (availableHeight - gap * (rows - 1)) / rows
+
+    return Array.from({ length: totalSlots }).map((_, i) => {
+      const colIdx = i % cols
+      const rowIdx = Math.floor(i / cols)
+      const sx = padX + colIdx * (defW + gap)
+      const sy = padTop + rowIdx * (defH + gap)
+      return {
+        xPercent: (sx / totalW) * 100,
+        yPercent: (sy / totalH) * 100,
+        wPercent: (defW / totalW) * 100,
+        hPercent: (defH / totalH) * 100,
+        slotW: defW,
+        slotH: defH,
+        aspectRatio: defW / defH,
+      }
+    })
+  }, [selectedTheme, selectedLayout, is2x6, totalW, totalH])
+
+  const regenerateComposite = useCallback(
+    async (offsets: SlotOffset[]) => {
+      try {
+        const photoUrls = photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath).filter(Boolean)
+        const stripUrl = await generateStripComposite({
+          photos: photoUrls,
+          frameSize: selectedFrameSize,
+          layout: selectedLayout,
+          theme: selectedTheme,
+          stickers: placedStickers,
+          filter: selectedFilter,
+          eventName: eventConfig.eventName,
+          eventDate: eventConfig.date,
+          slotOffsets: offsets,
+        })
+        setCompositeStripUrl(stripUrl)
+      } catch (err) {
+        console.warn('Error regenerating strip composite:', err)
+      }
+    },
+    [photos, selectedFrameSize, selectedLayout, selectedTheme, placedStickers, selectedFilter, eventConfig]
+  )
+
+  const handlePointerDown = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.currentTarget
+    try {
+      target.setPointerCapture(e.pointerId)
+    } catch {}
+    const rect = target.getBoundingClientRect()
+    dragStartRef.current = {
+      index,
+      startX: e.clientX,
+      startY: e.clientY,
+      initOffset: slotOffsetsRef.current[index] || { x: 0, y: 0 },
+      slotPixelWidth: rect.width,
+      slotPixelHeight: rect.height,
+    }
+    setActiveDragIndex(index)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current || activeDragIndex === null) return
+    const { index, startX, startY, initOffset, slotPixelWidth, slotPixelHeight } = dragStartRef.current
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+
+    // Sensitivity: vuốt 45% bề rộng ô tương ứng dịch chuyển hết biên (offset 1.0)
+    const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
+    const sensitivityY = Math.max(slotPixelHeight * 0.45, 40)
+
+    const nextX = Math.max(-1, Math.min(1, initOffset.x + dx / sensitivityX))
+    const nextY = Math.max(-1, Math.min(1, initOffset.y + dy / sensitivityY))
+
+    setSlotOffsets((prev) => {
+      const next = [...prev]
+      next[index] = { x: nextX, y: nextY }
+      return next
+    })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeDragIndex !== null) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+      const finalOffsets = [...slotOffsetsRef.current]
+      dragStartRef.current = null
+      setActiveDragIndex(null)
+      regenerateComposite(finalOffsets)
+    }
+  }
+
+  // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
+  const cmsBaseUrl = (deviceConfig?.cms_url || 'https://fotolism-cms.vercel.app').replace(/\/$/, '')
+  const webGalleryUrl = `${cmsBaseUrl}/gallery/${session?.sessionId || subfolderName}`
+  const targetCloudUrl = webGalleryUrl
+
+  // Tạo mã QR Code cho Cloud Gallery
   useEffect(() => {
-    if (!targetCloudUrl || (eventConfig.gdriveEnabled && !driveSyncDone)) {
+    if (!targetCloudUrl) {
       setQrDataUrl('')
       return
     }
@@ -85,24 +220,24 @@ export default function ReviewScreen() {
     })
       .then((url) => setQrDataUrl(url))
       .catch((err) => console.error('Error generating QR:', err))
-  }, [targetCloudUrl, eventConfig.gdriveEnabled, driveSyncDone])
+  }, [targetCloudUrl])
 
   // Sinh bản ghép canvas composite chất lượng cao & Đẩy ảnh lên Google Drive
   useEffect(() => {
     let isMounted = true
 
     async function processSessionMedia() {
-      try {
+        try {
         if (isSelfboothMode) {
           // Chế độ Selfbooth: Không cần ghép khung in ấn
           setIsGeneratingComposite(false)
 
-          // Nếu đã hoàn thành đồng bộ từ bước chụp thì không cần gọi lại
+          // Nếu đã hoàn thành đồng bộ từ bước ProcessingScreen thì không cần gọi lại
           if (driveSyncDone && cloudFolderUrl && !cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)) {
             return
           }
 
-          // Nếu đang trong quá trình đồng bộ nền từ CaptureScreen thì chờ đợi
+          // Nếu đang trong quá trình đồng bộ nền từ CaptureScreen/ProcessingScreen thì chờ đợi
           if (isSyncingDrive) {
             return
           }
@@ -110,7 +245,11 @@ export default function ReviewScreen() {
           if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
             setIsSyncingDrive(true)
             const filesToUpload: Array<{ name: string; dataUrl: string }> = []
-            photos.forEach((p, idx) => {
+            const sourcePhotos = (session?.selfboothLibrary && session.selfboothLibrary.length > 0)
+              ? session.selfboothLibrary
+              : photos
+
+            sourcePhotos.forEach((p, idx) => {
               const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
               if (dataUrl && dataUrl.trim().length > 0) {
                 filesToUpload.push({
@@ -120,19 +259,7 @@ export default function ReviewScreen() {
               }
             })
 
-            const effectiveSelfTimelapse =
-              session?.timelapseDataUrl ||
-              (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-            if (effectiveSelfTimelapse) {
-              filesToUpload.push({
-                name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-                dataUrl: effectiveSelfTimelapse,
-              })
-            }
-
             const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
-            console.log('[ReviewScreen] Uploading Selfbooth to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
-
             const api = isBrowser ? mockApi : fotolismApi
             let res = await api.storage.uploadDriveSession({
               parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
@@ -141,11 +268,8 @@ export default function ReviewScreen() {
               webhookUrl: effectiveWebhookUrl,
             })
 
-            // Direct Renderer Fallback cho Selfbooth: Gọi trực tiếp từ Renderer nếu IPC trả về lỗi/fallback
             if (!res.success || !res.data?.cloudFolderUrl || res.data.cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)) {
-              console.log('[ReviewScreen] Selfbooth IPC returned fallback/error, trying direct renderer upload...')
               try {
-                const validDataFiles = filesToUpload.filter((f) => f.dataUrl && f.dataUrl.startsWith('data:'))
                 const directRes = await fetch(effectiveWebhookUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -153,13 +277,11 @@ export default function ReviewScreen() {
                     action: 'create_session_folder',
                     parentFolderId: eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
                     folderName: subfolderName,
-                    files: validDataFiles,
+                    files: filesToUpload.filter((f) => f.dataUrl && f.dataUrl.startsWith('data:')),
                   }),
-                  redirect: 'follow',
                 })
                 const directJson = await directRes.json()
                 if (directJson && directJson.success && directJson.folderUrl) {
-                  console.log('[ReviewScreen] Selfbooth direct renderer upload SUCCESS:', directJson.folderUrl)
                   res = {
                     success: true,
                     data: {
@@ -167,12 +289,12 @@ export default function ReviewScreen() {
                       cloudFolderUrl: directJson.folderUrl,
                       cloudFolderId: directJson.folderId || '',
                       subfolderName,
-                      filesCount: directJson.filesCount || validDataFiles.length,
+                      filesCount: filesToUpload.length,
                     },
                   }
                 }
-              } catch (directErr: any) {
-                console.warn('[ReviewScreen] Selfbooth direct fetch fallback error:', directErr.message)
+              } catch (directErr) {
+                console.warn('[ReviewScreen] Selfbooth direct fetch failed:', directErr)
               }
             }
 
@@ -194,7 +316,18 @@ export default function ReviewScreen() {
           return
         }
 
-        // Chế độ Photobooth truyền thống
+          const prebuiltStrip = useAppStore.getState().compositeStripUrl || session?.compositeStripUrl
+        if (prebuiltStrip) {
+          setCompositeStripUrl(prebuiltStrip)
+          setIsGeneratingComposite(false)
+          if (cloudFolderUrl || useAppStore.getState().cloudFolderUrl) {
+            setIsSyncingDrive(false)
+            setDriveSyncDone(true)
+            return
+          }
+        }
+
+        // Sinh dải ảnh in hoàn chỉnh cho cả Photobooth và Selfbooth (fallback)
         setIsGeneratingComposite(true)
         const photoUrls = photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath).filter(Boolean)
         const stripUrl = await generateStripComposite({
@@ -206,6 +339,7 @@ export default function ReviewScreen() {
           filter: selectedFilter,
           eventName: eventConfig.eventName,
           eventDate: eventConfig.date,
+          slotOffsets: slotOffsetsRef.current,
         })
 
         if (!isMounted) return
@@ -227,8 +361,12 @@ export default function ReviewScreen() {
             })
           }
 
-          // 2. Các ảnh chụp đơn lẻ
-          photos.forEach((p, idx) => {
+          // 2. Toàn bộ ảnh chụp đơn lẻ (bao gồm toàn bộ kho ảnh Selfbooth nếu có)
+          const sourcePhotos = (session?.selfboothLibrary && session.selfboothLibrary.length > 0)
+            ? session.selfboothLibrary
+            : photos
+
+          sourcePhotos.forEach((p, idx) => {
             const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
             if (dataUrl && dataUrl.trim().length > 0) {
               filesToUpload.push({
@@ -237,33 +375,6 @@ export default function ReviewScreen() {
               })
             }
           })
-
-          // 3. Video Timelapse nếu có dữ liệu dataUrl hoặc blob
-          let effectiveTimelapse =
-            session?.timelapseDataUrl ||
-            (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-
-          if (!effectiveTimelapse && session?.timelapseUrl?.startsWith('blob:')) {
-            try {
-              const blobRes = await fetch(session.timelapseUrl)
-              const blob = await blobRes.blob()
-              effectiveTimelapse = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onloadend = () => resolve(reader.result as string)
-                reader.onerror = reject
-                reader.readAsDataURL(blob)
-              })
-            } catch (blobErr) {
-              console.warn('[ReviewScreen] Blob to dataUrl conversion fallback failed:', blobErr)
-            }
-          }
-
-          if (effectiveTimelapse) {
-            filesToUpload.push({
-              name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-              dataUrl: effectiveTimelapse,
-            })
-          }
 
           const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
           console.log('[ReviewScreen] Uploading Photobooth to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
@@ -347,15 +458,42 @@ export default function ReviewScreen() {
     selectedFilter,
     eventConfig,
     subfolderName,
-    session?.timelapseUrl,
     setGdriveUrl,
   ])
+
+  // Đánh dấu vé lượt chụp hoàn thành (COMPLETED) trên Cloud CMS
+  const markTicketCompleted = useCallback(async () => {
+    const pin = session?.pinCode
+    const adminPin = (eventConfig.adminPin || DEFAULT_ADMIN_PIN || '8888').trim()
+    if (!pin || pin === '8888' || pin === adminPin) return
+
+    try {
+      await fetch('http://localhost:3000/api/kiosk/tickets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin_code: pin,
+          status: 'COMPLETED',
+          kiosk_id: isSelfboothMode ? 'kiosk_02' : 'kiosk_01',
+        }),
+      })
+      console.log(`[ReviewScreen] Đã cập nhật vé ${pin} sang COMPLETED trên Cloud CMS`)
+    } catch (err) {
+      console.warn('[ReviewScreen] Không thể cập nhật trạng thái vé COMPLETED:', err)
+    }
+  }, [session?.pinCode, eventConfig.adminPin, isSelfboothMode])
+
+  // Cập nhật trạng thái COMPLETED ngay khi khách vào màn hình Review nhận ảnh
+  useEffect(() => {
+    markTicketCompleted()
+  }, [markTicketCompleted])
 
   // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS
   const recordSessionToOutbox = useMemo(() => () => {
     if (!session) return
     const is4x6 = selectedFrameSize === '4x6'
     const layoutType = isSelfboothMode ? 'selfbooth' : (is4x6 ? '4x6' : '2x6')
+    const kioskId = isSelfboothMode ? 'kiosk_02' : 'kiosk_01'
     const storageUrl =
       session.storageUrl ||
       cloudFolderUrl ||
@@ -369,7 +507,7 @@ export default function ReviewScreen() {
       pin_code: session.pinCode || null,
       customer_name: session.customerName || null,
       customer_phone: session.customerPhone || null,
-      kiosk_id: 'kiosk_01',
+      kiosk_id: kioskId,
       branch_id: 'branch_01',
       layout_type: layoutType,
       copies: isSelfboothMode ? 0 : printCopies,
@@ -381,23 +519,62 @@ export default function ReviewScreen() {
       drive_url: storageUrl,
       status: 'completed',
       created_at: new Date().toISOString(),
-      photos: photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath || ''),
+      photos: photos.map((p) => {
+        const pth = p.compositedPath || p.enhancedPath || p.rawPath || ''
+        // Chống lỗi QuotaExceededError (5MB) trong LocalStorage khi lưu DataURL base64 lớn
+        return pth.startsWith('data:') ? `[photo_slot_${p.id || 'shot'}]` : pth
+      }),
     })
-  }, [session, selectedFrameSize, printCopies, photos, cloudFolderUrl, subfolderName])
+  }, [session, selectedFrameSize, printCopies, photos, cloudFolderUrl, subfolderName, isSelfboothMode])
+
+  // ── Auto Return to Idle Timer (Cố định tối thiểu 120s / 2 phút cho tiến trình ngầm) ──
+  const [countdownToIdle, setCountdownToIdle] = useState<number>(() => Math.max(120, eventConfig.idleTimeoutSeconds || 120))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdownToIdle((prev) => {
+        if (prev <= 1) {
+          // Nếu các tiến trình ngầm (tải Drive, nén composite) chưa hoàn tất, hoãn đếm ngược
+          if (isSyncingDrive || isGeneratingComposite) {
+            return 15
+          }
+          clearInterval(timer)
+          handleFinish()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isSyncingDrive, isGeneratingComposite])
+
+  // Dọn dẹp Object URL nhị phân khi unmount
+  useEffect(() => {
+    return () => {
+      if (compositeStripUrl && compositeStripUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(compositeStripUrl) } catch { }
+      }
+    }
+  }, [compositeStripUrl])
 
   function handleFinish() {
+    if (isSyncingDrive || isGeneratingComposite) {
+      console.log('Background upload/sync is still active, waiting...')
+      return
+    }
+    markTicketCompleted()
     recordSessionToOutbox()
     clearSession()
     setScreen('idle')
   }
 
   async function handlePrint() {
-    // Lệnh in chỉ được thực hiện 1 lần trong 1 phiên chụp:
-    // Chặn tuyệt đối nếu đang in hoặc phiên này đã từng in!
+    // Lệnh in chỉ được thực hiện khi chưa in thành công và không trong tiến trình in
     if (isPrinting || session?.hasPrinted) return
 
     setIsPrinting(true)
-    setSessionPrinted()
+    setPrintError(null)
 
     try {
       const api = isBrowser ? mockApi : fotolismApi
@@ -412,13 +589,18 @@ export default function ReviewScreen() {
 
       const res = await api.print.send(pathToPrint, physicalSheets)
       if (res && res.success) {
+        setSessionPrinted()
         setIsPrinting(false)
+        setPrintError(null)
       } else {
-        console.error('Print failed:', res?.error)
+        const errorMsg = res?.error || 'Máy in không phản hồi hoặc lệnh in bị từ chối.'
+        console.error('Print failed:', errorMsg)
+        setPrintError(errorMsg)
         setIsPrinting(false)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Print failed:', err)
+      setPrintError(err?.message || 'Lỗi kết nối máy in.')
       setIsPrinting(false)
     }
   }
@@ -446,32 +628,6 @@ export default function ReviewScreen() {
             })
           }
         })
-
-        let effectiveTimelapse =
-          session?.timelapseDataUrl ||
-          (session?.timelapseUrl?.startsWith('data:') ? session.timelapseUrl : null)
-
-        if (!effectiveTimelapse && session?.timelapseUrl?.startsWith('blob:')) {
-          try {
-            const blobRes = await fetch(session.timelapseUrl)
-            const blob = await blobRes.blob()
-            effectiveTimelapse = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onloadend = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(blob)
-            })
-          } catch (blobErr) {
-            console.warn('[ReviewScreen] Retry blob to dataUrl conversion fallback failed:', blobErr)
-          }
-        }
-
-        if (effectiveTimelapse) {
-          filesToUpload.push({
-            name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-            dataUrl: effectiveTimelapse,
-          })
-        }
 
         const effectiveWebhookUrl = eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
         console.log('[ReviewScreen] Retrying upload to Google Drive Webhook:', effectiveWebhookUrl, 'files count:', filesToUpload.length)
@@ -537,39 +693,38 @@ export default function ReviewScreen() {
       }
     }
 
-    function handleDownloadTimelapse() {
-      const videoSrc = session?.timelapseUrl || session?.timelapseDataUrl
-      if (!videoSrc) return
-      const a = document.createElement('a')
-      a.href = videoSrc
-      a.download = `${FILE_PREFIX_TIMELAPSE}_${Date.now()}.webm`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-    }
-
     function handleOpenDriveBrowser() {
       if (cloudFolderUrl) {
         window.open(cloudFolderUrl, '_blank')
       }
     }
 
-    const isGrid =
-      selectedLayout.previewType === '4_grid' ||
-      selectedLayout.previewType === '6_grid' ||
-      selectedLayout.previewType === '8_grid'
-
     return (
       <div className="review-screen-pastel" id="review-screen">
+        {/* ── Fixed Brand Logo góc trên bên trái ── */}
+        <img src={BRAND_LOGO_SRC} alt="fotolism" className="review-fixed-brand-logo" />
+
         {/* ── Top Header: Tiêu đề trung tâm ── */}
         <header className="review-header-pastel">
-          <div style={{ width: 48 }} />
-
           <div className="review-header-center">
+            <div className="review-header-icon-box" aria-hidden="true">
+              <svg
+                width="34"
+                height="34"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#502A1D"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.5" fill="#502A1D" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+            </div>
             <h1 className="review-header-title">Ảnh Hoàn Thiện</h1>
           </div>
-
-          <div style={{ width: 48 }} />
         </header>
 
         {/* Main Content */}
@@ -640,125 +795,32 @@ export default function ReviewScreen() {
         ) : (
           /* Main 2-Column Content CHO PHOTOBOOTH */
           <main className="review-content-pastel">
-            {/* Left: Photobooth Strip Frame & Timelapse Media View */}
+            {/* Left: Photobooth Strip Frame */}
             <section className="strip-frame-container">
-              {/* Media View Mode Selector */}
-              <div className="review-media-tabs">
-                <button
-                  className={`review-media-tab-btn ${activeMediaView === 'strip' ? 'active' : ''}`}
-                  onClick={() => setActiveMediaView('strip')}
-                >
-                  <ImageIcon size={18} strokeWidth={2.2} />
-                  <span>Dải Ảnh In ({selectedFrameSize.toUpperCase()})</span>
-                </button>
-                <button
-                  className={`review-media-tab-btn ${activeMediaView === 'timelapse' ? 'active' : ''}`}
-                  onClick={() => setActiveMediaView('timelapse')}
-                >
-                  <Film size={18} strokeWidth={2.2} />
-                  <span>Video Timelapse ({eventConfig.timelapseSpeed || 2.5}x)</span>
-                </button>
+              <div className="frame-preview-wrapper fade-in">
+                {isGeneratingComposite ? (
+                  <div className="composite-generating-loader">
+                    <span className="loader-spinner-pink" />
+                    <span style={{ fontWeight: 700, color: 'var(--color-pink-primary)' }}>
+                      Đang hoàn thiện dải ảnh in...
+                    </span>
+                  </div>
+                ) : (
+                  <InteractiveStripPreview
+                    selectedFrameSize={selectedFrameSize}
+                    selectedTheme={selectedTheme}
+                    selectedFilter={selectedFilter}
+                    is2x6={is2x6}
+                    frameSlots={frameSlots}
+                    photos={photos}
+                    slotOffsets={slotOffsets}
+                    activeDragIndex={activeDragIndex}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                  />
+                )}
               </div>
-
-              {/* VIEW 1: DẢI ẢNH IN */}
-              {activeMediaView === 'strip' && (
-                <div className="frame-preview-wrapper fade-in">
-                  {isGeneratingComposite ? (
-                    <div className="composite-generating-loader">
-                      <span className="loader-spinner-pink" />
-                      <span style={{ fontWeight: 700, color: 'var(--color-pink-primary)' }}>
-                        Đang hoàn thiện dải ảnh in...
-                      </span>
-                    </div>
-                  ) : compositeStripUrl ? (
-                    <div className="final-rendered-strip-box animate-pop">
-                      <img
-                        src={compositeStripUrl}
-                        alt={`${BRAND_NAME} Final Print`}
-                        className={`final-rendered-strip-img ${selectedFrameSize === '2x6' ? 'strip-2x6-view' : 'postcard-4x6-view'}`}
-                      />
-                    </div>
-                  ) : (
-                    /* Fallback preview nếu chưa tải xong canvas */
-                    <div
-                      className={`photobooth-strip-paper ${selectedFrameSize === '4x6' ? 'frame-4x6-postcard' : 'frame-2x6-strip'}`}
-                      style={{
-                        background: selectedTheme.bgGradient || selectedTheme.bgColor,
-                        borderColor: selectedTheme.borderColor,
-                      }}
-                    >
-                      <div className="strip-header-deco">
-                        <span>{selectedTheme.decorations ? selectedTheme.decorations[0] : '🌸'}</span>
-                        <span className="strip-event-tag" style={{ color: selectedTheme.textColor }}>
-                          {eventConfig.eventName}
-                        </span>
-                        <span>{selectedTheme.decorations ? selectedTheme.decorations[1] : '✨'}</span>
-                      </div>
-
-                      <div className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}>
-                        {photos.map((photo, index) => (
-                          <div key={photo.id || index} className="strip-photo-item">
-                            <img
-                              src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
-                              alt={`Shot ${index + 1}`}
-                              style={{ filter: selectedFilter.cssFilter }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="strip-footer-deco">
-                        <span className="strip-logo-text" style={{ color: selectedTheme.textColor }}>
-                          {BRAND_NAME}
-                        </span>
-                        <span className="strip-date-text" style={{ color: selectedTheme.textColor }}>
-                          {eventConfig.date}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* VIEW 2: VIDEO TIMELAPSE */}
-              {activeMediaView === 'timelapse' && (
-                <div className="timelapse-preview-wrapper fade-in">
-                  {session?.timelapseUrl || session?.timelapseDataUrl ? (
-                    <div className="timelapse-player-card">
-                      <video
-                        src={session?.timelapseUrl || session?.timelapseDataUrl || ''}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        controls
-                        className="timelapse-video-element"
-                        ref={(el) => {
-                          if (el) el.playbackRate = eventConfig.timelapseSpeed || 2.5
-                        }}
-                      />
-                      <div className="timelapse-meta-bar">
-                        <span>Tốc độ: {eventConfig.timelapseSpeed || 2.5}x</span>
-                      </div>
-                      <button
-                        className="download-strip-btn"
-                        style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                        onClick={handleDownloadTimelapse}
-                      >
-                        <Download size={18} strokeWidth={2.2} />
-                        <span>Tải Video Timelapse</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="timelapse-empty-state">
-                      <Film size={54} strokeWidth={1.8} color="var(--brand-primary, #502A1D)" />
-                      <h3 style={{ margin: '10px 0 6px', color: 'var(--color-pink-primary)' }}>
-                        Video Timelapse
-                      </h3>
-                    </div>
-                  )}
-                </div>
-              )}
             </section>
 
             {/* Right: Instant QR & Print */}
@@ -828,83 +890,34 @@ export default function ReviewScreen() {
               </div>
 
               {/* Card In Ảnh */}
-              <div className="delivery-card-pastel">
-                <div className="card-title-pastel">
-                  <Printer size={20} strokeWidth={2.2} color="var(--brand-primary, #502A1D)" />
-                  <span>In Ảnh</span>
-                </div>
-
-                <div className="print-copies-row">
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Số bản in:</span>
-                    {session?.paidCopies && (
-                      <span style={{ fontSize: '0.76rem', color: '#059669', fontWeight: 600 }}>
-                        Đã thanh toán: {session.paidCopies} {selectedFrameSize === '2x6' ? 'dải' : 'tấm'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <button
-                      className="copies-btn-pastel"
-                      onClick={() => {
-                        const step = selectedFrameSize === '2x6' ? 2 : 1
-                        const min = selectedFrameSize === '2x6' ? 2 : 1
-                        setPrintCopies((c) => Math.max(min, c - step))
-                      }}
-                      disabled={Boolean(session?.hasPrinted) || isPrinting || printCopies <= (selectedFrameSize === '2x6' ? 2 : 1)}
-                    >
-                      -
-                    </button>
-                    <span style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--color-pink-primary)' }}>
-                      {printCopies} {selectedFrameSize === '2x6' ? 'dải' : 'tấm'}
-                    </span>
-                    <button
-                      className="copies-btn-pastel"
-                      onClick={() => {
-                        const step = selectedFrameSize === '2x6' ? 2 : 1
-                        setPrintCopies((c) => Math.min(12, c + step))
-                      }}
-                      disabled={Boolean(session?.hasPrinted) || isPrinting || printCopies >= 12}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  className="print-btn-pastel"
-                  id="print-button"
-                  disabled={Boolean(session?.hasPrinted) || isPrinting || isGeneratingComposite}
-                  onClick={handlePrint}
-                >
-                  In ảnh
-                </button>
-              </div>
+              <PrintActionDeck
+                selectedFrameSize={selectedFrameSize}
+                paidCopies={session?.paidCopies}
+                hasPrinted={session?.hasPrinted}
+                isPrinting={isPrinting}
+                isGeneratingComposite={isGeneratingComposite}
+                printCopies={printCopies}
+                printError={printError}
+                onSetPrintCopies={setPrintCopies}
+                onPrint={handlePrint}
+              />
             </section>
           </main>
         )}
 
-        {/* ── Bottom Bar: Cách lề mặc định 100px với 2 chữ 'Quay lại' và 'Tiếp tục' ── */}
+        {/* ── Bottom Bar: Nút Tiếp Tục / Hoàn Thành ── */}
         {(Boolean(qrDataUrl) || Boolean(syncError)) && (
-          <footer className="kiosk-bottom-nav-bar review-bottom-bar-pastel animate-pop">
+          <footer className="kiosk-bottom-nav-bar review-bottom-bar-pastel animate-pop" style={{ justifyContent: 'flex-end' }}>
             <button
-              className="kiosk-nav-btn btn-nav-back"
-              onClick={() => setScreen('select-filter')}
-              title="Quay lại"
-              aria-label="Quay lại"
-            >
-              Quay lại
-            </button>
-
-            <button
-              className="kiosk-nav-btn btn-nav-next"
+              className={`kiosk-nav-btn btn-nav-next ${(isSyncingDrive || isGeneratingComposite) ? 'disabled' : ''}`}
               id="finish-button"
+              disabled={isSyncingDrive || isGeneratingComposite}
               onClick={handleFinish}
-              title="Tiếp tục"
+              title={isSyncingDrive ? 'Đang hoàn tất lưu ảnh ngầm...' : 'Tiếp tục'}
               aria-label="Tiếp tục"
+              style={{ margin: '0 0 0 auto' }}
             >
-              Tiếp tục
+              {isSyncingDrive ? 'Đang lưu ảnh ngầm...' : `Tiếp tục (${countdownToIdle}s)`}
             </button>
           </footer>
         )}

@@ -23,8 +23,13 @@
 }
 
 @keyframes fadeInDim {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 /* ── Top Bar with Countdown Pills & Utility Buttons ────────────────────── */
@@ -162,23 +167,23 @@
   outline: 3px solid rgba(80, 42, 29, 0.25);
 }
 
-/* ── Main Stage Area (12-Column Grid: 1/12 Dock + 9/12 Live View + 2/12 Vertical Slots) ── */
+/* ── Main Stage Area (3-Column Layout: Left Dock + Center 16:9 Live View + Right Slots) ── */
 .capture-main-stage {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 9fr 2fr;
+  grid-template-columns: 76px 1fr auto;
   align-items: center;
   position: relative;
   z-index: 50;
-  overflow: visible;
+  overflow: hidden;
   width: 100%;
   box-sizing: border-box;
-  padding: 0 16px;
-  gap: 16px;
+  padding: 0 20px;
+  gap: 20px;
 }
 
-/* 1/12 Dock Column: Làm đẹp da & Đèn sáng studio */
+/* Left Dock Column: Làm đẹp da & Đèn sáng studio */
 .dock-grid-col-1.left-sidebar-dock {
   display: flex;
   flex-direction: column;
@@ -199,22 +204,25 @@
   filter: blur(1px);
 }
 
-/* 9/12 Live View Column (approx 75% Width) */
+/* Center Live View Column (Không gian trung tâm tối đa cho khung hình 16:9) */
 .liveview-grid-col-9 {
   width: 100%;
   height: 100%;
+  max-height: calc(100vh - 150px);
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
+  min-height: 0;
   position: relative;
+  overflow: hidden;
 }
 
-/* 2/12 Slots Column (approx 16.67% Width) */
+/* Right Slots Column */
 .slots-grid-col-2.right-slots-dock {
-  width: 100%;
+  width: auto;
   height: 100%;
-  max-height: calc(100vh - 165px);
+  max-height: calc(100vh - 150px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -419,12 +427,12 @@
   border-radius: 6px;
 }
 
-/* ── Camera Viewfinder Container (16:9 ratio, fills 10/12 column) ──────── */
+/* ── Camera Viewfinder Container (16:9 ratio theo thiết lập máy ảnh Canon EOS R100 & EDSDK Live View) ──────── */
 .camera-viewfinder-wrapper {
   aspect-ratio: 16 / 9;
-  width: 100%;
+  width: min(100%, calc((100vh - 150px) * 16 / 9));
   max-width: 100%;
-  max-height: calc(100vh - 182px);
+  max-height: calc(100vh - 150px);
   height: auto;
   margin: auto;
   position: relative;
@@ -450,6 +458,92 @@
   transition: filter 0.2s ease;
 }
 
+/* ── Safe Area Viewfinder Guide (Khung Giới Hạn Tỉ Lệ Chuẩn 528x352, 544x726, 281x580) ── */
+.capture-aspect-guide-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.capture-aspect-guide-box {
+  position: relative;
+  /* Kích thước và tỉ lệ co từ 2 bên vào được tính chuẩn xác 100% qua inline style guideBoxStyle */
+  max-height: 100%;
+  max-width: 100%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42);
+  border: 1.5px dashed rgba(251, 191, 36, 0.9);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 14px;
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.guide-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #FBBF24;
+  border-style: solid;
+}
+
+.guide-corner.top-left {
+  top: -2px;
+  left: -2px;
+  border-width: 3.5px 0 0 3.5px;
+}
+
+.guide-corner.top-right {
+  top: -2px;
+  right: -2px;
+  border-width: 3.5px 3.5px 0 0;
+}
+
+.guide-corner.bottom-left {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 3.5px 3.5px;
+}
+
+.guide-corner.bottom-right {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 3.5px 3.5px 0;
+}
+
+.guide-tag-badge {
+  background: rgba(80, 42, 29, 0.85);
+  color: #FFFFFF;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.guide-hint-text {
+  background: rgba(0, 0, 0, 0.65);
+  color: #FFFFFF;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
+}
+
 /* ── Camera Connecting State (Minimalist) ── */
 .camera-connecting-wrapper {
   color: #fff;
@@ -470,8 +564,13 @@
 }
 
 @keyframes spinSlow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .camera-connecting-text {
@@ -504,8 +603,13 @@
 }
 
 @keyframes flashBang {
-  0%   { opacity: 1; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Sequential Countdown digits overlay */
@@ -531,9 +635,20 @@
 }
 
 @keyframes countdownTranslucentPop {
-  0%   { transform: scale(0.85); opacity: 0.35; }
-  50%  { transform: scale(1.04); opacity: 0.9; }
-  100% { transform: scale(1); opacity: 0.6; }
+  0% {
+    transform: scale(0.85);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: scale(1.04);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
 }
 
 /* ── Right Vertical Slots Dock (Các ô dọc bên phải chiếm 2/12) ─────────────── */
@@ -608,7 +723,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-6 .live-slot-thumb,
 .vertical-slots-deck.shots-6 .slots-grid-2cols .live-slot-thumb {
   width: clamp(68px, 8.8vh, 84px);
-  height: clamp(68px, 8.8vh, 84px);
+  height: auto;
   border-radius: 14px;
 }
 
@@ -616,7 +731,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-8 .live-slot-thumb,
 .vertical-slots-deck.shots-8 .slots-grid-2cols .live-slot-thumb {
   width: clamp(60px, 7.6vh, 74px);
-  height: clamp(60px, 7.6vh, 74px);
+  height: auto;
   border-radius: 12px;
 }
 
@@ -624,7 +739,7 @@
 .vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-9 .live-slot-thumb,
 .vertical-slots-deck.shots-9 .slots-grid-2cols .live-slot-thumb {
   width: clamp(56px, 7.0vh, 68px);
-  height: clamp(56px, 7.0vh, 68px);
+  height: auto;
   border-radius: 12px;
 }
 
@@ -678,11 +793,10 @@
   padding-top: 6px !important;
 }
 
-/* Ô thumbnail phóng to rõ nét - Tăng 1.3 lần theo yêu cầu */
+/* Ô thumbnail phóng to rõ nét - Tự động đồng bộ tỉ lệ theo layout đã chọn */
 .live-slot-thumb {
-  width: 108px;
-  height: 108px;
-  border-radius: 18px;
+  border-radius: 14px;
+  cursor: pointer;
   overflow: hidden;
   background: #f1f2f5;
   display: flex;
@@ -691,11 +805,40 @@
   position: relative;
   transition: all var(--transition-fast, 0.2s ease);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .vertical-slots-deck .live-slot-thumb {
-  width: clamp(86px, 11.5vh, 108px);
-  height: clamp(86px, 11.5vh, 108px);
+  height: auto;
+}
+
+/* Tỉ lệ Khung 4 ảnh 2x6: Ô ngang 528 x 352 (tỉ lệ 3:2) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-2x6,
+.live-slot-thumb.slot-ratio-2x6 {
+  width: clamp(96px, 12.5vh, 120px);
+  height: auto;
+  aspect-ratio: 528 / 352;
+}
+
+/* Tỉ lệ Khung 4 ảnh 4x6: Ô dọc 544 x 726 (tỉ lệ 272:363) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck .live-slots-list.slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck.shots-6 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.vertical-slots-deck.shots-8 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-4,
+.live-slot-thumb.slot-ratio-4x6-4 {
+  width: clamp(74px, 9.8vh, 90px);
+  height: auto;
+  aspect-ratio: 544 / 726;
+}
+
+/* Tỉ lệ Khung 9 ảnh 4x6: Ô dọc 281 x 580 (tỉ lệ 281:580) */
+.vertical-slots-deck .live-slot-thumb.slot-ratio-4x6-9,
+.vertical-slots-deck .live-slots-list.slots-grid-2cols.shots-9 .live-slot-thumb.slot-ratio-4x6-9,
+.vertical-slots-deck.shots-9 .slots-grid-2cols .live-slot-thumb.slot-ratio-4x6-9,
+.live-slot-thumb.slot-ratio-4x6-9 {
+  width: clamp(48px, 6.5vh, 60px);
+  height: auto;
+  aspect-ratio: 281 / 580;
 }
 
 .live-slot-thumb.filled {
@@ -734,15 +877,34 @@
 }
 
 @keyframes slotBounceGlow {
-  0%   { transform: scale(1); }
-  35%  { transform: scale(1.24); box-shadow: 0 0 30px var(--color-pink-primary, #F4729A); }
-  70%  { transform: scale(1.08); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.24);
+    box-shadow: 0 0 30px var(--color-pink-primary, #F4729A);
+  }
+
+  70% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes pulseSlot {
-  from { transform: scale(1); border-color: #cbd5e1; }
-  to   { transform: scale(1.06); border-color: var(--color-pink-primary, #F4729A); }
+  from {
+    transform: scale(1);
+    border-color: #cbd5e1;
+  }
+
+  to {
+    transform: scale(1.06);
+    border-color: var(--color-pink-primary, #F4729A);
+  }
 }
 
 .live-slots-counter {
@@ -832,14 +994,17 @@
     transform: scale(0.65) translateY(40px);
     opacity: 0;
   }
+
   25% {
     transform: scale(1.06) translateY(0);
     opacity: 1;
   }
+
   65% {
     transform: scale(1) translateY(0);
     opacity: 1;
   }
+
   100% {
     transform: scale(0.25) translateY(360px);
     opacity: 0;
@@ -984,8 +1149,15 @@
 }
 
 @keyframes recBlink {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0.2; transform: scale(0.85); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
 }
 
 /* ── K-Beauty Presets (1-Chạm) ── */
@@ -1062,8 +1234,15 @@
 }
 
 @keyframes pulseSlotPurple {
-  from { transform: scale(1); border-color: #a78bfa; }
-  to   { transform: scale(1.08); border-color: #8b5cf6; }
+  from {
+    transform: scale(1);
+    border-color: #a78bfa;
+  }
+
+  to {
+    transform: scale(1.08);
+    border-color: #8b5cf6;
+  }
 }
 
 .slot-index-badge {
@@ -1188,8 +1367,15 @@
 }
 
 @keyframes glowPulse {
-  from { transform: scale(1); box-shadow: 0 8px 25px rgba(217, 70, 239, 0.45); }
-  to   { transform: scale(1.03); box-shadow: 0 12px 38px rgba(244, 114, 154, 0.75); }
+  from {
+    transform: scale(1);
+    box-shadow: 0 8px 25px rgba(217, 70, 239, 0.45);
+  }
+
+  to {
+    transform: scale(1.03);
+    box-shadow: 0 12px 38px rgba(244, 114, 154, 0.75);
+  }
 }
 
 .retake-hint-text {
@@ -1262,8 +1448,15 @@
 }
 
 @keyframes timerWarningBlink {
-  from { transform: scale(1); box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3); }
-  to   { transform: scale(1.05); box-shadow: 0 6px 24px rgba(239, 68, 68, 0.6); }
+  from {
+    transform: scale(1);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  }
+
+  to {
+    transform: scale(1.05);
+    box-shadow: 0 6px 24px rgba(239, 68, 68, 0.6);
+  }
 }
 
 .selfbooth-bottom-controls {
@@ -1387,7 +1580,8 @@
   min-height: 52px;
   padding: 0 28px;
   border-radius: var(--radius-full, 9999px);
-  background: #237A57; /* Emerald Luxury */
+  background: #237A57;
+  /* Emerald Luxury */
   color: #FFFFFF;
   border: none;
   font-family: var(--font-display, inherit);
@@ -1552,9 +1746,20 @@
 }
 
 @keyframes pulseLive {
-  0% { transform: scale(0.92); opacity: 0.8; }
-  50% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(0.92); opacity: 0.8; }
+  0% {
+    transform: scale(0.92);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.92);
+    opacity: 0.8;
+  }
 }
 
 .camera-current-name {
@@ -1608,16 +1813,17 @@
   min-width: 0;
 }
 
-/* Khung hình phóng to tối đa theo kích thước màn hình */
+/* Khung hình phóng to full tối đa theo kích thước màn hình trong Selfbooth (3:2 chuẩn Canon R100) */
 .liveview-selfbooth-full .camera-viewfinder-wrapper {
-  width: 100%;
-  max-width: min(1560px, 96vw);
+  width: auto;
+  max-width: 100%;
   height: 100%;
-  max-height: calc(100vh - 150px);
-  aspect-ratio: 16 / 9;
-  border-radius: 28px;
+  max-height: calc(100vh - 130px);
+  aspect-ratio: 3 / 2;
+  border-radius: 20px;
   margin: auto;
-  box-shadow: 0 16px 48px rgba(80, 42, 29, 0.16), 0 0 0 2px var(--border-default, #E6D9CF);
+  box-shadow: 0 16px 48px rgba(80, 42, 29, 0.2);
+  border: none;
 }
 
 /* ── Top-Left Elapsed Timer Badge (Đồng hồ góc trái tăng dần) ── */
@@ -1643,9 +1849,20 @@
 }
 
 @keyframes pulseTimerDot {
-  0%   { transform: scale(0.9); opacity: 0.8; }
-  50%  { transform: scale(1.3); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.8; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
 }
 
 .selfbooth-timer-digits {
@@ -1678,8 +1895,17 @@
 }
 
 @keyframes pulseWarning {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.15); opacity: 0.6; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 0.6;
+  }
 }
 
 /* ── Bottom Deck: Duy nhất 1 nút KẾT THÚC ── */
@@ -1736,8 +1962,15 @@
 }
 
 @keyframes fadeInModal {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .selfbooth-confirm-modal {
@@ -1809,3 +2042,83 @@
   box-shadow: 0 6px 20px rgba(80, 42, 29, 0.38);
 }
 
+
+/* Khóa nút đếm ngược và các chức năng xung quanh sau khi chụp */
+.countdown-pill:disabled,
+.countdown-pill.locked-disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--border-default) !important;
+}
+
+.camera-viewfinder-wrapper.selfbooth-clickable {
+  cursor: pointer;
+}
+
+.camera-viewfinder-wrapper.selfbooth-cooling-down {
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* ── Màn hình Lazy Loading xoay xoay trong 2.5s hồi đèn flash cho Selfbooth ── */
+.selfbooth-loading-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(18, 14, 12, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.selfbooth-loading-spinner-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+}
+
+.selfbooth-spinner-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #FFFFFF;
+  border-right-color: #FFFFFF;
+  animation: selfboothSpinRing 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes selfboothSpinRing {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Disabled State cho nút KẾT THÚC khi Flash đang hồi ── */
+.btn-selfbooth-finish-main.is-disabled,
+.btn-selfbooth-finish-main:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(0.2);
+}

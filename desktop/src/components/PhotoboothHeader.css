@@ -1,33 +1,51 @@
 /* ==========================================================================
    FOTOLISM 3.0 — UNIFIED PHOTOBOOTH HEADER
-   - Brand title "fotolism" on top
-   - 3-step progress bar: 1. Chọn layout -> 2. Thanh toán -> 3. Chụp ảnh
-   - Warm Minimalist Luxury, touch-friendly, high contrast, no extra icons
+   - Brand title "fotolism" fixed at top-left corner across steps
+   - 4-step progress bar centered: 1. Chọn layout -> 2. Confirm -> 3. Thanh toán -> 4. Chụp ảnh
+   - Checkmark icon on passed steps
+   - Warm Minimalist Luxury, touch-friendly, zero CLS/jumping
    ========================================================================== */
 
 .photobooth-header-unified {
-  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  height: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  padding: 12px 0 8px;
+  padding: 14px 48px 6px;
   box-sizing: border-box;
-  z-index: 10;
+  z-index: 100;
+  background: #FAF7F2;
   user-select: none;
 }
 
-/* ── Brand Title ─────────────────────────────────────────────────────────── */
+/* ── Brand Logo: Cố định góc bên trên trái màn hình ────────────────────── */
+.photobooth-brand-logo {
+  position: absolute;
+  top: 20px;
+  left: 48px;
+  height: clamp(44px, 3.2vw, 56px);
+  width: auto;
+  object-fit: contain;
+}
+
 .photobooth-brand-title {
-  font-family: var(--font-display, 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: clamp(2.4rem, 3.4vw, 3.2rem);
+  position: absolute;
+  top: 28px;
+  left: 48px;
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: clamp(2rem, 2.5vw, 2.4rem);
   font-weight: 800;
-  color: #351A10;
-  letter-spacing: -0.6px;
-  margin: 0 0 10px 0;
-  line-height: 1.05;
-  text-align: center;
+  color: #502A1D;
+  letter-spacing: -0.5px;
+  margin: 0;
+  line-height: 1;
+  text-align: left;
 }
 
 /* ── Steps Progress Bar ──────────────────────────────────────────────────── */
@@ -41,7 +59,7 @@
 .photobooth-step-node {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   transition: all 0.2s ease;
 }
 
@@ -56,7 +74,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-display, inherit);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   box-sizing: border-box;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -65,7 +83,7 @@
 /* Step Label */
 .photobooth-step-label {
   font-family: var(--font-display, inherit);
-  font-size: clamp(1.15rem, 1.4vw, 1.35rem);
+  font-size: clamp(1.05rem, 1.25vw, 1.25rem);
   font-weight: 700;
   letter-spacing: 0.1px;
   white-space: nowrap;
@@ -86,16 +104,16 @@
   font-weight: 800;
 }
 
-/* ── State: Passed (Bước đã hoàn thành) ──────────────────────────────────── */
+/* ── State: Passed (Bước đã hoàn thành có dấu tích ✓) ─────────────────────── */
 .photobooth-step-node.is-passed .photobooth-step-circle {
-  background: #633726;
+  background: #351A10;
   color: #FFFFFF;
-  border: 2px solid #633726;
+  border: 2px solid #351A10;
 }
 
 .photobooth-step-node.is-passed .photobooth-step-label {
-  color: #633726;
-  font-weight: 700;
+  color: #351A10;
+  font-weight: 800;
 }
 
 /* ── State: Pending (Bước chưa tới) ──────────────────────────────────────── */
@@ -112,7 +130,7 @@
 
 /* ── Divider Line Between Steps ─────────────────────────────────────────── */
 .photobooth-step-divider {
-  width: clamp(38px, 5.5vw, 68px);
+  width: clamp(28px, 4vw, 56px);
   height: 2px;
   background: #E0D3C9;
   border-radius: 2px;
@@ -121,5 +139,5 @@
 }
 
 .photobooth-step-divider.active {
-  background: #633726;
+  background: #351A10;
 }

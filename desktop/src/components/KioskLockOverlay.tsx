@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Lock, ShieldAlert, KeyRound, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { cloudSyncService } from '../services/cloudSyncService'
+import NumericKeypadModal from './NumericKeypadModal'
 import './KioskLockOverlay.css'
 
 export default function KioskLockOverlay() {
   const { setScreen, setIsKioskLocked, deviceConfig, eventConfig } = useAppStore()
   const [showPinModal, setShowPinModal] = useState(false)
-  const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
   const [isChecking, setIsChecking] = useState(false)
 
@@ -26,18 +26,19 @@ export default function KioskLockOverlay() {
     }
   }
 
-  const handleUnlockWithPin = () => {
+  const handleUnlockWithPin = (codeToVerify: string) => {
+    const raw = (codeToVerify || '').trim()
     const customPin = eventConfig?.adminPin
     const allowedPins = ['8888', '888888', '123456', '9999']
     if (customPin) allowedPins.push(customPin)
 
-    if (allowedPins.includes(pin)) {
+    if (allowedPins.includes(raw)) {
       setIsKioskLocked(false)
       setShowPinModal(false)
+      setPinError(null)
       setScreen('admin')
     } else {
       setPinError('Mã PIN quản trị không chính xác')
-      setPin('')
     }
   }
 
@@ -82,55 +83,32 @@ export default function KioskLockOverlay() {
         <button
           type="button"
           className="btn-staff-unlock-link"
-          onClick={() => setShowPinModal(true)}
+          onClick={() => {
+            setPinError(null)
+            setShowPinModal(true)
+          }}
         >
           <KeyRound size={14} />
           <span>Quản trị viên mở khóa tại quầy</span>
         </button>
       </div>
 
-      {showPinModal && (
-        <div className="lock-pin-modal-backdrop">
-          <div className="lock-pin-modal">
-            <h3>Mở Khóa Quản Trị</h3>
-            <p>Nhập mã PIN Quản trị để mở máy tại chỗ</p>
-            <input
-              type="password"
-              maxLength={6}
-              value={pin}
-              onChange={(e) => {
-                setPinError(null)
-                setPin(e.target.value.replace(/\D/g, ''))
-              }}
-              placeholder="••••"
-              autoFocus
-              className="lock-pin-input"
-            />
-            {pinError && <p className="lock-pin-error">{pinError}</p>}
-            <div className="lock-pin-actions">
-              <button
-                type="button"
-                className="btn-lock-cancel"
-                onClick={() => {
-                  setShowPinModal(false)
-                  setPin('')
-                  setPinError(null)
-                }}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                className="btn-lock-submit"
-                onClick={handleUnlockWithPin}
-              >
-                Mở khóa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── MODAL NHẬP MÃ PIN QUẢN TRỊ (DÙNG CHUNG NUMERIC KEYPAD MODAL) ── */}
+      <NumericKeypadModal
+        isOpen={showPinModal}
+        title="Mã PIN Quản Trị"
+        subtitle="Nhập mã PIN Quản trị để mở máy tại chỗ"
+        mask={true}
+        maxLength={6}
+        placeholder="NHẬP MÃ PIN..."
+        submitText="Mở khóa máy"
+        errorMessage={pinError}
+        onClose={() => {
+          setShowPinModal(false)
+          setPinError(null)
+        }}
+        onSubmit={(code) => handleUnlockWithPin(code)}
+      />
     </div>
   )
 }
-

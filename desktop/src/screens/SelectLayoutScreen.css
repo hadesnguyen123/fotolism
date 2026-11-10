@@ -1,9 +1,11 @@
 /* ==========================================================================
-   FOTOLISM 3.0 — BẢNG GIÁ POSTER (MÔ PHỎNG 100% ẢNH IN THẬT CHUẨN DNP)
-   - Phần khung ngoài: Khung viền ảnh in thật có lề trên, lề 2 bên và lề chân
-   - Phần trống dùng để chèn ảnh: Các ô ảnh trắng tinh khôi, bo góc nhẹ
-   - Chân khung ảnh (Footer): Mang thương hiệu fotolism sắc nét
-   - Khóa chặt tỉ lệ chuẩn in: 2x6 (1:3) và 4x6 (2:3)
+   FOTOLISM 3.0 — SELECT LAYOUT SCREEN (STEP 1: 2-ROW SHOWCASE)
+   - 2 Rows: 3 layouts on top row, 2 layouts centered on bottom row
+   - 2-layer photo sheet mockup (rotates back sheet + front sheet with fotolism)
+   - Generous row & item spacing (giãn hàng rộng rãi, thoáng mắt)
+   - Increased card dimensions (tăng kích thước lớn rõ chuẩn cảm ứng Kiosk)
+   - Dimming effect on unselected layouts
+   - Fixed Bottom Bar with Extra Price Banner
    ========================================================================== */
 
 .layout-poster-container {
@@ -18,52 +20,11 @@
   user-select: none;
   overflow: hidden;
   position: relative;
-  padding: 12px 36px 14px;
+  padding: 0;
   box-sizing: border-box;
 }
 
-/* ── Top Header: BẢNG GIÁ & Gạch Chân ────────────────────────────────────── */
-.layout-poster-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 52px;
-  flex-shrink: 0;
-}
-
-.poster-header-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.poster-header-title {
-  font-family: var(--font-display, inherit);
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #351A10;
-  letter-spacing: -0.5px;
-  margin: 0;
-  line-height: 1;
-}
-
-.poster-title-underline {
-  width: 72px;
-  height: 3.5px;
-  background: #351A10;
-  margin-top: 6px;
-  border-radius: 2px;
-}
-
-.header-placeholder {
-  width: 48px;
-  height: 48px;
-  visibility: hidden;
-}
-
-/* ── Showcase Bảng Giá: 2 Hàng (Hàng trên 3, Hàng dưới 2) ────────────────── */
+/* ── Showcase Bảng Giá: 1 Hàng Cân Đối Gồm 3 Bố Cục Duy Nhất ──────────────── */
 .poster-board-main {
   flex: 1;
   min-height: 0;
@@ -71,12 +32,11 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: clamp(12px, 1.8vh, 22px);
   width: 100%;
-  max-width: 1080px;
+  max-width: 1200px;
   box-sizing: border-box;
-  margin-top: clamp(24px, 3.5vh, 44px); /* Khoảng cách an toàn rộng rãi so với stepper */
-  margin-bottom: clamp(10px, 1.8vh, 20px);
+  margin-top: 120px; /* Khớp với fixed top header */
+  margin-bottom: 90px; /* Khớp với fixed bottom footer */
 }
 
 .poster-board-row {
@@ -86,14 +46,10 @@
 }
 
 .poster-board-row.row-3 {
-  gap: clamp(44px, 6vw, 84px);
+  gap: clamp(54px, 7vw, 100px);
 }
 
-.poster-board-row.row-2 {
-  gap: clamp(56px, 7.5vw, 100px);
-}
-
-/* ── Item Bố Cục (Các layout không được chọn sẽ mờ đi để nổi bật layout đang chọn) ── */
+/* ── Item Bố Cục (Các layout không được chọn sẽ mờ nhẹ để nổi bật layout đang chọn) ── */
 .poster-layout-item {
   display: flex;
   flex-direction: column;
@@ -104,26 +60,26 @@
   transition: opacity 0.25s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
 }
 
-/* Các layout không được chọn: Mờ đi để tập trung thị giác vào layout đang chọn */
+/* Layout không được chọn: Mờ đi để tập trung thị giác */
 .poster-layout-item:not(.selected) {
-  opacity: 0.38;
+  opacity: 0.42;
   filter: grayscale(10%);
 }
 
 .poster-layout-item:not(.selected):hover {
-  opacity: 0.82;
+  opacity: 0.85;
   filter: none;
   transform: translateY(-3px);
 }
 
-/* Layout đang được chọn: Rõ nét 100%, nổi bật tuyệt đối */
+/* Layout đang được chọn: Rõ nét 100%, nổi bật */
 .poster-layout-item.selected {
   opacity: 1;
   filter: none;
   transform: translateY(-4px);
 }
 
-/* ── Khung Mockup Đồ Họa 2 Lớp (Chuẩn Tỉ Lệ Quang Học 2x6 và 4x6) ────────── */
+/* ── Khung Mockup Đồ Họa 2 Lớp (Tăng kích thước lên chuẩn màn hình Kiosk) ────────── */
 .poster-frame-wrapper {
   position: relative;
   display: flex;
@@ -131,16 +87,16 @@
   justify-content: center;
 }
 
-/* Khổ nhỏ 2x6: Tỉ lệ 1:3 */
+/* Khổ nhỏ 2x6: Tỉ lệ 1:3 (Chuẩn màn hình Kiosk 1 hàng) */
 .poster-frame-wrapper.ratio-2x6 {
-  height: clamp(185px, 23vh, 245px);
+  height: clamp(230px, 32vh, 310px);
   aspect-ratio: 1 / 3;
   width: auto;
 }
 
-/* Khổ lớn 4x6: Tỉ lệ 2:3 */
+/* Khổ lớn 4x6: Tỉ lệ 2:3 (Chuẩn màn hình Kiosk 1 hàng) */
 .poster-frame-wrapper.ratio-4x6 {
-  height: clamp(185px, 23vh, 245px);
+  height: clamp(230px, 32vh, 310px);
   aspect-ratio: 2 / 3;
   width: auto;
 }
@@ -153,7 +109,7 @@
   width: 100%;
   height: 100%;
   background: #D5AFA3;
-  border-radius: 4px;
+  border-radius: 5px;
   transform: rotate(6.5deg) translate(10px, -6px);
   display: flex;
   flex-direction: column;
@@ -161,7 +117,7 @@
   box-sizing: border-box;
   pointer-events: none;
   overflow: hidden;
-  box-shadow: 0 4px 14px rgba(80, 42, 29, 0.08);
+  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.1);
 }
 
 .ratio-4x6 .poster-sheet-back {
@@ -173,12 +129,12 @@
   min-height: 0;
   width: 100%;
   display: grid;
-  gap: 3.5px;
+  gap: 4px;
   box-sizing: border-box;
 }
 
 .ratio-4x6 .poster-sheet-back .poster-slots-grid {
-  gap: 4.5px;
+  gap: 5px;
 }
 
 .poster-slot-back {
@@ -193,71 +149,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 14px;
+  height: 16px;
   margin-top: 4px;
   flex-shrink: 0;
 }
 
 .poster-footer-back .poster-brand-text {
   font-family: var(--font-display, inherit);
-  font-size: 0.52rem;
-  font-weight: 700;
-  color: #FAF2EC;
-  letter-spacing: 1px;
-  opacity: 0.9;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 1.2px;
   text-transform: lowercase;
 }
 
-/* ── Tấm Chính Phía Trước (Khung Ngoài In Thật + Phần Trống Chèn Ảnh) ──────── */
+/* ── Tấm Chính Phía Trước (Khung Ngoài In Thật Màu Nâu #502A1D) ───────────── */
 .poster-sheet-front {
   position: relative;
-  z-index: 2;
   width: 100%;
   height: 100%;
-  background: #351A10; /* Khung ngoài màu nâu đậm chuẩn Studio */
-  border-radius: 4px;
-  box-shadow: 0 10px 24px rgba(53, 26, 16, 0.2);
+  background: #502A1D;
+  border-radius: 5px;
   display: flex;
   flex-direction: column;
-  padding: 8px 6px 18px 6px; /* Lề khung: trên 8px, 2 bên 6px, đáy 18px */
+  padding: 8px 6px 16px 6px;
   box-sizing: border-box;
   overflow: hidden;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 22px rgba(80, 42, 29, 0.18);
+  transition: box-shadow 0.2s ease;
 }
 
 .ratio-4x6 .poster-sheet-front {
-  padding: 8px 8px 20px 8px; /* Lề khung 4x6: trên 8px, 2 bên 8px, đáy 20px */
-}
-
-/* Nghiêng nhẹ 2 dải strip đầu như mẫu nghệ thuật gốc */
-.poster-board-row.row-3 .poster-layout-item:nth-child(1) .poster-frame-wrapper {
-  transform: rotate(-3.5deg);
-}
-.poster-board-row.row-3 .poster-layout-item:nth-child(2) .poster-frame-wrapper {
-  transform: rotate(-2.5deg);
+  padding: 8px 8px 18px 8px;
 }
 
 .poster-layout-item.selected .poster-sheet-front {
-  border-color: #1A0B06;
-  box-shadow: 0 14px 34px rgba(53, 26, 16, 0.35), 0 0 0 3.5px #A66A43;
-  transform: scale(1.03);
+  box-shadow: 0 12px 32px rgba(80, 42, 29, 0.4);
 }
 
-/* ── Lưới Chứa Các Ô Ảnh (Phần Trống Dùng Để Chèn Ảnh) ───────────────────── */
 .poster-slots-grid {
   flex: 1;
   min-height: 0;
   width: 100%;
   display: grid;
-  gap: 4px; /* Khoảng cách giữa các ảnh */
+  gap: 4.5px;
   box-sizing: border-box;
 }
 
 .ratio-4x6 .poster-slots-grid {
-  gap: 5px;
+  gap: 5.5px;
 }
 
-/* Phần trống dùng để chèn ảnh: Nền trắng tinh khiết, bo góc mềm 2px */
+/* Ô trống ảnh: Nền trắng, bo góc 2px */
 .poster-slot-front {
   width: 100%;
   height: 100%;
@@ -268,41 +211,41 @@
   position: relative;
 }
 
-/* ── Chân Khung Ảnh (Footer): Mang Thương Hiệu fotolism ──────────────────── */
+/* Footer fotolism trên khung ảnh */
 .poster-footer-front {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 16px;
-  margin-top: 5px;
+  margin-top: 4px;
   flex-shrink: 0;
 }
 
 .poster-footer-front .poster-brand-text {
   font-family: var(--font-display, inherit);
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 800;
   color: #E8DDD6;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.4px;
   text-transform: lowercase;
 }
 
-/* ── Checkmark Khi Được Chọn ─────────────────────────────────────────────── */
+/* Checkmark góc trên bên phải khi được chọn (Tăng kích thước lên 30px) */
 .poster-check-badge {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 28px;
-  height: 28px;
+  top: -9px;
+  right: -9px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: #502A1D;
+  background: #351A10;
   border: 2px solid #FFFFFF;
   color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.4);
+  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.45);
   animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -311,15 +254,39 @@
   to { transform: scale(1); opacity: 1; }
 }
 
-/* ── Nút Giá Tiền Dạng Khối Nâu Đậm ──────────────────────────────────────── */
+/* ── Thông Tin Mô Tả Layout ────────────────────────────────────────────── */
+.poster-meta-block {
+  margin-top: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.poster-layout-name {
+  font-family: var(--font-display, inherit);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #351C15;
+  letter-spacing: -0.2px;
+}
+
+.poster-layout-sub {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #8C6D60;
+}
+
+/* ── Nút Giá Tiền Nâu Đậm Dạng Khối (Tăng kích thước Touch-Friendly) ─────── */
 .poster-price-btn {
   margin-top: 10px;
-  height: 40px;
-  padding: 0 18px;
-  min-width: 108px;
+  height: 44px;
+  padding: 0 20px;
+  min-width: 120px;
   background: #351A10;
   color: #FFFFFF;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -329,7 +296,7 @@
 }
 
 .ratio-4x6 + .poster-price-btn {
-  min-width: 136px;
+  min-width: 140px;
 }
 
 .poster-price-btn span {
@@ -342,46 +309,26 @@
 .poster-layout-item.selected .poster-price-btn {
   background: #1A0B06;
   box-shadow: 0 6px 20px rgba(53, 26, 16, 0.45);
-  transform: scale(1.06);
+  transform: scale(1.05);
 }
 
-/* ── Footer: Nút Quay Lại (Trái) + Banner Giá In Thêm (Giữa) + Nút Tiếp Tục (Phải) ── */
-.poster-footer-section {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+/* ── Banner Giá In Thêm ở giữa thanh Footer cố định ───────────────────────── */
+.poster-fixed-footer {
+  display: flex;
   align-items: center;
-  width: 100%;
-  max-width: 100vw;
-  margin: 0;
-  padding: 8px 100px 24px; /* Cách lề mặc định 100px */
-  box-sizing: border-box;
-  flex-shrink: 0;
-}
-
-.poster-footer-section .btn-nav-back {
-  justify-self: start;
-}
-
-.poster-footer-section .poster-extra-banner {
-  justify-self: center;
-}
-
-.poster-footer-section .btn-nav-next {
-  justify-self: end;
+  justify-content: space-between;
 }
 
 .poster-extra-banner {
   background: #F2D8D0;
-  border-radius: var(--radius-full, 9999px);
-  height: 60px;
-  padding: 0 42px;
+  border-radius: 9999px;
+  height: 54px;
+  padding: 0 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  width: fit-content;
-  max-width: none;
-  box-shadow: 0 4px 16px rgba(53, 26, 16, 0.08);
+  gap: 16px;
+  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.08);
   border: 1px solid rgba(53, 26, 16, 0.12);
   box-sizing: border-box;
   white-space: nowrap;
@@ -390,21 +337,19 @@
 
 .extra-banner-label {
   font-family: var(--font-display, inherit);
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 900;
   color: #351A10;
   letter-spacing: 0.8px;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .extra-banner-vbar {
-  width: 2.5px;
-  height: 26px;
+  width: 2px;
+  height: 24px;
   background: #351A10;
   opacity: 0.35;
   border-radius: 1px;
-  flex-shrink: 0;
 }
 
 .extra-banner-val-group {
@@ -412,12 +357,10 @@
   align-items: center;
   gap: 16px;
   font-family: var(--font-body, inherit);
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: #351A10;
-  letter-spacing: 0.2px;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .extra-banner-val-group .extra-item strong {
@@ -427,35 +370,6 @@
 
 .extra-banner-dot {
   opacity: 0.45;
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-/* Nút Tiếp Tục Thanh Toán CTA */
-.btn-poster-proceed {
-  height: 48px;
-  padding: 0 48px;
-  border-radius: var(--radius-full, 9999px);
-  background: #351A10;
-  color: #FFFFFF;
-  font-family: var(--font-display, inherit);
   font-size: 1.15rem;
-  font-weight: 800;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  box-shadow: 0 8px 24px rgba(53, 26, 16, 0.28);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.btn-poster-proceed:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 12px 30px rgba(53, 26, 16, 0.38);
-  background: #1A0B06;
-}
-
-.btn-poster-proceed:active {
-  transform: translateY(0) scale(0.99);
+  line-height: 1;
 }

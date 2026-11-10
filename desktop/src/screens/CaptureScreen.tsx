@@ -4,15 +4,17 @@ import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
 import {
   FILE_PREFIX_SHOT,
   FILE_PREFIX_SELF,
-  FILE_PREFIX_TIMELAPSE,
   SESSION_FOLDER_PREFIX,
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
   DEFAULT_SELFBOOTH_DURATION_SECONDS,
+  isRemoteTriggerEvent,
 } from '../lib/constants'
 import { BeautyCameraView, type BeautyCameraHandle } from '../components/BeautyCameraView'
-import { beautyEngine, type BeautyConfigSnapshot } from '../services/beautyEngine'
-import { Camera, ArrowRight, Palette, Loader2, Clock } from 'lucide-react'
+import { CaptureAspectGuide } from '../components/capture/CaptureAspectGuide'
+import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
+import { cropImageToAspect } from '../lib/canvasCompositor'
+import { Camera, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
@@ -45,17 +47,16 @@ export default function CaptureScreen() {
     countdownSeconds,
     setCountdownSeconds,
     selectedLayout,
+    selectedFrameSize,
     selectedCopies,
     selectedFilter,
     selectFilter,
-    selectedBeautyPreset,
     ringLightEnabled,
     ringLightLevel,
     mirrorCamera,
     setCameras,
     selectCamera,
     eventConfig,
-    setTimelapseUrl,
     setGdriveUrl,
     setIsSyncingDrive,
     setDriveSyncDone,
@@ -72,21 +73,54 @@ export default function CaptureScreen() {
     rosyTone,
     glowClarity,
     getBeautyFilterCss,
+    photoboothSessionEndTime,
+    startPhotoboothSessionTimer,
   } = useAppStore()
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const beautyCameraRef = useRef<BeautyCameraHandle>(null)
   const currentStreamRef = useRef<MediaStream | null>(null)
   const [activeMediaStream, setActiveMediaStream] = useState<MediaStream | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
-  const timelapseCanvasRef = useRef<HTMLCanvasElement | null>(null)
-  const timelapseTimerRef = useRef<number | null>(null)
-  const timelapsePromiseRef = useRef<Promise<string | null> | null>(null)
-  const [isTimelapseRecording, setIsTimelapseRecording] = useState<boolean>(false)
-
+  const pendingCapturesRef = useRef<Set<number>>(new Set())
   const totalShots = selectedLayout.photosCount || 4
   const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
+
+  useEffect(() => {
+    if (!isSelfboothMode && !photoboothSessionEndTime) {
+      startPhotoboothSessionTimer()
+    }
+  }, [isSelfboothMode, photoboothSessionEndTime, startPhotoboothSessionTimer])
+
+  // Xác định tỉ lệ và kích thước ô chuẩn theo Single Source of Truth:
+  // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 3:2 = 1.5)
+  // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 272:363 ≈ 0.7493)
+  // - Khung 9 ảnh 4x6: 281 x 580 (tỉ lệ 281:580 ≈ 0.4845)
+  const is2x6 = selectedFrameSize === '2x6'
+  const is9Grid = selectedLayout.photosCount === 9
+  const targetSlotDimensions = is2x6
+    ? { w: 528, h: 352, label: '528×352' }
+    : is9Grid
+      ? { w: 281, h: 580, label: '281×580' }
+      : { w: 544, h: 726, label: '544×726' }
+
+  // ── Tính toán khung vàng (Safe Area Viewfinder Guide) trong vùng Live View 16:9 ──
+  // - Khung vàng sử dụng chính xác tỷ lệ của ô ảnh trong layout.
+  // - Tự động co từ hai bên vào, căn giữa Live View.
+  // - Ưu tiên giữ chiều cao tối đa (100%) trong Live View; tính lại chiều rộng theo tỷ lệ.
+  // - Nếu chiều rộng vượt quá hiển thị, tự động thu nhỏ cả hai chiều để nằm trọn trong Live View.
+  const slotAspect = targetSlotDimensions.w / targetSlotDimensions.h
+  const liveAspect = 16 / 9
+  const guideBoxStyle: React.CSSProperties = slotAspect <= liveAspect
+    ? {
+        height: '100%',
+        width: `${((slotAspect / liveAspect) * 100).toFixed(4)}%`,
+        aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
+      }
+    : {
+        width: '100%',
+        height: `${((liveAspect / slotAspect) * 100).toFixed(4)}%`,
+        aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
+      }
 
   const [hasCamera, setHasCamera] = useState<boolean>(false)
   const [activeFlyout, setActiveFlyout] = useState<'filter' | null>(null)
@@ -105,12 +139,18 @@ export default function CaptureScreen() {
 
   // ── Chế độ PHOTOBOOTH CỔ ĐIỂN (Có Retake / Xóa ô xấu) ──
   const [slots, setSlots] = useState<(CapturedPhoto | null)[]>(Array(totalShots).fill(null))
+  const slotsRef = useRef<(CapturedPhoto | null)[]>(slots)
+  slotsRef.current = slots
   const [retakeSlotIndex, setRetakeSlotIndex] = useState<number | null>(null)
-  // Giới hạn lượt chụp lại: chỉ chụp lại từ đầu tối đa 1 lần, mỗi ô chỉ được xóa và chụp lại tối đa 1 lần
+  // Số lần đã xóa chụp lại của từng ô (mỗi ô tối đa 2 lần xóa)
+  const [slotDeleteCounts, setSlotDeleteCounts] = useState<Record<number, number>>({})
+  // Giới hạn lượt chụp lại: chỉ chụp lại từ đầu tối đa 1 lần
   const [sessionResetCount, setSessionResetCount] = useState<number>(0)
-  const [slotRetakeCounts, setSlotRetakeCounts] = useState<number[]>(() => Array(totalShots).fill(0))
 
   useEffect(() => {
+    // Đánh thức Canon Daemon và gia hạn shutdown timer
+    fetch('http://127.0.0.1:8899/wake').catch(() => {})
+
     // Khởi tạo phiên trong SQLite persistent session storage (FR-06)
     api.session?.create({
       id: sessionId,
@@ -123,15 +163,20 @@ export default function CaptureScreen() {
     }).catch(console.warn)
   }, [sessionId, totalShots, selectedLayout?.id, selectedCopies])
 
-  // ── Chế độ SELFBOOTH (Chụp tự do không giới hạn & Bấm remote 2s) ──
+  // ── Chế độ SELFBOOTH (Chụp tự do không giới hạn & Bấm remote 2.5s hồi đèn flash) ──
+  const SELFBOOTH_FLASH_RECYCLE_MS = 2500
   const [isSelfboothRunning, setIsSelfboothRunning] = useState<boolean>(false)
   const [selfboothLibrary, setSelfboothLibrary] = useState<CapturedPhoto[]>([])
   const [isCanonDaemonActive, setIsCanonDaemonActive] = useState<boolean>(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false)
+  const [isFlashCoolingDown, setIsFlashCoolingDown] = useState<boolean>(false)
 
   // Khởi động Camera thiết bị
   const startCamera = useCallback(async (deviceId?: string) => {
+    // Gửi tín hiệu đánh thức camera daemon trước khi khởi động luồng
+    fetch('http://127.0.0.1:8899/wake').catch(() => {})
     // 0. Kiểm tra Canon Persistent Daemon (Direct EDSDK)
+    const userCameraType = useAppStore.getState().cameraType
     let daemonActive = false
     try {
       const daemonRes = await (isBrowser ? mockApi : fotolismApi).camera.canonDaemonStatus?.()
@@ -154,7 +199,7 @@ export default function CaptureScreen() {
       allDevices.some((d) => d.deviceId === deviceId && !/canon|eos/i.test(d.label))
 
     // NẾU Canon Daemon đang hoạt động và không chọn webcam phụ khác -> BẮT BUỘC dùng luồng Canon EDSDK trực tiếp
-    if (daemonActive && !isExplicitNonCanonWebcam) {
+    if (daemonActive && !isExplicitNonCanonWebcam && userCameraType !== 'laptop') {
       if (currentStreamRef.current) {
         currentStreamRef.current.getTracks().forEach((track) => track.stop())
         currentStreamRef.current = null
@@ -303,13 +348,6 @@ export default function CaptureScreen() {
     startCamera(initialId || undefined)
 
     return () => {
-      if (timelapseTimerRef.current) {
-        clearInterval(timelapseTimerRef.current)
-        timelapseTimerRef.current = null
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try { mediaRecorderRef.current.stop() } catch { }
-      }
       if (currentStreamRef.current) {
         currentStreamRef.current.getTracks().forEach((track) => track.stop())
         currentStreamRef.current = null
@@ -323,6 +361,8 @@ export default function CaptureScreen() {
 
     const probeTimer = setInterval(async () => {
       try {
+        const currentCameraType = useAppStore.getState().cameraType
+        if (currentCameraType === 'laptop') return
         const daemonRes = await (isBrowser ? mockApi : fotolismApi).camera.canonDaemonStatus?.()
         if (daemonRes?.success && daemonRes.data?.running) {
           console.log('⚡ [CaptureScreen] Canon EOS Daemon detected active, auto-switching to live stream...')
@@ -341,18 +381,8 @@ export default function CaptureScreen() {
     if (isSelfboothMode) {
       setIsSelfboothRunning(true)
       setIsSessionActive(true)
-      startTimelapse()
     }
   }, [isSelfboothMode])
-
-  // Tự động kích hoạt ghi hình Timelapse cho cả Photobooth ngay khi camera sẵn sàng
-  useEffect(() => {
-    if (hasCamera && eventConfig.timelapseEnabled) {
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-        startTimelapse()
-      }
-    }
-  }, [hasCamera, eventConfig.timelapseEnabled])
 
   // Đồng hồ đếm ngược thời gian chụp Selfbooth (05:00 -> 00:00). Hết giờ tự động out ra review
   const totalDuration = eventConfig.selfboothDurationSeconds || DEFAULT_SELFBOOTH_DURATION_SECONDS
@@ -384,18 +414,18 @@ export default function CaptureScreen() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Lắng nghe phím Remote (Bluetooth / USB Clicker) trong chế độ Selfbooth
+  // Lắng nghe phím Remote (Rapoo R100 / USB Clicker / Bluetooth) trong chế độ Selfbooth
   useEffect(() => {
     if (!isSelfboothMode) return
 
     const handleRemoteKeyDown = (e: KeyboardEvent) => {
       // Bỏ qua nếu đang gõ text vào input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (isCapturingShot) return
+      // Chặn ngay lập tức nếu đang trong quá trình chụp hoặc đèn flash đang nạp hồi 2.5s
+      if (isCapturingShot || isFlashCoolingDown) return
 
-      // Remote clickers phổ biến gửi: Space, Enter, PageDown, PageUp, ArrowDown, ArrowRight, 'b', 'B', 'f', 'F'
-      const triggerKeys = [' ', 'Space', 'Enter', 'PageDown', 'PageUp', 'ArrowRight', 'ArrowDown', 'b', 'B', 'f', 'F']
-      if (triggerKeys.includes(e.key) || triggerKeys.includes(e.code)) {
+      // Kiểm tra phím bấm từ Remote Rapoo R100 (PageDown, PageUp, Dot, Arrows, Space, Enter...)
+      if (isRemoteTriggerEvent(e)) {
         e.preventDefault()
         handleTakeSelfboothShot()
       }
@@ -403,7 +433,7 @@ export default function CaptureScreen() {
 
     window.addEventListener('keydown', handleRemoteKeyDown)
     return () => window.removeEventListener('keydown', handleRemoteKeyDown)
-  }, [isSelfboothMode, isCapturingShot, isSelfboothRunning, handleTakeSelfboothShot])
+  }, [isSelfboothMode, isCapturingShot, isFlashCoolingDown, isSelfboothRunning, handleTakeSelfboothShot])
 
   // Chụp 1 khung hình từ video sang DataURL với bảo đảm không bao giờ trả về ảnh đen
   function grabVideoFrame(): string {
@@ -473,155 +503,6 @@ export default function CaptureScreen() {
     return ''
   }
 
-  // Khởi động quay Timelapse hậu trường trong nền (Universal Beauty Canvas)
-  function startTimelapse() {
-    if (!eventConfig.timelapseEnabled) return
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') return
-
-    try {
-      recordedChunksRef.current = []
-
-      // 1. Khởi tạo Universal Recording Canvas chuẩn tỉ lệ 16:9 (960x540)
-      // Tối ưu kích thước video gọn nhẹ (~1.5-2.5MB), sắc nét, tải lên Drive cực nhanh
-      if (!timelapseCanvasRef.current) {
-        const c = document.createElement('canvas')
-        c.width = 960
-        c.height = 540
-        timelapseCanvasRef.current = c
-      }
-      const canvas = timelapseCanvasRef.current
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-
-      if (timelapseTimerRef.current) {
-        clearInterval(timelapseTimerRef.current)
-      }
-
-      // 2. Chụp khung hình định kỳ (15 FPS) từ WebGL Beauty Camera / Video
-      // Đảm bảo video timelapse thu lại đúng visual người dùng thấy (có beauty, lật gương)
-      timelapseTimerRef.current = window.setInterval(() => {
-        const glCanvas = beautyCameraRef.current?.getCanvasElement()
-        const img = beautyCameraRef.current?.getImageElement()
-        const video = beautyCameraRef.current?.getVideoElement() || videoRef.current
-
-        try {
-          if (glCanvas && glCanvas.width > 0) {
-            ctx.drawImage(glCanvas, 0, 0, canvas.width, canvas.height)
-          } else if (img && img.naturalWidth > 0) {
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-          } else if (video && video.videoWidth > 0) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-          }
-        } catch { }
-      }, 66)
-
-      let streamToRecord: MediaStream | null = null
-      if (typeof canvas.captureStream === 'function') {
-        streamToRecord = canvas.captureStream(15)
-      } else if (currentStreamRef.current && currentStreamRef.current.active) {
-        streamToRecord = currentStreamRef.current
-      }
-
-      if (!streamToRecord) {
-        console.warn('[Timelapse] Không thể khởi tạo MediaStream để ghi video')
-        return
-      }
-
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-        ? 'video/webm;codecs=vp8'
-        : 'video/webm'
-      const recorder = new MediaRecorder(streamToRecord, {
-        mimeType,
-        videoBitsPerSecond: 1_200_000,
-      })
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data)
-        }
-      }
-
-      recorder.start(500)
-      mediaRecorderRef.current = recorder
-      setIsTimelapseRecording(true)
-      console.log('🎬 [Timelapse] Đã bắt đầu ghi hình video hậu trường (15 FPS, 960x540)!')
-    } catch (err) {
-      console.warn('Failed to start MediaRecorder for timelapse:', err)
-    }
-  }
-
-  // Dừng quay Timelapse và xử lý ngầm video (non-blocking capture flow)
-  async function stopTimelapse(): Promise<string | null> {
-    if (timelapseTimerRef.current) {
-      clearInterval(timelapseTimerRef.current)
-      timelapseTimerRef.current = null
-    }
-
-    if (timelapsePromiseRef.current) {
-      return timelapsePromiseRef.current
-    }
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      const promise = new Promise<string | null>((resolve) => {
-        if (!mediaRecorderRef.current) {
-          setIsTimelapseRecording(false)
-          return resolve(null)
-        }
-        mediaRecorderRef.current.onstop = () => {
-          setIsTimelapseRecording(false)
-          try {
-            if (recordedChunksRef.current.length > 0) {
-              const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-              const videoUrl = URL.createObjectURL(blob)
-              console.log(`🎬 [Timelapse] Hoàn tất ghi video! Kích thước: ${(blob.size / 1024).toFixed(1)} KB`)
-
-              // Chuyển đổi ngầm sang Base64 dataUrl để lưu cục bộ và đẩy lên Google Drive
-              const reader = new FileReader()
-              reader.onloadend = () => {
-                const dataUrl = reader.result as string
-                if (dataUrl && dataUrl.startsWith('data:')) {
-                  // Cập nhật cả link blob xem trực tiếp và link dataUrl base64 để tải lên Drive
-                  setTimelapseUrl(videoUrl, dataUrl)
-                  const fileName = `${FILE_PREFIX_TIMELAPSE}_${Date.now()}.webm`
-                  const api = isBrowser ? mockApi : fotolismApi
-                  api.storage.savePhoto(dataUrl, fileName).catch((err) => console.warn('Save timelapse error:', err))
-                  resolve(dataUrl)
-                } else {
-                  setTimelapseUrl(videoUrl, null)
-                  resolve(null)
-                }
-              }
-              reader.onerror = () => {
-                setTimelapseUrl(videoUrl, null)
-                resolve(null)
-              }
-              reader.readAsDataURL(blob)
-              return
-            }
-          } catch (err) {
-            console.warn('Error creating timelapse blob:', err)
-          }
-          resolve(null)
-        }
-
-        try {
-          mediaRecorderRef.current.stop()
-        } catch {
-          setIsTimelapseRecording(false)
-          resolve(null)
-        }
-      }).finally(() => {
-        timelapsePromiseRef.current = null
-      })
-
-      timelapsePromiseRef.current = promise
-      return promise
-    } else {
-      setIsTimelapseRecording(false)
-      return null
-    }
-  }
-
   // ══════════════════════════════════════════════════════════════════════════════
   // XỬ LÝ PHOTOBOOTH CỔ ĐIỂN (Retake / Xóa ô xấu)
   // ══════════════════════════════════════════════════════════════════════════════
@@ -629,7 +510,7 @@ export default function CaptureScreen() {
   const isPhotoboothFull = filledSlotsCount === totalShots
 
   async function handleTakePhotoboothShot() {
-    if (isCapturingShot) return
+    if (isCapturingShot || isFlashCoolingDown) return
     if (isPhotoboothFull && retakeSlotIndex === null) return
 
     // Xác định ô sẽ được gán ảnh vào
@@ -644,11 +525,6 @@ export default function CaptureScreen() {
     setIsCapturingShot(true)
 
     try {
-      // Khởi động timelapse nếu chưa ghi hoặc cần tiếp tục ghi hình
-      if (eventConfig.timelapseEnabled && !isTimelapseRecording) {
-        startTimelapse()
-      }
-
       const timestamp = Date.now()
       const fileName = `${FILE_PREFIX_SHOT}_${targetIndex + 1}_${timestamp}.jpg`
 
@@ -669,10 +545,14 @@ export default function CaptureScreen() {
       setCurrentCountdown(0)
       setShowFlash(true)
       setTimeout(() => setShowFlash(false), 450)
+      setIsFlashCoolingDown(true)
+      setTimeout(() => setIsFlashCoolingDown(false), SELFBOOTH_FLASH_RECYCLE_MS)
 
       // 2. Chụp khung hình tại đúng 0s (người dùng đã cười tươi tạo dáng xong)
-      const photoDataUrl = grabVideoFrame()
+      let photoDataUrl = grabVideoFrame()
       if (photoDataUrl) {
+        // Cắt crop theo đúng tỉ lệ chuẩn của ô layout (528x352, 544x726, 381x580)
+        photoDataUrl = await cropImageToAspect(photoDataUrl, targetSlotDimensions.w, targetSlotDimensions.h)
         setCameraFreezeFrame(photoDataUrl)
       }
       const photoPath = photoDataUrl || `photo_${timestamp}_${targetIndex + 1}.jpg`
@@ -693,24 +573,6 @@ export default function CaptureScreen() {
       // Reset lại retake index sau khi chụp xong
       setRetakeSlotIndex(null)
 
-      // 4. Kích hoạt hiệu ứng bay vào ô thumbnail ngay lập tức (Tổng delay < 0.4s!)
-      // 5. Khóa Beauty Snapshot tại thời điểm chụp để bảo đảm 100% WYSIWYG (Preview thế nào, ảnh chụp thế ấy)
-      const beautySnapshot: BeautyConfigSnapshot = {
-        slimFace,
-        vLine,
-        bigEyes,
-        skinSmoothing,
-        whiteningTone,
-        rosyTone,
-        glowClarity,
-        brightnessAdjust,
-        contrastAdjust,
-        saturationAdjust,
-        mirror: mirrorCamera,
-        presetId: selectedBeautyPreset,
-        timestamp: Date.now(),
-      }
-
       // Lưu ảnh preview/fallback vào đĩa trong nền bất đồng bộ (không chặn giao diện người dùng)
       if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
         api.storage.savePhoto(photoDataUrl, fileName).catch((err) => console.warn('Save photo error:', err))
@@ -720,6 +582,7 @@ export default function CaptureScreen() {
       // CHỈ kích hoạt máy ảnh Canon khi Canon Daemon đang active (tránh treo giao diện khi dùng webcam)
       // Chạy hoàn toàn bất đồng bộ trong nền (Non-blocking), không cản trở luồng chụp và chuyển ô
       if (isCanonDaemonActive) {
+        pendingCapturesRef.current.add(targetIndex)
         const captureId = `cap_${sessionId}_slot${targetIndex}_${Date.now()}`
         api.camera.edsdkCapture({
           captureId,
@@ -729,24 +592,23 @@ export default function CaptureScreen() {
           shotIndex: targetIndex,
         })
           .then(async (res) => {
-            if (res && res.success && res.data && res.data.dataUrl) {
+            if (res && res.success && res.data && res.data.savedPath) {
               const canonData = res.data
               console.log(`[Method 2] Canon EOS 24MP captured: ${canonData.savedPath}`)
 
-              // ── AI BEAUTY ENGINE: HIGH-QUALITY MODE (WYSIWYG GUARANTEE) ──
-              // Xử lý ảnh chụp chất lượng cao bằng cùng quy tắc biến dạng, làm mịn và lật gương như Preview
-              let finalPhotoUrl = canonData.dataUrl
+              let finalPhotoPath = canonData.savedPath
+              let finalPhotoUrl = canonData.dataUrl || canonData.savedPath
+
+              // ── ƯU TIÊN 1: Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP gốc ──
               try {
-                const hqResult = await beautyEngine.processHighQualityPhoto(canonData.dataUrl, beautySnapshot)
-                if (hqResult && hqResult.success && hqResult.dataUrl) {
-                  finalPhotoUrl = hqResult.dataUrl
-                  const beautyFileName = `beauty_${fileName}`
-                  api.storage.savePhoto(finalPhotoUrl, beautyFileName).catch((err) =>
-                    console.warn('Save beauty photo error:', err)
-                  )
+                const enhanceRes = await api.ai.enhance(canonData.savedPath, 50)
+                if (enhanceRes && enhanceRes.success && enhanceRes.data && enhanceRes.data.enhancedPath) {
+                  finalPhotoPath = enhanceRes.data.enhancedPath
+                  finalPhotoUrl = `file://${finalPhotoPath.replace(/\\/g, '/')}`
+                  console.log(`[AI Engine] Korean Soft Beauty applied: ${finalPhotoPath}`)
                 }
-              } catch (hqErr) {
-                console.warn('[BeautyEngine HQ] Processing fallback:', hqErr)
+              } catch (aiErr) {
+                console.warn('[AI Engine] Python enhance fallback:', aiErr)
               }
 
               setSlots((prev) => {
@@ -769,6 +631,9 @@ export default function CaptureScreen() {
           .catch((err) => {
             console.warn('[Method 2] Canon hardware capture fallback:', err)
           })
+          .finally(() => {
+            pendingCapturesRef.current.delete(targetIndex)
+          })
       }
 
       // Xóa khung đóng băng camera ngay sau hiệu ứng chớp flash dứt khoát (< 350ms)
@@ -778,10 +643,9 @@ export default function CaptureScreen() {
 
 
       // Nếu sau lần chụp này đã full tất cả các ô:
-      // Dừng timelapse nhưng KHÔNG tự động chuyển màn hình ngay!
+      // KHÔNG tự động chuyển màn hình ngay!
       // Giữ nguyên để khách xem lại, xóa ảnh không đẹp hoặc bấm Tiếp tục.
       if (nextSlots.every(Boolean)) {
-        stopTimelapse().catch((err) => console.warn('Stop timelapse background error:', err))
         if (eventConfig.gdriveEnabled) {
           const folderLink =
             eventConfig.gdriveFolderUrl ||
@@ -797,17 +661,17 @@ export default function CaptureScreen() {
     }
   }
 
-  // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (mỗi ô chỉ được xóa và chụp lại tối đa 1 lần)
+  // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (mỗi ô tối đa 2 lần xóa)
   function handleDeleteSlot(indexToDelete: number) {
     if (isCapturingShot) return
-    const usedCount = slotRetakeCounts[indexToDelete] || 0
-    if (usedCount >= 1) return
 
-    setSlotRetakeCounts((prev) => {
-      const next = [...prev]
-      next[indexToDelete] = usedCount + 1
-      return next
-    })
+    const currentCount = slotDeleteCounts[indexToDelete] || 0
+    if (currentCount >= 2) return
+
+    setSlotDeleteCounts((prev) => ({
+      ...prev,
+      [indexToDelete]: currentCount + 1,
+    }))
 
     const nextSlots = [...slots]
     nextSlots[indexToDelete] = null
@@ -820,14 +684,24 @@ export default function CaptureScreen() {
     const validPhotos = slots.filter((s): s is CapturedPhoto => s !== null)
     if (validPhotos.length < totalShots) return
 
-    // Đảm bảo dừng timelapse và đợi hoàn tất xuất video trước khi chuyển màn hình
-    if (timelapsePromiseRef.current) {
-      await timelapsePromiseRef.current
-    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      await stopTimelapse()
+    // Đợi ảnh Canon hoàn tất lưu và chạy AI trong nền nếu đang xử lý
+    if (pendingCapturesRef.current.size > 0) {
+      await new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (pendingCapturesRef.current.size === 0) {
+            clearInterval(interval)
+            resolve(true)
+          }
+        }, 150)
+        setTimeout(() => {
+          clearInterval(interval)
+          resolve(false)
+        }, 5000)
+      })
     }
 
-    setSessionPhotos(validPhotos)
+    const finalPhotos = slotsRef.current.filter((s): s is CapturedPhoto => s !== null)
+    setSessionPhotos(finalPhotos.length === totalShots ? finalPhotos : validPhotos)
     setIsSessionActive(false)
     setScreen('select-theme')
   }
@@ -838,14 +712,14 @@ export default function CaptureScreen() {
 
   // Bấm chụp 1 ảnh trong phiên Selfbooth (chụp tự do liên tục bằng remote hoặc nút bấm)
   async function handleTakeSelfboothShot() {
-    if (isCapturingShot) return
+    if (isCapturingShot || isFlashCoolingDown) return
     if (!isSelfboothRunning) {
       setIsSelfboothRunning(true)
       setIsSessionActive(true)
-      startTimelapse()
     }
 
     setIsCapturingShot(true)
+    setIsFlashCoolingDown(true)
 
     try {
       const timestamp = Date.now()
@@ -855,11 +729,8 @@ export default function CaptureScreen() {
       const canonSelfPath = `F:\\Fotolism_image\\${fileName}`
       const selfApi = isBrowser ? mockApi : fotolismApi
 
-      // Đếm ngược ngắn 2 giây để tạo dáng nhanh vui vẻ
-      for (let c = 2; c >= 1; c--) {
-        setCurrentCountdown(c)
-        await new Promise((r) => setTimeout(r, 1000))
-      }
+      // ── BỎ HOÀN TOÀN COUNTDOWN: BẮT ẢNH TỨC THÌ (< 50ms) ──────────────
+      setCurrentCountdown(0)
 
       // ── BẮT ẢNH TỨC THÌ TỪ LUỒNG MÁY ẢNH CANON SELFBOOTH ──────────────
       if (!isCanonDaemonActive) {
@@ -868,8 +739,10 @@ export default function CaptureScreen() {
       setCurrentCountdown(0)
       setShowFlash(true)
       setTimeout(() => setShowFlash(false), 450)
+      setIsFlashCoolingDown(true)
+      setTimeout(() => setIsFlashCoolingDown(false), SELFBOOTH_FLASH_RECYCLE_MS)
 
-      const photoDataUrl = grabVideoFrame()
+      let photoDataUrl = grabVideoFrame()
       if (photoDataUrl) {
         setCameraFreezeFrame(photoDataUrl)
       }
@@ -893,6 +766,7 @@ export default function CaptureScreen() {
       // PHƯƠNG ÁN 2 cho Selfbooth: Chụp ảnh thật từ cảm biến máy ảnh Canon (Fotolism 2.2 Idempotency)
       // CHỈ kích hoạt máy ảnh Canon khi Canon Daemon đang active (tránh đứng màn hình khi dùng webcam)
       if (isCanonDaemonActive) {
+        pendingCapturesRef.current.add(photoNum)
         const captureId = `cap_${sessionId}_self${photoNum}_${Date.now()}`
         selfApi.camera.edsdkCapture({
           captureId,
@@ -901,39 +775,55 @@ export default function CaptureScreen() {
           savePath: canonSelfPath,
           shotIndex: photoNum,
         })
-          .then((res) => {
-            if (res && res.success && res.data && res.data.dataUrl) {
+          .then(async (res) => {
+            if (res && res.success && res.data && res.data.savedPath) {
               const canonData = res.data
               console.log(`[Method 2 Selfbooth] Canon 24MP captured: ${canonData.savedPath}`)
+              let finalPhotoUrl = canonData.dataUrl || canonData.savedPath
+
+              // ── Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP ──
+              try {
+                const enhanceRes = await selfApi.ai.enhance(canonData.savedPath, 50)
+                if (enhanceRes && enhanceRes.success && enhanceRes.data && enhanceRes.data.enhancedPath) {
+                  finalPhotoUrl = `file://${enhanceRes.data.enhancedPath.replace(/\\/g, '/')}`
+                  console.log(`[Selfbooth AI] Korean Soft Beauty applied: ${enhanceRes.data.enhancedPath}`)
+                }
+              } catch (aiErr) {
+                console.warn('[Selfbooth AI] Python enhance fallback:', aiErr)
+              }
+
               setSelfboothLibrary((prev) =>
                 prev.map((p) =>
                   p.id === newPhoto.id
-                    ? {
-                      ...p,
-                      rawPath: canonData.savedPath,
-                      enhancedPath: canonData.dataUrl,
-                      compositedPath: canonData.dataUrl,
-                    }
+                    ? { ...p, rawPath: canonData.savedPath, enhancedPath: finalPhotoUrl, compositedPath: finalPhotoUrl }
                     : p
                 )
               )
             }
           })
           .catch((err) => console.warn('[Method 2] Selfbooth Canon capture fallback:', err))
+          .finally(() => {
+            pendingCapturesRef.current.delete(photoNum)
+          })
       }
 
-      // Xóa khung đóng băng camera ngay sau hiệu ứng chớp flash dứt khoát (< 350ms)
-      setTimeout(() => setCameraFreezeFrame(null), 350)
+      // Giữ khung đóng băng xem lại ảnh vừa chụp trong 1.5s (Instant Review) trước khi mở lại Live View
+      setTimeout(() => setCameraFreezeFrame(null), 1500)
 
       // Hiệu ứng bay lên ngay lập tức (< 0.4s)
       setSnapshotFlyer({ photoUrl: photoPath, slotIndex: 0, isEdsdk: false })
       setTimeout(() => setSnapshotFlyer(null), 800)
+
+      // Khóa nhận lệnh trong đúng 2.5s để đèn Flash Studio hồi tụ điện, Canon R100 phơi sáng và truyền ảnh an toàn
+      await new Promise((r) => setTimeout(r, SELFBOOTH_FLASH_RECYCLE_MS))
 
     } catch (shootErr) {
       console.error('Error during selfbooth shot:', shootErr)
     } finally {
       setCurrentCountdown(0)
       setIsCapturingShot(false)
+      setIsFlashCoolingDown(false)
+      setCameraFreezeFrame(null)
     }
   }
 
@@ -958,14 +848,28 @@ export default function CaptureScreen() {
       }
     }
 
-    const timelapseDataUrl = await stopTimelapse()
+    // Đợi ảnh Canon hoàn tất lưu và xử lý AI trong nền nếu đang chụp
+    if (pendingCapturesRef.current.size > 0) {
+      await new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (pendingCapturesRef.current.size === 0) {
+            clearInterval(interval)
+            resolve(true)
+          }
+        }, 150)
+        setTimeout(() => {
+          clearInterval(interval)
+          resolve(false)
+        }, 5000)
+      })
+    }
 
     // 1. Lưu toàn bộ ảnh khách đã chụp vào session store
     setSessionPhotos(finalPhotos)
     setIsSessionActive(false)
 
     // 2. KHỞI ĐỘNG ĐẨY ẢNH LÊN GOOGLE DRIVE NGAY LẬP TỨC TRONG NỀN
-    // Tạo thư mục phiên chụp riêng trên Google Drive và đẩy toàn bộ ảnh + video timelapse lên ngay
+    // Tạo thư mục phiên chụp riêng trên Google Drive và đẩy toàn bộ ảnh lên ngay
     if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
       setIsSyncingDrive(true)
       setDriveSyncDone(false)
@@ -981,14 +885,6 @@ export default function CaptureScreen() {
           })
         }
       })
-
-      // Đính kèm video timelapse hậu trường nếu có
-      if (timelapseDataUrl && timelapseDataUrl.startsWith('data:')) {
-        filesToUpload.push({
-          name: `${FILE_PREFIX_TIMELAPSE}.webm`,
-          dataUrl: timelapseDataUrl,
-        })
-      }
 
       const now = new Date()
       const pad = (n: number) => (n < 10 ? '0' : '') + n
@@ -1051,8 +947,8 @@ export default function CaptureScreen() {
       })
     }
 
-    // Tự động out ra màn hình quét mã QR lấy ảnh (Requirement 4)
-    setScreen('review')
+    // Selfbooth Flow: Bỏ màn chọn ảnh ghép frame, chuyển thẳng sang màn processing đẩy ảnh và QR
+    setScreen('processing')
   }
 
   useEffect(() => {
@@ -1063,20 +959,15 @@ export default function CaptureScreen() {
   function handleResetShootSession() {
     if (sessionResetCount >= 1) return
     setSessionResetCount((c) => c + 1)
-    setSlotRetakeCounts(Array(totalShots).fill(0))
     setIsSessionActive(false)
     setIsCapturingShot(false)
     setIsSelfboothRunning(false)
     setSlots(Array(totalShots).fill(null))
     setRetakeSlotIndex(null)
+    setSlotDeleteCounts({})
     setSelfboothLibrary([])
     setSelfboothSecondsLeft(totalDuration)
     setShowFinishConfirm(false)
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop()
-      } catch { }
-    }
   }
 
   return (
@@ -1099,16 +990,20 @@ export default function CaptureScreen() {
             </div>
           ) : (
             <div className="countdown-capsule-group">
-              {[5, 3].map((sec) => (
-                <button
-                  key={sec}
-                  className={`countdown-pill ${countdownSeconds === sec ? 'active' : ''}`}
-                  onClick={() => setCountdownSeconds(sec)}
-                  title={`Thời gian đếm ngược ${sec} giây`}
-                >
-                  <span>{sec}s</span>
-                </button>
-              ))}
+              {[8, 5].map((sec) => {
+                const isLocked = isSessionActive || slots.some(Boolean) || isCapturingShot || isFlashCoolingDown
+                return (
+                  <button
+                    key={sec}
+                    className={`countdown-pill ${countdownSeconds === sec ? 'active' : ''} ${isLocked ? 'locked-disabled' : ''}`}
+                    onClick={() => !isLocked && setCountdownSeconds(sec)}
+                    disabled={isLocked}
+                    title={isLocked ? 'Đã bắt đầu chụp, không thể thay đổi số giây' : `Thời gian đếm ngược ${sec} giây`}
+                  >
+                    <span>{sec}s</span>
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -1121,10 +1016,14 @@ export default function CaptureScreen() {
       <div className={`capture-main-stage ${isSelfboothMode ? 'selfbooth-stage' : ''}`}>
         {/* ── CỘT 1/12: Bộ lọc màu nhanh (Chỉ hiển thị trong Photobooth) ── */}
         {!isSelfboothMode && (
-          <aside className={`dock-grid-col-1 left-sidebar-dock ${isSessionActive && !isPhotoboothFull ? 'locked-dimmed' : ''}`}>
+          <aside className={`dock-grid-col-1 left-sidebar-dock ${(isSessionActive || slots.some(Boolean) || isCapturingShot) ? 'locked-dimmed' : ''}`}>
             <button
               className={`dock-btn ${activeFlyout === 'filter' ? 'active' : ''}`}
-              onClick={() => setActiveFlyout(activeFlyout === 'filter' ? null : 'filter')}
+              onClick={() => {
+                if (isSessionActive || slots.some(Boolean) || isCapturingShot) return
+                setActiveFlyout(activeFlyout === 'filter' ? null : 'filter')
+              }}
+              disabled={isSessionActive || slots.some(Boolean) || isCapturingShot}
               title="Bộ lọc màu ảnh"
               aria-label="Bộ lọc màu"
             >
@@ -1176,7 +1075,16 @@ export default function CaptureScreen() {
 
         {/* ── CỘT LIVE VIEW: Chiếm 9/12 trong Photobooth hoặc Chiếm trọn màn hình trong Selfbooth ── */}
         <div className={isSelfboothMode ? 'liveview-selfbooth-full' : 'liveview-grid-col-9'}>
-          <div className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''}`}>
+          <div
+            className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''} ${
+              isSelfboothMode ? (isFlashCoolingDown ? 'selfbooth-cooling-down' : 'selfbooth-clickable') : ''
+            }`}
+            onClick={() => {
+              if (isSelfboothMode && !isCapturingShot && !isFlashCoolingDown) {
+                handleTakeSelfboothShot()
+              }
+            }}
+          >
             {hasCamera ? (
               <>
                 <BeautyCameraView
@@ -1214,6 +1122,9 @@ export default function CaptureScreen() {
                     }}
                   />
                 )}
+                {selectedFilter?.id === 'retro_90s' && (
+                  <div className="retro-film-grain-overlay" style={{ zIndex: 3 }} />
+                )}
                 {/* Thẻ video nguồn dự phòng cấp thấp luôn phát stream camera */}
                 <video
                   ref={videoRef}
@@ -1250,16 +1161,22 @@ export default function CaptureScreen() {
               />
             )}
 
-            {/* Timelapse Recording Indicator */}
-            {eventConfig.timelapseEnabled && (isTimelapseRecording || isSessionActive) && (
-              <div className="timelapse-recording-badge">
-                <span className="rec-dot" />
-                <span>REC TIMELAPSE ({eventConfig.timelapseSpeed || 2.5}x)</span>
+            {/* ── Khung Giới Hạn Tỉ Lệ Chuẩn (Safe Area Viewfinder Guide) cho khách đứng đúng khuôn hình (Chỉ dùng cho Photobooth) ── */}
+            {!isSelfboothMode && (
+              <CaptureAspectGuide guideBoxStyle={guideBoxStyle} />
+            )}
+
+            {/* ── Màn hình Lazy Loading xoay tròn 2.5s sau mỗi lần chụp (hồi đèn flash & xử lý ảnh) ── */}
+            {isFlashCoolingDown && (
+              <div className="selfbooth-loading-overlay animate-fade-in">
+                <div className="selfbooth-loading-spinner-box">
+                  <div className="selfbooth-spinner-ring" />
+                </div>
               </div>
             )}
 
             {/* Countdown digits overlay */}
-            {isCapturingShot && currentCountdown > 0 && (
+            {!isSelfboothMode && isCapturingShot && currentCountdown > 0 && (
               <div className="multi-shot-countdown-overlay">
                 <div className="countdown-digits-translucent">{currentCountdown}</div>
               </div>
@@ -1292,80 +1209,22 @@ export default function CaptureScreen() {
           </div>
         </div>
 
-        {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth. Xóa hoàn toàn khung bên phải trong Selfbooth ── */}
+        {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth ── */}
         {!isSelfboothMode && (
-          <aside className="slots-grid-col-2 right-slots-dock">
-            <div className={`live-slots-deck vertical-slots-deck ${totalShots >= 6 ? 'multi-col-deck' : ''} shots-${totalShots}`}>
-              <div className={`live-slots-list ${totalShots >= 6 ? 'slots-grid-2cols' : ''} shots-${totalShots}`}>
-                {Array.from({ length: totalShots }).map((_, index) => {
-                  const slotItem = slots[index]
-                  const isFilled = slotItem !== null
-                  const isRetaking = retakeSlotIndex === index
-                  const isJustCaptured = justCapturedSlot === index
-                  const retakesUsed = slotRetakeCounts[index] || 0
-                  const canRetake = retakesUsed < 1
-                  const isCenteredLast = totalShots === 9 && index === 8
-
-                  return (
-                    <div
-                      key={index}
-                      className={`live-slot-thumb ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${!canRetake ? 'retake-locked' : ''} ${isCenteredLast ? 'slot-thumb-centered-last' : ''}`}
-                      onClick={() => {
-                        if (isFilled && !isCapturingShot && canRetake) {
-                          handleDeleteSlot(index)
-                        }
-                      }}
-                      title={
-                        isFilled
-                          ? canRetake
-                            ? `Bấm ✕ để xóa và chụp lại ô ${index + 1} (còn 1 lượt)`
-                            : `Ô ${index + 1} đã chụp lại 1 lần (không thể xóa thêm)`
-                          : undefined
-                      }
-                    >
-                      {isFilled ? (
-                        <>
-                          <img src={slotItem.compositedPath || slotItem.rawPath} alt={`Slot ${index + 1}`} />
-                          <span className="slot-index-badge">{index + 1}</span>
-                          {canRetake ? (
-                            <button
-                              className="slot-delete-btn"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteSlot(index)
-                              }}
-                              title={`Xóa ảnh ô ${index + 1} để chụp lại (còn 1 lượt)`}
-                              aria-label={`Xóa ảnh ô ${index + 1}`}
-                            >
-                              ✕
-                            </button>
-                          ) : (
-                            <span
-                              className="slot-locked-badge"
-                              title="Ô này đã dùng hết lượt chụp lại (1/1)"
-                            >
-                              ✓
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <div className="slot-empty-content">
-                          <span className="slot-empty-plus">+</span>
-                          <span className="slot-empty-label">Ô {index + 1}</span>
-                          {retakesUsed > 0 && (
-                            <span className="slot-retake-used-tag">Lần 2</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="live-slots-counter">
-                {filledSlotsCount}/{totalShots}
-              </div>
-            </div>
-          </aside>
+          <LiveSlotsDock
+            totalShots={totalShots}
+            selectedFrameSize={selectedFrameSize}
+            slots={slots}
+            retakeSlotIndex={retakeSlotIndex}
+            justCapturedSlot={justCapturedSlot}
+            slotDeleteCounts={slotDeleteCounts}
+            isCapturingShot={isCapturingShot}
+            targetSlotDimensions={targetSlotDimensions}
+            is2x6={is2x6}
+            is9Grid={is9Grid}
+            onDeleteSlot={handleDeleteSlot}
+            onSelectRetakeSlot={setRetakeSlotIndex}
+          />
         )}
       </div>
 
@@ -1386,7 +1245,6 @@ export default function CaptureScreen() {
                       onClick={handleProceedPhotobooth}
                     >
                       <span>Tiếp Tục Chọn Frame</span>
-                      <ArrowRight size={22} strokeWidth={2.2} />
                     </button>
                   </div>
                 ) : (
@@ -1394,18 +1252,20 @@ export default function CaptureScreen() {
                   <button
                     className="start-capture-btn-pink"
                     id="start-capture-button"
-                    disabled={isCapturingShot}
+                    disabled={isCapturingShot || isFlashCoolingDown}
                     onClick={handleTakePhotoboothShot}
                   >
                     <Camera size={26} strokeWidth={2} />
                     <span>
                       {isCapturingShot
                         ? `Đang đếm ngược...`
-                        : retakeSlotIndex !== null
-                          ? `📸 Chụp Lại Ô ${retakeSlotIndex + 1}`
-                          : filledSlotsCount === 0
-                            ? `Bắt đầu chụp (Ảnh 1 / ${totalShots})`
-                            : `Chụp tiếp ảnh ${filledSlotsCount + 1} / ${totalShots}`}
+                        : isFlashCoolingDown
+                          ? `Đang xử lý ảnh...`
+                          : retakeSlotIndex !== null
+                            ? `📸 Chụp Lại Ô ${retakeSlotIndex + 1}`
+                            : filledSlotsCount === 0
+                              ? `Bắt đầu chụp (Ảnh 1 / ${totalShots})`
+                              : `Chụp tiếp ảnh ${filledSlotsCount + 1} / ${totalShots}`}
                     </span>
                   </button>
                 )}
@@ -1435,12 +1295,15 @@ export default function CaptureScreen() {
           /* ── SELFBOOTH MODE CONTROLS: CHỈ DUY NHẤT 1 NÚT KẾT THÚC CÓ POPUP CONFIRM ── */
           <div className="selfbooth-bottom-single-deck">
             <button
-              className="btn-selfbooth-finish-main"
-              onClick={() => setShowFinishConfirm(true)}
+              className={`btn-selfbooth-finish-main ${isCapturingShot || isFlashCoolingDown ? 'is-disabled' : ''}`}
+              disabled={isCapturingShot || isFlashCoolingDown}
+              onClick={() => {
+                if (isCapturingShot || isFlashCoolingDown) return
+                setShowFinishConfirm(true)
+              }}
               id="selfbooth-finish-button"
             >
               <span>KẾT THÚC</span>
-              <ArrowRight size={22} strokeWidth={2.4} />
             </button>
           </div>
         )}
