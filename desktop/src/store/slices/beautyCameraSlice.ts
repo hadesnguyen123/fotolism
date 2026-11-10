@@ -23,7 +23,7 @@ export function loadSavedBeautyConfig(): BeautyConfig {
                 : null
         if (raw) {
             const parsed = JSON.parse(raw)
-            return { ...DEFAULT_BEAUTY_CONFIG, ...parsed }
+            return { ...DEFAULT_BEAUTY_CONFIG, ...parsed, mirror: true }
         }
     } catch {}
     return DEFAULT_BEAUTY_CONFIG
@@ -234,8 +234,8 @@ export const createBeautyCameraSlice: StateCreator<
             return parts.length > 0 ? parts.join(' ') : 'none'
         },
 
-        getCameraTransformCss: (mirror: boolean) => {
-            return mirror ? 'scaleX(-1)' : 'none'
+        getCameraTransformCss: (_mirror?: boolean) => {
+            return 'scaleX(-1)'
         },
 
         getEffectiveFilterCss: () => {
@@ -332,29 +332,16 @@ export const createBeautyCameraSlice: StateCreator<
                 selectedCameraId: type === 'eos' ? 'canon-daemon-stream' : null,
             })
         },
-        mirrorCamera: (() => {
-            try {
-                if (typeof window !== 'undefined') {
-                    const v = localStorage.getItem('fotolism_mirror_camera')
-                    return v !== null ? v === 'true' : true
-                }
-                return true
-            } catch {
-                return true
-            }
-        })(),
+        mirrorCamera: true,
         setCameras: (cameras) => set({ availableCameras: cameras }),
         selectCamera: (id) => set({ selectedCameraId: id }),
-        setMirrorCamera: (mirrorCamera) => {
+        setMirrorCamera: (_mirror?: boolean) => {
             try {
                 if (typeof window !== 'undefined') {
-                    localStorage.setItem(
-                        'fotolism_mirror_camera',
-                        String(mirrorCamera)
-                    )
+                    localStorage.setItem('fotolism_mirror_camera', 'true')
                 }
             } catch {}
-            set({ mirrorCamera })
+            set({ mirrorCamera: true })
         },
     }
 }

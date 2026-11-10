@@ -65,8 +65,6 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
     const {
         cameraType,
         setCameraType,
-        mirrorCamera,
-        setMirrorCamera,
         ringLightEnabled,
         setRingLightEnabled,
         brightnessAdjust,
@@ -245,9 +243,7 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                             alt="Canon Live View"
                                             className="liveview-feed-media"
                                             style={{
-                                                transform: mirrorCamera
-                                                    ? 'scaleX(-1)'
-                                                    : 'none',
+                                                transform: 'scaleX(-1)',
                                                 filter: getBeautyFilterCss(),
                                             }}
                                         />
@@ -273,9 +269,7 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         muted
                                         className="liveview-feed-media"
                                         style={{
-                                            transform: mirrorCamera
-                                                ? 'scaleX(-1)'
-                                                : 'none',
+                                            transform: 'scaleX(-1)',
                                             filter: getBeautyFilterCss(),
                                         }}
                                     />
@@ -320,18 +314,23 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
 
                                 <div className="mirror-light-row">
                                     <div className="switch-row-touch">
-                                        <span className="switch-label-touch">
-                                            Gương
-                                        </span>
-                                        <label className="switch-toggle-touch">
+                                        <div className="flex flex-col">
+                                            <span className="switch-label-touch">
+                                                Gương (Mirror)
+                                            </span>
+                                            <span className="text-[10px] font-bold text-emerald-600">
+                                                ✓ Luôn bật trên Kiosk
+                                            </span>
+                                        </div>
+                                        <label
+                                            className="switch-toggle-touch opacity-90 cursor-default"
+                                            title="Gương luôn luôn được bật trên Kiosk"
+                                        >
                                             <input
                                                 type="checkbox"
-                                                checked={mirrorCamera}
-                                                onChange={(e) =>
-                                                    setMirrorCamera(
-                                                        e.target.checked
-                                                    )
-                                                }
+                                                checked={true}
+                                                readOnly
+                                                disabled
                                             />
                                             <span className="switch-slider-touch" />
                                         </label>

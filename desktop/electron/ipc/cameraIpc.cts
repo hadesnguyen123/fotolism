@@ -158,6 +158,43 @@ function findDigiCamSetupPath(): string | null {
     return null
 }
 
+/**
+ * Lật gương ngang (Horizontal Flip) file ảnh JPEG trực tiếp trên đĩa
+ * Đảm bảo 100% ảnh chụp xong từ máy ảnh Canon khớp chính xác với luồng soi gương trên màn hình Kiosk
+ */
+async function flipImageFile(targetPath: string): Promise<void> {
+    return new Promise((resolve) => {
+        try {
+            if (!targetPath || !fs.existsSync(targetPath)) return resolve()
+            if (process.platform === 'win32') {
+                const escapedPath = targetPath.replace(/'/g, "''")
+                const script = `Add-Type -AssemblyName System.Drawing; $fs = [System.IO.File]::OpenRead('${escapedPath}'); $bmp = [System.Drawing.Bitmap]::FromStream($fs); $fs.Close(); $bmp.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX); $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Jpeg); $bmp.Dispose()`
+                exec(
+                    `powershell -NoProfile -NonInteractive -Command "${script}"`,
+                    (err) => {
+                        if (err)
+                            console.warn(
+                                '[Canon Mirror] PowerShell flip error:',
+                                err
+                            )
+                        resolve()
+                    }
+                )
+            } else if (process.platform === 'darwin') {
+                exec(`sips --flipHorizontal "${targetPath}"`, (err) => {
+                    if (err)
+                        console.warn('[Canon Mirror] sips flip error:', err)
+                    resolve()
+                })
+            } else {
+                resolve()
+            }
+        } catch {
+            resolve()
+        }
+    })
+}
+
 export function registerCameraIpc(): void {
     ipcMain.handle('camera:list', async () => {
         const res = await fetch(`${AI_SERVICE_URL}/camera/list`)
@@ -358,6 +395,9 @@ export function registerCameraIpc(): void {
                                 fs.existsSync(targetPath) &&
                                 fs.statSync(targetPath).size > 1000
                             ) {
+                                // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip)
+                                await flipImageFile(targetPath)
+
                                 const buffer = fs.readFileSync(targetPath)
                                 const sizeMb = (
                                     buffer.length /
@@ -502,6 +542,9 @@ export function registerCameraIpc(): void {
                             fs.existsSync(savePath) &&
                             fs.statSync(savePath).size > 1000
                         ) {
+                            // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip)
+                            await flipImageFile(savePath)
+
                             const buffer = fs.readFileSync(savePath)
                             const sizeMb = (
                                 buffer.length /

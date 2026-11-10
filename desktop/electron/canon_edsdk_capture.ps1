@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)]
     [string]$savePath
 )
@@ -316,6 +316,17 @@ $errorMsg = ""
 $success = [CanonNativeCapture]::Shoot($savePath, [ref]$errorMsg)
 
 if ($success -and (Test-Path $savePath)) {
+    try {
+        Add-Type -AssemblyName System.Drawing
+        $fs = [System.IO.File]::OpenRead($savePath)
+        $bmp = [System.Drawing.Bitmap]::FromStream($fs)
+        $fs.Close()
+        $bmp.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX)
+        $bmp.Save($savePath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+        $bmp.Dispose()
+    } catch {
+        # Không làm gián đoạn luồng nếu System.Drawing gặp cảnh báo
+    }
     $size = (Get-Item $savePath).Length
     $out = @{
         success = $true

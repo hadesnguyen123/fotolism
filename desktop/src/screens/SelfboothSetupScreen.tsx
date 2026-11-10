@@ -25,7 +25,6 @@ export default function SelfboothSetupScreen() {
         selectFilter,
         eventConfig,
         setSelfboothDurationSeconds,
-        mirrorCamera,
     } = useAppStore()
 
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -156,7 +155,7 @@ export default function SelfboothSetupScreen() {
                                     selectedFilter.cssFilter !== 'none'
                                         ? selectedFilter.cssFilter
                                         : undefined,
-                                transform: mirrorCamera ? 'scaleX(-1)' : 'none',
+                                transform: 'scaleX(-1)', // Kiosk: Gương luôn luôn bật
                             }}
                         />
 
