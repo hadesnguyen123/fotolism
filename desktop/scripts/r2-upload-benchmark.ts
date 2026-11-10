@@ -7,10 +7,10 @@ import { S3Client, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/c
 
 // Cấu hình môi trường
 const CMS_URL = process.env.CMS_URL || 'http://localhost:3000'
-const R2_ENDPOINT = process.env.R2_ENDPOINT || 'https://70e55bd2443669e10901a0826fd50ab4.r2.cloudflarestorage.com'
+const R2_ENDPOINT = process.env.R2_ENDPOINT || ''
 const R2_BUCKET = process.env.R2_BUCKET || 'fotolism-photos'
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '57e97336d6366ec3bda984b250a4fb5e'
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '30f0da7e73c917e2d0741a211fb4e072dada2578405ee73552aed9e50dc72321'
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || ''
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || ''
 
 const DATASET_DIR = 'F:\\Fotolism_image\\benchmark_dataset_500mb'
 const TOTAL_FILES = 50
