@@ -558,10 +558,9 @@ export default function CaptureScreen() {
                     ctx.filter = beautyFilter
                 }
 
-                if (mirrorCamera) {
-                    ctx.translate(w, 0)
-                    ctx.scale(-1, 1)
-                }
+                // Kiosk: Ảnh chụp xong luôn luôn lật gương
+                ctx.translate(w, 0)
+                ctx.scale(-1, 1)
 
                 ctx.drawImage(video, 0, 0, w, h)
                 const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.98)

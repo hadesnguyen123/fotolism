@@ -217,10 +217,9 @@ export const BeautyCameraView = forwardRef<
                         off.height = h
                         const ctx = off.getContext('2d')
                         if (ctx) {
-                            if (mirrorCamera) {
-                                ctx.translate(w, 0)
-                                ctx.scale(-1, 1)
-                            }
+                            // Kiosk: Ảnh chụp xong luôn luôn lật gương
+                            ctx.translate(w, 0)
+                            ctx.scale(-1, 1)
                             ctx.drawImage(img, 0, 0, w, h)
                             const mjpegDataUrl = off.toDataURL(
                                 'image/jpeg',
@@ -246,10 +245,9 @@ export const BeautyCameraView = forwardRef<
                         off.height = h
                         const ctx = off.getContext('2d')
                         if (ctx) {
-                            if (mirrorCamera) {
-                                ctx.translate(w, 0)
-                                ctx.scale(-1, 1)
-                            }
+                            // Kiosk: Ảnh chụp xong luôn luôn lật gương
+                            ctx.translate(w, 0)
+                            ctx.scale(-1, 1)
                             ctx.drawImage(video, 0, 0, w, h)
                             const fallbackUrl = off.toDataURL(
                                 'image/jpeg',
@@ -474,7 +472,7 @@ export const BeautyCameraView = forwardRef<
                 gl.uniform1f(uBrightness, (brightnessAdjust || 100) / 100.0)
                 gl.uniform1f(uContrast, (contrastAdjust || 100) / 100.0)
                 gl.uniform1f(uSaturation, (saturationAdjust || 100) / 100.0)
-                gl.uniform1i(uMirror, mirrorCamera ? 1 : 0)
+                gl.uniform1i(uMirror, 1) // Kiosk: Gương luôn luôn bật (Mirror 100%)
 
                 // Cập nhật tọa độ khuôn mặt MediaPipe phát hiện được
                 const faces = detectedFacesRef.current
