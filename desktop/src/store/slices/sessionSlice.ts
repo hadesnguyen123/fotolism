@@ -9,6 +9,7 @@ import { COLOR_FILTERS } from '../../config/filters'
 import { BEAUTY_PRESETS } from '../../services/beautyEngine'
 import { loadSavedBeautyConfig } from './beautyCameraSlice'
 import { LS_BEAUTY_CONFIG_KEY } from '../../lib/constants'
+import type { SlotOffset } from '../../lib/canvasCompositor'
 
 export interface CapturedPhoto {
     id: string
@@ -42,6 +43,7 @@ export interface SessionState {
     discountCodeUsed: string | null
     discountAmount: number
     hasPrinted?: boolean
+    slotOffsets?: SlotOffset[]
 }
 
 export function generateSessionId(): string {
@@ -83,6 +85,8 @@ export interface SessionSlice {
     setCloudFolderUrl: (url: string | null) => void
     compositeStripUrl: string | null
     setCompositeStripUrl: (url: string | null) => void
+    slotOffsets: SlotOffset[]
+    setSlotOffsets: (offsets: SlotOffset[]) => void
 }
 
 export const createSessionSlice: StateCreator<
@@ -105,6 +109,7 @@ export const createSessionSlice: StateCreator<
     driveSyncError: null,
     cloudFolderUrl: null,
     compositeStripUrl: null,
+    slotOffsets: [],
 
     setIsSyncingDrive: (isSyncingDrive) => set({ isSyncingDrive }),
     setDriveSyncDone: (driveSyncDone) => set({ driveSyncDone }),
@@ -115,6 +120,13 @@ export const createSessionSlice: StateCreator<
             compositeStripUrl,
             session: state.session
                 ? { ...state.session, compositeStripUrl }
+                : state.session,
+        })),
+    setSlotOffsets: (slotOffsets) =>
+        set((state: any) => ({
+            slotOffsets,
+            session: state.session
+                ? { ...state.session, slotOffsets }
                 : state.session,
         })),
 
@@ -146,6 +158,7 @@ export const createSessionSlice: StateCreator<
                 paymentMethod: null,
                 discountCodeUsed: null,
                 discountAmount: 0,
+                slotOffsets: [],
             },
             photoboothSessionEndTime: null,
             isSyncingDrive: false,
@@ -153,6 +166,7 @@ export const createSessionSlice: StateCreator<
             driveSyncError: null,
             cloudFolderUrl: null,
             compositeStripUrl: null,
+            slotOffsets: [],
             ...(set as any)({
                 selectedFrameSize: '2x6',
                 selectedCategory: 4,
@@ -277,6 +291,7 @@ export const createSessionSlice: StateCreator<
             driveSyncError: null,
             cloudFolderUrl: null,
             compositeStripUrl: null,
+            slotOffsets: [],
             ...(set as any)({
                 appliedCoupon: null,
                 selectedFrameSize: '2x6',

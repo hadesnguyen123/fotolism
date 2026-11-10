@@ -1,10 +1,11 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAppStore, THEME_OPTIONS, type ThemeItem } from '../store/appStore'
-import { DEFAULT_EVENT_NAME, resolveAssetUrl } from '../lib/constants'
-import { Camera, Layers } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { FrameCarousel } from '../components/theme/FrameCarousel'
 import { FilterSelectorDeck } from '../components/theme/FilterSelectorDeck'
+import { InteractiveStripPreview } from '../components/theme/InteractiveStripPreview'
+import type { SlotOffset } from '../lib/canvasCompositor'
 import './ThemeSelectScreen.css'
 
 export default function ThemeSelectScreen() {
@@ -19,6 +20,8 @@ export default function ThemeSelectScreen() {
         selectedFilter,
         selectFilter,
         eventConfig,
+        slotOffsets: storeSlotOffsets,
+        setSlotOffsets: setStoreSlotOffsets,
     } = useAppStore()
 
     const trackRef = useRef<HTMLDivElement>(null)
@@ -79,6 +82,143 @@ export default function ThemeSelectScreen() {
         selectedLayout.previewType === '8_grid' ||
         selectedLayout.previewType === '9_grid' ||
         (selectedLayout.cols !== undefined && selectedLayout.cols > 1)
+
+    const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
+    const totalW = is2x6 ? 600 : 1200
+    const totalH = 1800
+
+    const initialOffsets =
+        session?.slotOffsets ||
+        storeSlotOffsets ||
+        Array(photosCount).fill({ x: 0, y: 0 })
+
+    const [slotOffsets, setSlotOffsetsState] = useState<SlotOffset[]>(() =>
+        initialOffsets.length >= photosCount
+            ? initialOffsets
+            : Array.from({ length: photosCount }).map(
+                  (_, i) => initialOffsets[i] || { x: 0, y: 0 }
+              )
+    )
+    const slotOffsetsRef = useRef<SlotOffset[]>(slotOffsets)
+    slotOffsetsRef.current = slotOffsets
+
+    const frameSlots = useMemo(() => {
+        if (selectedTheme?.slots && selectedTheme.slots.length > 0) {
+            return selectedTheme.slots.map(
+                (s: { x: number; y: number; w: number; h: number }) => ({
+                    xPercent: (s.x / totalW) * 100,
+                    yPercent: (s.y / totalH) * 100,
+                    wPercent: (s.w / totalW) * 100,
+                    hPercent: (s.h / totalH) * 100,
+                    slotW: s.w,
+                    slotH: s.h,
+                    aspectRatio: s.w / s.h,
+                })
+            )
+        }
+        const totalSlots = selectedLayout.photosCount || 4
+        const cols = selectedLayout.cols || (is2x6 ? 1 : 2)
+        const rows =
+            selectedLayout.rows || Math.max(1, Math.ceil(totalSlots / cols))
+        const footerHeight = selectedTheme?.hideFooter ? 0 : 150
+        const padX = is2x6 ? 36 : 50
+        const padTop = 40
+        const gap = 20
+        const availableHeight = totalH - padTop - footerHeight
+        const defW = (totalW - padX * 2 - gap * (cols - 1)) / cols
+        const defH = (availableHeight - gap * (rows - 1)) / rows
+
+        return Array.from({ length: totalSlots }).map((_, i) => {
+            const colIdx = i % cols
+            const rowIdx = Math.floor(i / cols)
+            const sx = padX + colIdx * (defW + gap)
+            const sy = padTop + rowIdx * (defH + gap)
+            return {
+                xPercent: (sx / totalW) * 100,
+                yPercent: (sy / totalH) * 100,
+                wPercent: (defW / totalW) * 100,
+                hPercent: (defH / totalH) * 100,
+                slotW: defW,
+                slotH: defH,
+                aspectRatio: defW / defH,
+            }
+        })
+    }, [selectedTheme, selectedLayout, is2x6, totalW, totalH])
+
+    // Cử chỉ chạm & kéo để căn chỉnh ảnh trong ô slot
+    const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null)
+    const dragStartRef = useRef<{
+        index: number
+        startX: number
+        startY: number
+        initOffset: SlotOffset
+        slotPixelWidth: number
+        slotPixelHeight: number
+    } | null>(null)
+
+    const handleSlotPointerDown = (
+        index: number,
+        e: React.PointerEvent<HTMLDivElement>
+    ) => {
+        const target = e.currentTarget
+        try {
+            target.setPointerCapture(e.pointerId)
+        } catch {}
+        const rect = target.getBoundingClientRect()
+        dragStartRef.current = {
+            index,
+            startX: e.clientX,
+            startY: e.clientY,
+            initOffset: slotOffsetsRef.current[index] || { x: 0, y: 0 },
+            slotPixelWidth: rect.width,
+            slotPixelHeight: rect.height,
+        }
+        setActiveDragIndex(index)
+    }
+
+    const handleSlotPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!dragStartRef.current || activeDragIndex === null) return
+        const {
+            index,
+            startX,
+            startY,
+            initOffset,
+            slotPixelWidth,
+            slotPixelHeight,
+        } = dragStartRef.current
+        const dx = e.clientX - startX
+        const dy = e.clientY - startY
+
+        const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
+        const sensitivityY = Math.max(slotPixelHeight * 0.45, 40)
+
+        const nextX = Math.max(
+            -1,
+            Math.min(1, initOffset.x + dx / sensitivityX)
+        )
+        const nextY = Math.max(
+            -1,
+            Math.min(1, initOffset.y + dy / sensitivityY)
+        )
+
+        setSlotOffsetsState((prev) => {
+            const next = [...prev]
+            next[index] = { x: nextX, y: nextY }
+            return next
+        })
+    }
+
+    const handleSlotPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (activeDragIndex !== null) {
+            try {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+            } catch {}
+            const finalOffsets = [...slotOffsetsRef.current]
+            dragStartRef.current = null
+            setActiveDragIndex(null)
+            setStoreSlotOffsets(finalOffsets)
+        }
+    }
 
     // Xử lý bắt đầu chạm màn hình cảm ứng hoặc nhấn chuột
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -242,199 +382,22 @@ export default function ThemeSelectScreen() {
 
             {/* ── Main 2-Column Split: Live Preview (Trái) + Chọn Frame & Filter (Phải) ── */}
             <main className="theme-main-split">
-                {/* CỘT TRÁI: Dải ảnh in hoàn chỉnh kèm ảnh thật của khách và bộ lọc màu */}
+                {/* CỘT TRÁI: Dải ảnh in tương tác — Cho phép chạm kéo cân chỉnh vị trí từng ô */}
                 <section className="theme-preview-card">
-                    <div
-                        className={`strip-preview-fixed-frame ${
-                            (selectedTheme.frameSize || selectedFrameSize) ===
-                            '2x6'
-                                ? 'frame-size-2x6'
-                                : 'frame-size-4x6'
-                        } ${selectedTheme.overlayUrl ? 'has-custom-overlay' : ''}`}
-                        style={{
-                            background: selectedTheme.overlayUrl
-                                ? 'transparent'
-                                : selectedTheme.bgGradient ||
-                                  selectedTheme.bgColor,
-                            borderColor: selectedTheme.overlayUrl
-                                ? 'transparent'
-                                : selectedTheme.borderColor,
-                        }}
-                    >
-                        {/* Nếu là cuộn phim 35mm: đục lỗ film 2 bên */}
-                        {selectedTheme.id === 'theme_vintage_film' && (
-                            <div className="film-live-perforations">
-                                <div className="film-holes-strip left" />
-                                <div className="film-holes-strip right" />
-                            </div>
-                        )}
-
-                        {/* Các ô chứa ảnh thật của khách (Hỗ trợ tọa độ chuẩn xác theo từng Khung Đồ Họa) */}
-                        {selectedTheme.slots &&
-                        selectedTheme.slots.length > 0 ? (
-                            <div className="theme-custom-slots-container">
-                                {displayedPhotos.map((photo, index) => {
-                                    const slot = selectedTheme.slots![index]
-                                    if (!slot) return null
-                                    const canvasW =
-                                        (selectedTheme.frameSize ||
-                                            selectedFrameSize) === '2x6'
-                                            ? 600
-                                            : 1200
-                                    const canvasH = 1800
-                                    return (
-                                        <div
-                                            key={photo.id || index}
-                                            className="theme-slot-photo custom-positioned"
-                                            style={{
-                                                position: 'absolute',
-                                                left: `calc(${(slot.x / canvasW) * 100}% - 1px)`,
-                                                top: `calc(${(slot.y / canvasH) * 100}% - 1px)`,
-                                                width: `calc(${(slot.w / canvasW) * 100}% + 2px)`,
-                                                height: `calc(${(slot.h / canvasH) * 100}% + 2px)`,
-                                                borderRadius: 0,
-                                            }}
-                                        >
-                                            {photo.compositedPath ||
-                                            photo.rawPath ? (
-                                                <>
-                                                    <img
-                                                        src={
-                                                            photo.compositedPath ||
-                                                            photo.rawPath
-                                                        }
-                                                        alt={`Photo ${index + 1}`}
-                                                        style={{
-                                                            borderRadius: 0,
-                                                            width: '100%',
-                                                            height: '100%',
-                                                            objectFit: 'cover',
-                                                            filter:
-                                                                selectedFilter?.cssFilter &&
-                                                                selectedFilter.cssFilter !==
-                                                                    'none'
-                                                                    ? selectedFilter.cssFilter
-                                                                    : undefined,
-                                                            transition:
-                                                                'filter 0.25s ease',
-                                                        }}
-                                                    />
-                                                    {(selectedFilter?.id ===
-                                                        'retro_90s' ||
-                                                        selectedFilter?.hasGrain) && (
-                                                        <div className="retro-film-grain-overlay" />
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <div className="theme-slot-placeholder">
-                                                    <Camera
-                                                        size={16}
-                                                        strokeWidth={2}
-                                                        style={{
-                                                            display:
-                                                                'inline-block',
-                                                            verticalAlign:
-                                                                'middle',
-                                                            marginRight: 4,
-                                                        }}
-                                                    />
-                                                    <span>Ảnh {index + 1}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        ) : (
-                            <div
-                                className={
-                                    isGrid
-                                        ? 'grid-preview-slots'
-                                        : 'strip-preview-slots'
-                                }
-                                style={
-                                    isGrid
-                                        ? {
-                                              gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
-                                              gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
-                                          }
-                                        : undefined
-                                }
-                            >
-                                {displayedPhotos.map((photo, index) => (
-                                    <div
-                                        key={photo.id || index}
-                                        className="theme-slot-photo"
-                                        style={{ position: 'relative' }}
-                                    >
-                                        {photo.compositedPath ||
-                                        photo.rawPath ? (
-                                            <>
-                                                <img
-                                                    src={
-                                                        photo.compositedPath ||
-                                                        photo.rawPath
-                                                    }
-                                                    alt={`Photo ${index + 1}`}
-                                                    style={{
-                                                        filter:
-                                                            selectedFilter?.cssFilter &&
-                                                            selectedFilter.cssFilter !==
-                                                                'none'
-                                                                ? selectedFilter.cssFilter
-                                                                : undefined,
-                                                        transition:
-                                                            'filter 0.25s ease',
-                                                    }}
-                                                />
-                                                {(selectedFilter?.id ===
-                                                    'retro_90s' ||
-                                                    selectedFilter?.hasGrain) && (
-                                                    <div className="retro-film-grain-overlay" />
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className="theme-slot-placeholder">
-                                                <Camera
-                                                    size={16}
-                                                    strokeWidth={2}
-                                                    style={{
-                                                        display: 'inline-block',
-                                                        verticalAlign: 'middle',
-                                                        marginRight: 4,
-                                                    }}
-                                                />
-                                                <span>Ảnh {index + 1}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Chân dải ảnh in thương hiệu fotolism */}
-                        {!selectedTheme.hideFooter && (
-                            <div className="strip-branding-footer">
-                                <span
-                                    style={{
-                                        color: selectedTheme.textColor,
-                                    }}
-                                >
-                                    {eventConfig.eventName ||
-                                        DEFAULT_EVENT_NAME}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Lớp Khung Đồ Họa PNG Trong Suốt (Overlay nếu có) */}
-                        {selectedTheme.overlayUrl && (
-                            <img
-                                src={resolveAssetUrl(selectedTheme.overlayUrl)}
-                                alt={selectedTheme.name}
-                                className="theme-frame-overlay-img"
-                            />
-                        )}
-                    </div>
+                    <InteractiveStripPreview
+                        selectedFrameSize={selectedFrameSize}
+                        selectedTheme={selectedTheme}
+                        selectedFilter={selectedFilter}
+                        is2x6={is2x6}
+                        frameSlots={frameSlots}
+                        photos={displayedPhotos}
+                        slotOffsets={slotOffsets}
+                        activeDragIndex={activeDragIndex}
+                        eventName={eventConfig.eventName}
+                        onPointerDown={handleSlotPointerDown}
+                        onPointerMove={handleSlotPointerMove}
+                        onPointerUp={handleSlotPointerUp}
+                    />
                 </section>
 
                 {/* CỘT PHẢI: Gồm 2 section (Khung chọn Frame bên trên & Khung chọn Filter bên dưới) */}
@@ -508,6 +471,7 @@ export default function ThemeSelectScreen() {
                                 type="button"
                                 className="btn-theme-modal-confirm"
                                 onClick={() => {
+                                    setStoreSlotOffsets(slotOffsetsRef.current)
                                     setShowFinishConfirm(false)
                                     setScreen('processing')
                                 }}

@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import {
     generateStripComposite,
     preparePrintImageForDNP,
-    type SlotOffset,
 } from '../lib/canvasCompositor'
 import {
     FILE_PREFIX_SHOT,
@@ -18,7 +17,6 @@ import QRCode from 'qrcode'
 import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
-import { InteractiveStripPreview } from '../components/review/InteractiveStripPreview'
 import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import './ReviewScreen.css'
 
@@ -68,174 +66,14 @@ export default function ReviewScreen() {
         return `${SESSION_FOLDER_PREFIX}_${dateStr}_${timeStr}`
     })
 
-    const photos = useMemo(() => {
+    const photos: any[] = useMemo(() => {
         if (session?.photos && session.photos.length > 0) return session.photos
         return []
     }, [session?.photos])
 
     const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
 
-    // ── Offset cân chỉnh vị trí ảnh từng ô (Normalized Offset -1.0 đến +1.0) ──
-    const [slotOffsets, setSlotOffsets] = useState<SlotOffset[]>(() =>
-        Array(photos.length).fill({ x: 0, y: 0 })
-    )
-    const slotOffsetsRef = useRef<SlotOffset[]>(slotOffsets)
-    slotOffsetsRef.current = slotOffsets
-
-    const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null)
-    const dragStartRef = useRef<{
-        index: number
-        startX: number
-        startY: number
-        initOffset: SlotOffset
-        slotPixelWidth: number
-        slotPixelHeight: number
-    } | null>(null)
-
     const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
-    const totalW = is2x6 ? 600 : 1200
-    const totalH = 1800
-
-    const frameSlots = useMemo(() => {
-        if (selectedTheme?.slots && selectedTheme.slots.length > 0) {
-            return selectedTheme.slots.map(
-                (s: { x: number; y: number; w: number; h: number }) => ({
-                    xPercent: (s.x / totalW) * 100,
-                    yPercent: (s.y / totalH) * 100,
-                    wPercent: (s.w / totalW) * 100,
-                    hPercent: (s.h / totalH) * 100,
-                    slotW: s.w,
-                    slotH: s.h,
-                    aspectRatio: s.w / s.h,
-                })
-            )
-        }
-        const totalSlots = selectedLayout.photosCount || 4
-        const cols = selectedLayout.cols || (is2x6 ? 1 : 2)
-        const rows =
-            selectedLayout.rows || Math.max(1, Math.ceil(totalSlots / cols))
-        const footerHeight = selectedTheme?.hideFooter ? 0 : 150
-        const padX = is2x6 ? 36 : 50
-        const padTop = 40
-        const gap = 20
-        const availableHeight = totalH - padTop - footerHeight
-        const defW = (totalW - padX * 2 - gap * (cols - 1)) / cols
-        const defH = (availableHeight - gap * (rows - 1)) / rows
-
-        return Array.from({ length: totalSlots }).map((_, i) => {
-            const colIdx = i % cols
-            const rowIdx = Math.floor(i / cols)
-            const sx = padX + colIdx * (defW + gap)
-            const sy = padTop + rowIdx * (defH + gap)
-            return {
-                xPercent: (sx / totalW) * 100,
-                yPercent: (sy / totalH) * 100,
-                wPercent: (defW / totalW) * 100,
-                hPercent: (defH / totalH) * 100,
-                slotW: defW,
-                slotH: defH,
-                aspectRatio: defW / defH,
-            }
-        })
-    }, [selectedTheme, selectedLayout, is2x6, totalW, totalH])
-
-    const regenerateComposite = useCallback(
-        async (offsets: SlotOffset[]) => {
-            try {
-                const photoUrls = photos
-                    .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
-                    .filter(Boolean)
-                const stripUrl = await generateStripComposite({
-                    photos: photoUrls,
-                    frameSize: selectedFrameSize,
-                    layout: selectedLayout,
-                    theme: selectedTheme,
-                    stickers: placedStickers,
-                    filter: selectedFilter,
-                    eventName: eventConfig.eventName,
-                    eventDate: eventConfig.date,
-                    slotOffsets: offsets,
-                })
-                setCompositeStripUrl(stripUrl)
-            } catch (err) {
-                console.warn('Error regenerating strip composite:', err)
-            }
-        },
-        [
-            photos,
-            selectedFrameSize,
-            selectedLayout,
-            selectedTheme,
-            placedStickers,
-            selectedFilter,
-            eventConfig,
-        ]
-    )
-
-    const handlePointerDown = (
-        index: number,
-        e: React.PointerEvent<HTMLDivElement>
-    ) => {
-        const target = e.currentTarget
-        try {
-            target.setPointerCapture(e.pointerId)
-        } catch {}
-        const rect = target.getBoundingClientRect()
-        dragStartRef.current = {
-            index,
-            startX: e.clientX,
-            startY: e.clientY,
-            initOffset: slotOffsetsRef.current[index] || { x: 0, y: 0 },
-            slotPixelWidth: rect.width,
-            slotPixelHeight: rect.height,
-        }
-        setActiveDragIndex(index)
-    }
-
-    const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragStartRef.current || activeDragIndex === null) return
-        const {
-            index,
-            startX,
-            startY,
-            initOffset,
-            slotPixelWidth,
-            slotPixelHeight,
-        } = dragStartRef.current
-        const dx = e.clientX - startX
-        const dy = e.clientY - startY
-
-        // Sensitivity: vuốt 45% bề rộng ô tương ứng dịch chuyển hết biên (offset 1.0)
-        const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
-        const sensitivityY = Math.max(slotPixelHeight * 0.45, 40)
-
-        const nextX = Math.max(
-            -1,
-            Math.min(1, initOffset.x + dx / sensitivityX)
-        )
-        const nextY = Math.max(
-            -1,
-            Math.min(1, initOffset.y + dy / sensitivityY)
-        )
-
-        setSlotOffsets((prev) => {
-            const next = [...prev]
-            next[index] = { x: nextX, y: nextY }
-            return next
-        })
-    }
-
-    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (activeDragIndex !== null) {
-            try {
-                e.currentTarget.releasePointerCapture(e.pointerId)
-            } catch {}
-            const finalOffsets = [...slotOffsetsRef.current]
-            dragStartRef.current = null
-            setActiveDragIndex(null)
-            regenerateComposite(finalOffsets)
-        }
-    }
 
     // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
     const cmsBaseUrl = cloudSyncService.getCmsUrl()
@@ -438,7 +276,10 @@ export default function ReviewScreen() {
                     filter: selectedFilter,
                     eventName: eventConfig.eventName,
                     eventDate: eventConfig.date,
-                    slotOffsets: slotOffsetsRef.current,
+                    slotOffsets:
+                        session?.slotOffsets ||
+                        useAppStore.getState().slotOffsets ||
+                        [],
                 })
 
                 if (!isMounted) return
@@ -1120,7 +961,7 @@ export default function ReviewScreen() {
                     {/* Left: Photobooth Strip Frame */}
                     <section className="strip-frame-container">
                         <div className="frame-preview-wrapper fade-in">
-                            {isGeneratingComposite ? (
+                            {isGeneratingComposite || !compositeStripUrl ? (
                                 <div className="composite-generating-loader">
                                     <span className="loader-spinner-pink" />
                                     <span
@@ -1133,19 +974,40 @@ export default function ReviewScreen() {
                                     </span>
                                 </div>
                             ) : (
-                                <InteractiveStripPreview
-                                    selectedFrameSize={selectedFrameSize}
-                                    selectedTheme={selectedTheme}
-                                    selectedFilter={selectedFilter}
-                                    is2x6={is2x6}
-                                    frameSlots={frameSlots}
-                                    photos={photos}
-                                    slotOffsets={slotOffsets}
-                                    activeDragIndex={activeDragIndex}
-                                    onPointerDown={handlePointerDown}
-                                    onPointerMove={handlePointerMove}
-                                    onPointerUp={handlePointerUp}
-                                />
+                                <div
+                                    className={`review-final-strip-card ${
+                                        selectedFrameSize === '2x6'
+                                            ? 'strip-2x6-view'
+                                            : 'postcard-4x6-view'
+                                    }`}
+                                    style={{
+                                        position: 'relative',
+                                        aspectRatio: is2x6
+                                            ? '600 / 1800'
+                                            : '1200 / 1800',
+                                        maxHeight: 'calc(100vh - 215px)',
+                                        borderRadius: '14px',
+                                        boxShadow:
+                                            '0 16px 45px rgba(0, 0, 0, 0.16)',
+                                        overflow: 'hidden',
+                                        background: '#FAF6F0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <img
+                                        src={compositeStripUrl}
+                                        alt="Dải ảnh in thành phẩm"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            borderRadius: '14px',
+                                        }}
+                                    />
+                                </div>
                             )}
                         </div>
                     </section>

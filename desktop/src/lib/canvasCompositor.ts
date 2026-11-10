@@ -274,25 +274,9 @@ export async function generateStripComposite(
                     ctx.filter = 'none'
                 }
 
-                // Fit & Center crop (aspect fill) đồng bộ chuẩn xác với Live View 16:9 kèm bù offset
+                // Fit & Center crop chuẩn xác: Chống lỗi cắt xén 2 lần (Double Cropping)
+                // Đồng bộ 1:1 giữa Live View, Khung Vàng an toàn, và dải in thực tế
                 const imgAspect = img.width / img.height
-                const viewfinderAspect = 16 / 9
-                let baseSrcX = 0
-                let baseSrcY = 0
-                let baseSrcW = img.width
-                let baseSrcH = img.height
-
-                // Nếu ảnh gốc có tỷ lệ khác Live View 16:9 (ví dụ cảm biến Canon 3:2 = 1.5):
-                // Live View 16:9 đã crop đỉnh/đáy -> chuẩn hóa vùng nguồn theo đúng những gì khách thấy trên Live View
-                if (imgAspect < viewfinderAspect - 0.02) {
-                    baseSrcH = Math.round(img.width / viewfinderAspect)
-                    baseSrcY = Math.round((img.height - baseSrcH) / 2)
-                } else if (imgAspect > viewfinderAspect + 0.02) {
-                    baseSrcW = Math.round(img.height * viewfinderAspect)
-                    baseSrcX = Math.round((img.width - baseSrcW) / 2)
-                }
-
-                const effectiveAspect = baseSrcW / baseSrcH
                 const slotAspect = drawW / drawH
                 const offset =
                     opts.slotOffsets && opts.slotOffsets[i]
@@ -301,23 +285,65 @@ export async function generateStripComposite(
                 const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
                 const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
 
-                let finalSrcW = baseSrcW
-                let finalSrcH = baseSrcH
-                let finalSrcX = baseSrcX
-                let finalSrcY = baseSrcY
+                let finalSrcX = 0
+                let finalSrcY = 0
+                let finalSrcW = img.width
+                let finalSrcH = img.height
 
-                if (effectiveAspect > slotAspect) {
-                    finalSrcW = Math.round(baseSrcH * slotAspect)
-                    const maxSlack = (baseSrcW - finalSrcW) / 2
-                    finalSrcX = Math.round(
-                        baseSrcX + maxSlack - clampedX * maxSlack
-                    )
+                // Trường hợp 1: Ảnh đã có cùng tỉ lệ với ô slot (sai số < 0.03)
+                // (Ví dụ ảnh đã qua cropImageToAspect theo khung vàng, hoặc ảnh gốc 3:2 Canon vào ô 2x6 3:2)
+                if (Math.abs(imgAspect - slotAspect) < 0.03) {
+                    if (Math.abs(clampedX) > 0.01 || Math.abs(clampedY) > 0.01) {
+                        // Khách có kéo tay căn chỉnh vị trí ở màn hình review: zoom nhẹ 1.08x để có margin trượt mà không hở viền
+                        const zoom = 1.08
+                        finalSrcW = Math.round(img.width / zoom)
+                        finalSrcH = Math.round(img.height / zoom)
+                        const slackX = (img.width - finalSrcW) / 2
+                        const slackY = (img.height - finalSrcH) / 2
+                        finalSrcX = Math.round(slackX - clampedX * slackX)
+                        finalSrcY = Math.round(slackY - clampedY * slackY)
+                    } else {
+                        // Vị trí mặc định: Giữ nguyên 100% hình ảnh không cắt bất kỳ pixel nào
+                        finalSrcW = img.width
+                        finalSrcH = img.height
+                        finalSrcX = 0
+                        finalSrcY = 0
+                    }
                 } else {
-                    finalSrcH = Math.round(baseSrcW / slotAspect)
-                    const maxSlack = (baseSrcH - finalSrcH) / 2
-                    finalSrcY = Math.round(
-                        baseSrcY + maxSlack - clampedY * maxSlack
-                    )
+                    // Trường hợp 2: Ảnh gốc toàn cảnh chưa crop (webcam 16:9 hoặc Canon 3:2 vào ô dọc 4x6 4 ảnh hoặc 9 ảnh)
+                    // Cắt chuẩn xác 1 lần duy nhất theo Khung Vàng của Live View 16:9
+                    const viewfinderAspect = 16 / 9
+                    let viewX = 0
+                    let viewY = 0
+                    let viewW = img.width
+                    let viewH = img.height
+
+                    if (imgAspect < viewfinderAspect - 0.02) {
+                        // Cảm biến 3:2 hẹp hơn 16:9 -> Live View 16:9 đã crop đỉnh/đáy
+                        viewH = Math.round(img.width / viewfinderAspect)
+                        viewY = Math.round((img.height - viewH) / 2)
+                    } else if (imgAspect > viewfinderAspect + 0.02) {
+                        // Ảnh rộng hơn 16:9 -> Live View 16:9 đã crop 2 bên
+                        viewW = Math.round(img.height * viewfinderAspect)
+                        viewX = Math.round((img.width - viewW) / 2)
+                    }
+
+                    const effectiveAspect = viewW / viewH
+                    if (effectiveAspect > slotAspect) {
+                        // Slot hẹp hơn Live View 16:9: Giữ chiều cao, co chiều rộng từ 2 bên vào giữa
+                        finalSrcH = viewH
+                        finalSrcW = Math.round(viewH * slotAspect)
+                        const slackX = (viewW - finalSrcW) / 2
+                        finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
+                        finalSrcY = viewY
+                    } else {
+                        // Slot rộng hơn Live View 16:9: Giữ chiều rộng, co chiều cao
+                        finalSrcW = viewW
+                        finalSrcH = Math.round(viewW / slotAspect)
+                        const slackY = (viewH - finalSrcH) / 2
+                        finalSrcX = viewX
+                        finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
+                    }
                 }
 
                 ctx.drawImage(
@@ -414,9 +440,31 @@ export async function generateStripComposite(
 }
 
 /**
+ * Lấy mẫu màu nền từ góc ảnh dải in để tạo nền tràn viền (Full Bleed) cho bản in máy in nhiệt DNP
+ */
+function sampleImageCornerColor(img: HTMLImageElement): string {
+    try {
+        if (typeof document === 'undefined') return '#FFFFFF'
+        const tempCanvas = document.createElement('canvas')
+        tempCanvas.width = 16
+        tempCanvas.height = 16
+        const tCtx = tempCanvas.getContext('2d')
+        if (!tCtx) return '#FFFFFF'
+        tCtx.drawImage(img, 0, 0, 16, 16)
+        const pixel = tCtx.getImageData(4, 4, 1, 1).data
+        if (pixel[3] > 100) {
+            return `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`
+        }
+    } catch {}
+    return '#FFFFFF'
+}
+
+/**
  * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6:
- * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau đúng chuẩn Photobooth Template.
- * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200): Giữ nguyên.
+ * - Áp dụng Vùng An Toàn (Safe Margin 0.92) và Bù Trừ Dao Cắt Cơ Học (Cutter Bleed Offset).
+ * - Chống triệt để lỗi máy in xén mép cắt mất các chấm tròn trang trí và chi tiết viền ở 2 mép ngoài cùng.
+ * - Tràn viền nền (Full Bleed) bằng màu nền frame để không bao giờ bị lộ viền trắng khi cắt.
+ * - Cân đối tuyệt đối 1:1 giữa hai dải 2x6 sau khi cắt đôi.
  */
 export async function preparePrintImageForDNP(
     sourceDataUrl: string
@@ -434,19 +482,31 @@ export async function preparePrintImageForDNP(
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
 
-        // Nền trắng
-        ctx.fillStyle = '#FFFFFF'
+        // 1. Tràn nền 100% bằng màu nền của frame (chống lộ viền trắng khi máy in xén mép)
+        const bgColor = sampleImageCornerColor(img)
+        ctx.fillStyle = bgColor
         ctx.fillRect(0, 0, 1200, 1800)
 
-        // Dải 1: Bên trái (x: 0 -> 600 px)
-        ctx.drawImage(img, 0, 0, 600, 1800)
+        // 2. Tính toán Vùng An Toàn (Safe Margin & Mechanical Cutter Offset)
+        // Máy in DNP DS-RX1 xén mất ~25-30px ở 2 mép ngoài cùng (X=0 và X=1200) do cơ chế overscan.
+        // Scale 0.92 (W: 552px, H: 1656px) tạo khoảng đệm hoàn hảo:
+        // - Mép ngoài cách 36px (sau khi xén còn ~11px lề an toàn cho chấm tròn).
+        // - Mép trong cách trục giữa 12px (cắt đôi tại 600px đối xứng hoàn hảo 1:1).
+        const scale = 0.92
+        const scaledW = Math.round(600 * scale)   // 552 px
+        const scaledH = Math.round(1800 * scale)  // 1656 px
+        const posY = Math.round((1800 - scaledH) / 2) // 72 px
 
-        // Dải 2: Bên phải (x: 600 -> 1200 px)
-        ctx.drawImage(img, 600, 0, 600, 1800)
+        const posX1 = 36   // Dải 1 (Trái): X: 36 -> 588 px
+        const posX2 = 612  // Dải 2 (Phải): X: 612 -> 1164 px
 
-        // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
+        // Vẽ 2 dải vào vùng an toàn
+        ctx.drawImage(img, posX1, posY, scaledW, scaledH)
+        ctx.drawImage(img, posX2, posY, scaledW, scaledH)
+
+        // 3. Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
         ctx.save()
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
         ctx.lineWidth = 1
         ctx.setLineDash([8, 8])
         ctx.beginPath()
@@ -458,6 +518,24 @@ export async function preparePrintImageForDNP(
         return canvas.toDataURL('image/jpeg', 0.98)
     }
 
-    // Trường hợp 2: Ảnh đã là khổ 4x6 (1200x1800 hoặc 1800x1200)
-    return sourceDataUrl
+    // Trường hợp 2: Khổ 4x6 đơn (1200x1800 hoặc 1800x1200)
+    // Áp dụng safe margin 0.94 để các chi tiết viền 4 phía không bị máy in xén mất
+    const canvas = document.createElement('canvas')
+    canvas.width = srcW
+    canvas.height = srcH
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return sourceDataUrl
+
+    const bgColor = sampleImageCornerColor(img)
+    ctx.fillStyle = bgColor
+    ctx.fillRect(0, 0, srcW, srcH)
+
+    const scale = 0.94
+    const scaledW = Math.round(srcW * scale)
+    const scaledH = Math.round(srcH * scale)
+    const posX = Math.round((srcW - scaledW) / 2)
+    const posY = Math.round((srcH - scaledH) / 2)
+
+    ctx.drawImage(img, posX, posY, scaledW, scaledH)
+    return canvas.toDataURL('image/jpeg', 0.98)
 }
