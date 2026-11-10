@@ -360,7 +360,7 @@ export default function DeviceActivationScreen() {
                   type="text"
                   value={cmsUrl}
                   onChange={(e) => setCmsUrl(e.target.value)}
-                  placeholder="http://localhost:3000"
+                  placeholder="https://fotolism-cms.vercel.app"
                   className="server-input"
                 />
                 <button

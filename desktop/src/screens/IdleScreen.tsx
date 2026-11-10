@@ -4,6 +4,7 @@ import { DEFAULT_ADMIN_PIN } from '../lib/constants'
 import { Settings, Check } from 'lucide-react'
 import NumericKeypadModal from '../components/NumericKeypadModal'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
+import { cloudSyncService } from '../services/cloudSyncService'
 import './IdleScreen.css'
 
 export default function IdleScreen() {
@@ -92,7 +93,8 @@ export default function IdleScreen() {
 
     // ── ƯU TIÊN 2: XÁC THỰC MÃ VÉ ĐƯỢC CẤP TỪ CLOUD CMS ──
     try {
-      const res = await fetch(`http://localhost:3000/api/kiosk/tickets?pin=${encodeURIComponent(rawCode)}`, {
+      const cmsUrl = cloudSyncService.getCmsUrl()
+      const res = await fetch(`${cmsUrl}/api/kiosk/tickets?pin=${encodeURIComponent(rawCode)}`, {
         headers: { 'Content-Type': 'application/json' },
       })
       const json = await res.json()
@@ -115,7 +117,7 @@ export default function IdleScreen() {
           pendingMode
 
         // Cập nhật trạng thái vé thành IN_BOOTH trên CMS để đánh dấu đang chụp
-        fetch('http://localhost:3000/api/kiosk/tickets', {
+        fetch(`${cmsUrl}/api/kiosk/tickets`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

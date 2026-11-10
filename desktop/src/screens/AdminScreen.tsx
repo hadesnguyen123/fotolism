@@ -248,8 +248,8 @@ export const AdminScreen: React.FC = () => {
     const netOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
     setIsNetworkOnline(netOnline)
 
-    // 2. Kiểm tra CMS (Port 3000)
-    const cmsUrl = deviceConfig?.cms_url || 'http://localhost:3000'
+    // 2. Kiểm tra CMS
+    const cmsUrl = cloudSyncService.getCmsUrl()
     try {
       const res = await fetch(`${cmsUrl}/api/system/health`, {
         method: 'GET',
@@ -574,7 +574,7 @@ export const AdminScreen: React.FC = () => {
     setIsPingingCms(true)
     setCmsPingResult(null)
     try {
-      const cmsUrl = deviceConfig?.cms_url || 'http://localhost:3000'
+      const cmsUrl = cloudSyncService.getCmsUrl()
       const start = Date.now()
       const res = await fetch(`${cmsUrl}/api/kiosk/heartbeat`, {
         method: 'POST',
