@@ -42,7 +42,7 @@ describe('Device Activation & M2M Token Authentication', () => {
         kiosk_id: 'kiosk_01',
         branch_id: 'branch_hn_01',
         kiosk_name: 'Fotolism Kiosk Test',
-        cms_url: 'http://localhost:3000',
+        cms_url: 'https://fotolism-cms.vercel.app',
         activated_at: new Date().toISOString()
       });
 
@@ -62,7 +62,7 @@ describe('Device Activation & M2M Token Authentication', () => {
         kiosk_id: 'kiosk_01',
         branch_id: 'branch_hn_01',
         kiosk_name: 'Fotolism Kiosk Test',
-        cms_url: 'http://localhost:3000',
+        cms_url: 'https://fotolism-cms.vercel.app',
         activated_at: new Date().toISOString()
       });
 
@@ -71,7 +71,7 @@ describe('Device Activation & M2M Token Authentication', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('http://localhost:3000/api/kiosk/heartbeat');
+      expect(url).toBe('https://fotolism-cms.vercel.app/api/kiosk/heartbeat');
       expect(options.headers).toMatchObject({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer jb_tok_test_auth_header'
@@ -98,7 +98,7 @@ describe('Device Activation & M2M Token Authentication', () => {
       });
       globalThis.fetch = mockFetch;
 
-      const result = await cloudSyncService.activateDevice('849201', 'http://localhost:3000');
+      const result = await cloudSyncService.activateDevice('849201', 'https://fotolism-cms.vercel.app');
 
       expect(result.success).toBe(true);
       expect(result.data?.device_token).toBe('jb_tok_activated_999');
@@ -106,7 +106,7 @@ describe('Device Activation & M2M Token Authentication', () => {
 
       // Verify request payload
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/kiosk/activate',
+        'https://fotolism-cms.vercel.app/api/kiosk/activate',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -119,7 +119,7 @@ describe('Device Activation & M2M Token Authentication', () => {
       // Mock network failure when contacting CMS
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Failed to fetch (offline)'));
 
-      const result = await cloudSyncService.activateDevice('888888', 'http://localhost:3000');
+      const result = await cloudSyncService.activateDevice('888888', 'https://fotolism-cms.vercel.app');
       expect(result.success).toBe(true);
       expect(result.data?.device_token).toBe('jb_tok_dev_888888_test');
       expect(result.data?.kiosk_id).toBe('kiosk_01');
@@ -144,7 +144,7 @@ describe('Device Activation & M2M Token Authentication', () => {
         kiosk_id: 'kiosk_01',
         branch_id: 'branch_hn_01',
         kiosk_name: 'Fotolism Kiosk Existing',
-        cms_url: 'http://localhost:3000',
+        cms_url: 'https://fotolism-cms.vercel.app',
         activated_at: new Date().toISOString()
       };
 
@@ -166,7 +166,7 @@ describe('Device Activation & M2M Token Authentication', () => {
         kiosk_id: 'kiosk_01',
         branch_id: 'branch_hn_01',
         kiosk_name: 'Fotolism Kiosk Existing',
-        cms_url: 'http://localhost:3000',
+        cms_url: 'https://fotolism-cms.vercel.app',
         activated_at: new Date().toISOString()
       };
       mockStorage.setItem('fotolism_device_config', JSON.stringify(existingConfig));

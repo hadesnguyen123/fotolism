@@ -4,7 +4,7 @@ import { URL } from 'node:url'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-const CMS_URL = process.env.CMS_URL || 'http://localhost:3000'
+const CMS_URL = process.env.CMS_URL || 'https://fotolism-cms.vercel.app'
 const R2_BUCKET = process.env.R2_BUCKET || 'fotolism-photos'
 
 interface GalleryBenchmarkResult {

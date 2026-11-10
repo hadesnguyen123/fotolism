@@ -308,7 +308,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
             <label className="form-label-touch">CMS Base URL</label>
             <input
               type="text"
-              value={deviceConfig?.cms_url || 'http://localhost:3000'}
+              value={deviceConfig?.cms_url || 'https://fotolism-cms.vercel.app'}
               onChange={(e) =>
                 setDeviceConfig({
                   ...(deviceConfig || {
@@ -320,7 +320,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                 })
               }
               className="form-input-touch"
-              placeholder="http://localhost:3000"
+              placeholder="https://fotolism-cms.vercel.app"
             />
           </div>
 

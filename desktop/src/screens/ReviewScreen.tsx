@@ -40,7 +40,6 @@ export default function ReviewScreen() {
     setDriveSyncError: setSyncError,
     cloudFolderUrl,
     setCloudFolderUrl,
-    deviceConfig,
   } = useAppStore()
 
   const defaultCopies = session?.paidCopies || selectedCopies || (selectedFrameSize === '2x6' ? 2 : 1)
@@ -202,7 +201,7 @@ export default function ReviewScreen() {
   }
 
   // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
-  const cmsBaseUrl = (deviceConfig?.cms_url || 'https://fotolism-cms.vercel.app').replace(/\/$/, '')
+  const cmsBaseUrl = cloudSyncService.getCmsUrl()
   const webGalleryUrl = `${cmsBaseUrl}/gallery/${session?.sessionId || subfolderName}`
   const targetCloudUrl = webGalleryUrl
 
@@ -468,7 +467,7 @@ export default function ReviewScreen() {
     if (!pin || pin === '8888' || pin === adminPin) return
 
     try {
-      await fetch('http://localhost:3000/api/kiosk/tickets', {
+      await fetch(`${cloudSyncService.getCmsUrl()}/api/kiosk/tickets`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

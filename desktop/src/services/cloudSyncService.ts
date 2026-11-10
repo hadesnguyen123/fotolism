@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * FOTOLISM 3.0 — CLOUD SYNC WORKER & OUTBOX SERVICE
- * - 2-Way communication between Kiosk Client and Cloud CMS (Port 3000)
+ * - 2-Way communication between Kiosk Client and Cloud CMS
  * - Periodic Heartbeat (every 30s) sending device health & paper levels
  * - Offline-First SQLite/LocalStorage Outbox queue for Session records
  * - Auto-fetch & apply updated Pricing Rules & Vouchers on configVersion bump
@@ -57,7 +57,7 @@ export interface DeviceConfig {
   activated_at?: string
 }
 
-const DEFAULT_CMS_URL = 'http://localhost:3000'
+export const DEFAULT_CMS_URL = 'https://fotolism-cms.vercel.app'
 const DEFAULT_KIOSK_ID = 'kiosk_01'
 const OUTBOX_STORAGE_KEY = 'fotolism_sessions_outbox'
 const CONFIG_VER_KEY = 'fotolism_config_version'
@@ -88,6 +88,15 @@ class CloudSyncService {
     if (savedCfg) {
       try {
         this.deviceConfig = JSON.parse(savedCfg)
+        if (
+          this.deviceConfig?.cms_url &&
+          (this.deviceConfig.cms_url.includes('localhost:3000') ||
+            this.deviceConfig.cms_url.includes('127.0.0.1:3000'))
+        ) {
+          this.deviceConfig.cms_url = DEFAULT_CMS_URL
+          localStorage.setItem('fotolism_device_config', JSON.stringify(this.deviceConfig))
+          localStorage.setItem('fotolism_cms_url', DEFAULT_CMS_URL)
+        }
       } catch {}
     }
     this.refreshPendingCount()
@@ -142,7 +151,31 @@ class CloudSyncService {
   }
 
   public getCmsUrl(): string {
-    return localStorage.getItem('fotolism_cms_url') || DEFAULT_CMS_URL
+    // 1. Biến môi trường dev cục bộ (ưu tiên nếu nhà phát triển cấu hình VITE_CMS_URL)
+    const envUrl =
+      typeof import.meta !== 'undefined' && import.meta.env?.VITE_CMS_URL
+        ? (import.meta.env.VITE_CMS_URL as string)
+        : typeof process !== 'undefined' && process.env?.CMS_URL
+          ? process.env.CMS_URL
+          : undefined
+
+    if (envUrl) {
+      return envUrl.replace(/\/$/, '')
+    }
+
+    // 2. Cấu hình đã lưu trong LocalStorage
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('fotolism_cms_url') : null
+    if (saved) {
+      const clean = saved.replace(/\/$/, '')
+      // Tự động chuyển đổi nếu máy trạm còn lưu localhost:3000 từ các phiên bản dev cũ
+      if (clean === 'http://localhost:3000' || clean === 'http://127.0.0.1:3000') {
+        localStorage.setItem('fotolism_cms_url', DEFAULT_CMS_URL)
+        return DEFAULT_CMS_URL
+      }
+      return clean
+    }
+
+    return DEFAULT_CMS_URL
   }
 
   public setCmsUrl(url: string) {
@@ -690,7 +723,7 @@ class CloudSyncService {
     if (!hbOk && !syncRes.success) {
       return {
         success: false,
-        message: '❌ Không thể kết nối đến Cloud CMS (Port 3000). Vui lòng kiểm tra mạng hoặc khởi động CMS.',
+        message: '❌ Không thể kết nối đến Cloud CMS. Vui lòng kiểm tra mạng hoặc khởi động CMS.',
         syncedCount: 0,
       }
     }
