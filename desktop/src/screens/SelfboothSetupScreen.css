@@ -8,376 +8,416 @@
    ========================================================================== */
 
 .selfbooth-setup-container {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: #FAF6F0;
-  user-select: none;
-  overflow: hidden;
-  position: relative;
-  padding: 24px 48px;
-  box-sizing: border-box;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #faf6f0;
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+    padding: 24px 48px;
+    box-sizing: border-box;
 }
 
 /* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
 .selfbooth-fixed-brand-logo {
-  position: absolute;
-  top: 20px;
-  left: 48px;
-  height: clamp(44px, 3.2vw, 56px);
-  width: auto;
-  object-fit: contain;
-  z-index: 50;
-  pointer-events: none;
+    position: absolute;
+    top: 20px;
+    left: 48px;
+    height: clamp(44px, 3.2vw, 56px);
+    width: auto;
+    object-fit: contain;
+    z-index: 50;
+    pointer-events: none;
 }
 
 /* ── Top Header: Icon Camera + Tiêu Đề Trung Tâm ───────────────────────── */
 .selfbooth-setup-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 4px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-  z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+    z-index: 10;
 }
 
 .setup-header-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
 }
 
 .setup-header-icon-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 6px;
-  color: #502A1D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    color: #502a1d;
 }
 
 .setup-header-title {
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: clamp(1.9rem, 2.4vw, 2.3rem);
-  font-weight: 800;
-  color: #502A1D;
-  letter-spacing: -0.5px;
-  line-height: 1.15;
-  margin: 0;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: clamp(1.9rem, 2.4vw, 2.3rem);
+    font-weight: 800;
+    color: #502a1d;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+    margin: 0;
 }
 
 .setup-header-subtitle {
-  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 1.02rem;
-  color: #7A665A;
-  font-weight: 500;
-  margin: 6px 0 0 0;
+    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-size: 1.02rem;
+    color: #7a665a;
+    font-weight: 500;
+    margin: 6px 0 0 0;
 }
 
 /* ── Main Stage: 2 Cột Cân Đối Hoàn Hảo ────────────────────────────────── */
 .selfbooth-setup-grid {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 36px;
-  max-width: 1220px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+    max-width: 1220px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* ── CỘT TRÁI: LIVE CAMERA PREVIEW 16:9 ──────────────────────────────────── */
 .setup-preview-card {
-  flex: 1;
-  max-width: 580px;
-  background: #FFFFFF;
-  border-radius: 26px;
-  padding: 20px;
-  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
-  border: 1.5px solid #F0E6DE;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+    flex: 1;
+    max-width: 580px;
+    background: #ffffff;
+    border-radius: 26px;
+    padding: 20px;
+    box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
+    border: 1.5px solid #f0e6de;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .preview-video-container-3-2 {
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  background: #18181B;
-  border-radius: 18px;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.06);
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    background: #18181b;
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        inset 0 0 24px rgba(0, 0, 0, 0.4),
+        0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .preview-video-element {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: filter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: filter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .preview-filter-indicator {
-  position: absolute;
-  bottom: 14px;
-  left: 14px;
-  background: rgba(30, 20, 15, 0.75);
-  backdrop-filter: blur(10px);
-  padding: 6px 16px;
-  border-radius: 9999px;
-  color: #FFFFFF;
-  font-size: 0.88rem;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    background: rgba(30, 20, 15, 0.75);
+    backdrop-filter: blur(10px);
+    padding: 6px 16px;
+    border-radius: 9999px;
+    color: #ffffff;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .preview-filter-indicator .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.6);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.6);
 }
 
 .preview-filter-indicator strong {
-  color: #FFFDF9;
-  font-weight: 800;
+    color: #fffdf9;
+    font-weight: 800;
 }
 
 /* ── CỘT PHẢI: BỘ ĐIỀU KHIỂN TINH GỌN ───────────────────────────────────── */
 .setup-controls-card {
-  flex: 1;
-  max-width: 560px;
-  background: #FFFFFF;
-  border-radius: 26px;
-  padding: 28px 32px;
-  box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
-  border: 1.5px solid #F0E6DE;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 28px;
-  box-sizing: border-box;
+    flex: 1;
+    max-width: 560px;
+    background: #ffffff;
+    border-radius: 26px;
+    padding: 28px 32px;
+    box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
+    border: 1.5px solid #f0e6de;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    box-sizing: border-box;
 }
 
 .control-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .control-section-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
 }
 
 .section-label {
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #502A1D;
-  letter-spacing: -0.2px;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #502a1d;
+    letter-spacing: -0.2px;
 }
 
 .section-hint {
-  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #8C7A70;
+    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #8c7a70;
 }
 
 /* ── 3 TÔNG MÀU HÌNH TRÒN ĐƠN GIẢN NHƯ PHOTOBOOTH ── */
 .setup-filter-circles-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 36px;
-  padding: 12px 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+    padding: 12px 0 6px;
 }
 
 .setup-filter-circle-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
 .setup-filter-circle-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 14px rgba(53, 28, 21, 0.15);
-  outline: none;
-  position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 14px rgba(53, 28, 21, 0.15);
+    outline: none;
+    position: relative;
 }
 
 .setup-filter-circle-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 20px rgba(53, 28, 21, 0.22);
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(53, 28, 21, 0.22);
 }
 
 .setup-filter-circle-btn.selected {
-  border-color: #502A1D;
-  box-shadow: 0 0 0 3px #FAF6F0, 0 8px 24px rgba(80, 42, 29, 0.35);
-  transform: scale(1.12);
+    border-color: #502a1d;
+    box-shadow:
+        0 0 0 3px #faf6f0,
+        0 8px 24px rgba(80, 42, 29, 0.35);
+    transform: scale(1.12);
 }
 
 .setup-filter-circle-label {
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #502A1D;
-  letter-spacing: -0.2px;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #502a1d;
+    letter-spacing: -0.2px;
 }
 
 /* ── THỜI GIAN CHỤP (5, 7, 10 PHÚT) ─────────────────────────────────────── */
 .durations-minutes-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
 }
 
 .duration-card-chip {
-  height: 104px;
-  background: #FAF6F1;
-  border: 1.5px solid #EFE7DE;
-  border-radius: 20px;
-  padding: 10px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  outline: none;
-  box-sizing: border-box;
+    height: 104px;
+    background: #faf6f1;
+    border: 1.5px solid #efe7de;
+    border-radius: 20px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    outline: none;
+    box-sizing: border-box;
 }
 
 .duration-card-chip:hover {
-  background: #FFFFFF;
-  border-color: #502A1D;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.08);
+    background: #ffffff;
+    border-color: #502a1d;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(80, 42, 29, 0.08);
 }
 
 .duration-card-chip.selected {
-  background: #FFFDFB;
-  border-color: #502A1D;
-  border-width: 2px;
-  box-shadow: 0 8px 20px rgba(80, 42, 29, 0.12);
-  transform: translateY(-2px);
+    background: #fffdfb;
+    border-color: #502a1d;
+    border-width: 2px;
+    box-shadow: 0 8px 20px rgba(80, 42, 29, 0.12);
+    transform: translateY(-2px);
 }
 
 .duration-chip-number {
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 1.8rem;
-  font-weight: 800;
-  color: #502A1D;
-  line-height: 1;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #502a1d;
+    line-height: 1;
 }
 
 .duration-chip-unit {
-  font-family: var(--font-display, 'Baloo 2', sans-serif);
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: #502A1D;
-  margin-top: 1px;
+    font-family: var(--font-display, 'Baloo 2', sans-serif);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #502a1d;
+    margin-top: 1px;
 }
 
 .duration-chip-desc {
-  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #8C7A70;
-  margin-top: 3px;
+    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #8c7a70;
+    margin-top: 3px;
 }
 
 /* ── Bottom Nav: Nút Quay Lại & Nút Tiếp Tục Không Icon ─────────────────── */
 .selfbooth-bottom-nav {
-  height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 48px 10px;
-  box-sizing: border-box;
-  width: 100%;
-  flex-shrink: 0;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 48px 10px;
+    box-sizing: border-box;
+    width: 100%;
+    flex-shrink: 0;
 }
 
 .btn-selfbooth-back {
-  height: 54px;
-  padding: 0 42px;
-  background: #FFFFFF;
-  color: #502A1D;
-  border: 1.5px solid #EFE7DE;
-  border-radius: 9999px;
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 1.12rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(80, 42, 29, 0.05);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    height: 54px;
+    padding: 0 42px;
+    background: #ffffff;
+    color: #502a1d;
+    border: 1.5px solid #efe7de;
+    border-radius: 9999px;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: 1.12rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(80, 42, 29, 0.05);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-selfbooth-back:hover {
-  background: #FAF6F1;
-  border-color: #502A1D;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(80, 42, 29, 0.1);
+    background: #faf6f1;
+    border-color: #502a1d;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(80, 42, 29, 0.1);
 }
 
 .btn-selfbooth-back:active {
-  transform: scale(0.97);
+    transform: scale(0.97);
 }
 
 .btn-selfbooth-proceed {
-  height: 56px;
-  padding: 0 48px;
-  background: #502A1D;
-  color: #FFFFFF;
-  border: none;
-  border-radius: 9999px;
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 1.15rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(80, 42, 29, 0.28);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    height: 56px;
+    padding: 0 48px;
+    background: #502a1d;
+    color: #ffffff;
+    border: none;
+    border-radius: 9999px;
+    font-family: var(
+        --font-display,
+        'Baloo 2',
+        'Plus Jakarta Sans',
+        system-ui,
+        sans-serif
+    );
+    font-size: 1.15rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(80, 42, 29, 0.28);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-selfbooth-proceed:hover {
-  background: #3D1F15;
-  transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(80, 42, 29, 0.38);
+    background: #3d1f15;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(80, 42, 29, 0.38);
 }
 
 .btn-selfbooth-proceed:active {
-  transform: scale(0.97);
+    transform: scale(0.97);
 }

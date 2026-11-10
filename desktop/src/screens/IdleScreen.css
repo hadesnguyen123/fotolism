@@ -9,621 +9,644 @@
    ========================================================================== */
 
 .idle-screen {
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  max-width: 100vw;
-  max-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-  user-select: none;
-  background: radial-gradient(circle at 50% 36%, #FFFFFF 0%, #FAF6F1 52%, #EFE5DB 100%);
-  padding: 24px 0 0;
-  box-sizing: border-box;
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    max-width: 100vw;
+    max-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+    background: radial-gradient(
+        circle at 50% 36%,
+        #ffffff 0%,
+        #faf6f1 52%,
+        #efe5db 100%
+    );
+    padding: 24px 0 0;
+    box-sizing: border-box;
 }
 
 /* ── 1. Top Header (Discreet Staff Admin) ── */
 .idle-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 10;
-  flex-shrink: 0;
-  padding: 0 44px;
-  box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+    flex-shrink: 0;
+    padding: 0 44px;
+    box-sizing: border-box;
 }
 
 .idle-header-spacer {
-  width: 120px;
+    width: 120px;
 }
 
 .idle-admin-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-default);
-  color: var(--text-secondary);
-  padding: 8px 18px;
-  border-radius: var(--radius-full);
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: 8px 18px;
+    border-radius: var(--radius-full);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
 }
 
 .idle-admin-btn:hover {
-  background: #ffffff;
-  color: var(--brand-primary);
-  border-color: var(--brand-primary);
-  box-shadow: 0 4px 14px rgba(80, 42, 29, 0.12);
-  transform: translateY(-1px);
+    background: #ffffff;
+    color: var(--brand-primary);
+    border-color: var(--brand-primary);
+    box-shadow: 0 4px 14px rgba(80, 42, 29, 0.12);
+    transform: translateY(-1px);
 }
 
 .idle-admin-icon {
-  transition: transform 0.4s ease;
+    transition: transform 0.4s ease;
 }
 
 .idle-admin-btn:hover .idle-admin-icon {
-  transform: rotate(60deg);
+    transform: rotate(60deg);
 }
 
 /* ── 2. Center Attract & Selection Area ── */
 .idle-main {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  max-width: 980px;
-  margin: auto 0;
-  z-index: 2;
-  animation: idleFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 980px;
+    margin: auto 0;
+    z-index: 2;
+    animation: idleFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes idleFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Brand Typography */
 .idle-brand {
-  text-align: center;
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+    text-align: center;
+    margin-bottom: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .idle-logo-img {
-  max-width: 660px;
-  max-height: 165px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 16px rgba(80, 42, 29, 0.08));
+    max-width: 660px;
+    max-height: 165px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 16px rgba(80, 42, 29, 0.08));
 }
 
 .idle-brand-title {
-  font-family: var(--font-display);
-  font-size: 5rem;
-  font-weight: 900;
-  color: var(--brand-primary);
-  line-height: 1.02;
-  letter-spacing: -2px;
-  margin: 0;
-  text-shadow: 0 2px 12px rgba(80, 42, 29, 0.08);
+    font-family: var(--font-display);
+    font-size: 5rem;
+    font-weight: 900;
+    color: var(--brand-primary);
+    line-height: 1.02;
+    letter-spacing: -2px;
+    margin: 0;
+    text-shadow: 0 2px 12px rgba(80, 42, 29, 0.08);
 }
 
 .idle-brand-subtitle {
-  font-family: var(--font-body);
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--brand-accent);
-  letter-spacing: 3.5px;
-  text-transform: uppercase;
-  margin-top: 10px;
-  margin-bottom: 0;
+    font-family: var(--font-body);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--brand-accent);
+    letter-spacing: 3.5px;
+    text-transform: uppercase;
+    margin-top: 10px;
+    margin-bottom: 0;
 }
 
 .idle-prompt {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-  margin-top: 16px;
-  margin-bottom: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    margin-top: 16px;
+    margin-bottom: 0;
 }
 
 /* ── 3. Dual Modes Selection (Touch & Remote First) ── */
 .idle-modes {
-  display: flex;
-  gap: 36px;
-  width: 100%;
-  max-width: 920px;
-  justify-content: center;
-  align-items: stretch;
+    display: flex;
+    gap: 36px;
+    width: 100%;
+    max-width: 920px;
+    justify-content: center;
+    align-items: stretch;
 }
 
 .idle-mode-card {
-  flex: 1;
-  max-width: 430px;
-  min-width: 340px;
-  background: var(--surface-default);
-  border-radius: 28px;
-  border: 2px solid var(--border-default);
-  box-shadow: 0 12px 32px rgba(80, 42, 29, 0.06), 0 2px 6px rgba(80, 42, 29, 0.03);
-  padding: 48px 36px 44px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
-  box-sizing: border-box;
+    flex: 1;
+    max-width: 430px;
+    min-width: 340px;
+    background: var(--surface-default);
+    border-radius: 28px;
+    border: 2px solid var(--border-default);
+    box-shadow:
+        0 12px 32px rgba(80, 42, 29, 0.06),
+        0 2px 6px rgba(80, 42, 29, 0.03);
+    padding: 48px 36px 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    box-sizing: border-box;
 }
 
 /* Touch & Remote Focus / Hover States */
 .idle-mode-card:hover {
-  transform: translateY(-8px);
-  border-color: #502A1D;
-  box-shadow: 0 22px 50px rgba(80, 42, 29, 0.14), 0 4px 12px rgba(80, 42, 29, 0.06);
+    transform: translateY(-8px);
+    border-color: #502a1d;
+    box-shadow:
+        0 22px 50px rgba(80, 42, 29, 0.14),
+        0 4px 12px rgba(80, 42, 29, 0.06);
 }
 
 .idle-mode-card:focus-visible {
-  outline: 3px solid var(--brand-primary);
-  outline-offset: 4px;
+    outline: 3px solid var(--brand-primary);
+    outline-offset: 4px;
 }
 
 .idle-mode-card:active {
-  transform: scale(0.985);
-  box-shadow: 0 6px 18px rgba(80, 42, 29, 0.08);
+    transform: scale(0.985);
+    box-shadow: 0 6px 18px rgba(80, 42, 29, 0.08);
 }
 
 /* Thẻ Đang Được Chọn (Selected State) */
 .idle-mode-card.selected {
-  border-color: #351A10;
-  box-shadow: 0 18px 46px rgba(53, 26, 16, 0.18), 0 0 0 3px #351A10;
-  transform: translateY(-6px);
-  background: #FFFFFF;
+    border-color: #351a10;
+    box-shadow:
+        0 18px 46px rgba(53, 26, 16, 0.18),
+        0 0 0 3px #351a10;
+    transform: translateY(-6px);
+    background: #ffffff;
 }
 
 /* Huy hiệu Checkmark Góc Trên Bên Phải của thẻ được chọn */
 .mode-check-badge {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #351A10;
-  color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 14px rgba(53, 26, 16, 0.35);
-  z-index: 5;
-  animation: badgePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #351a10;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(53, 26, 16, 0.35);
+    z-index: 5;
+    animation: badgePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes badgePop {
-  0% { transform: scale(0.4); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+    0% {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 /* Visual Over Text: Artwork container */
 .mode-card-visual {
-  width: 140px;
-  height: 140px;
-  border-radius: 24px;
-  background: var(--surface-warm);
-  border: 1px solid var(--border-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 22px;
-  box-shadow: inset 0 2px 8px rgba(80, 42, 29, 0.03);
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 140px;
+    height: 140px;
+    border-radius: 24px;
+    background: var(--surface-warm);
+    border: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+    box-shadow: inset 0 2px 8px rgba(80, 42, 29, 0.03);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .idle-mode-card:hover .mode-card-visual,
 .idle-mode-card.selected .mode-card-visual {
-  transform: scale(1.06);
+    transform: scale(1.06);
 }
 
 .visual-svg {
-  filter: drop-shadow(0 4px 10px rgba(80, 42, 29, 0.08));
+    filter: drop-shadow(0 4px 10px rgba(80, 42, 29, 0.08));
 }
 
 /* Typography Inside Card */
 .mode-card-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 0;
 }
 
 .mode-card-title {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 900;
-  color: var(--brand-primary);
-  letter-spacing: 1.2px;
-  margin: 0;
-  line-height: 1.15;
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--brand-primary);
+    letter-spacing: 1.2px;
+    margin: 0;
+    line-height: 1.15;
 }
 
 .mode-card-caption {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-top: 8px;
-  margin-bottom: 0;
-  letter-spacing: 0.3px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    margin-bottom: 0;
+    letter-spacing: 0.3px;
 }
 
 /* Ẩn các nút bên trong thẻ, chỉ để 1 nút Bắt đầu ở góc phải màn hình */
 .mode-card-btn {
-  display: none !important;
+    display: none !important;
 }
 
 /* ── 4. Footer Điều Hướng Chân Trang: 1 Nút "Bắt đầu" Góc Phải Cách Lề 100px ── */
 .idle-bottom-nav-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end; /* Dạt về góc bên phải */
-  width: 100%;
-  padding: 0 100px 24px; /* Cách lề mặc định 100px */
-  box-sizing: border-box;
-  flex-shrink: 0;
-  z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* Dạt về góc bên phải */
+    width: 100%;
+    padding: 0 100px 24px; /* Cách lề mặc định 100px */
+    box-sizing: border-box;
+    flex-shrink: 0;
+    z-index: 50;
 }
 
 .idle-footer {
-  display: none;
+    display: none;
 }
 
 .idle-footer-line {
-  width: 48px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(80, 42, 29, 0.12);
+    width: 48px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(80, 42, 29, 0.12);
 }
 
 /* ── Responsive Refinements ── */
 @media (max-width: 900px) {
-  .idle-brand-title {
-    font-size: 3.8rem;
-  }
-  .idle-modes {
-    gap: 20px;
-  }
-  .idle-mode-card {
-    padding: 28px 20px 24px;
-  }
+    .idle-brand-title {
+        font-size: 3.8rem;
+    }
+    .idle-modes {
+        gap: 20px;
+    }
+    .idle-mode-card {
+        padding: 28px 20px 24px;
+    }
 }
 
 /* ── 5. PIN Entry Modal ── */
 .pin-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(30, 20, 16, 0.65);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-  animation: pinFadeIn 0.2s ease-out;
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 20, 16, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: pinFadeIn 0.2s ease-out;
 }
 
 @keyframes pinFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .pin-modal-container.numpad-layout {
-  background: #FFFFFF;
-  border-radius: 32px;
-  padding: 32px 36px 36px;
-  max-width: 440px;
-  width: 100%;
-  box-shadow: 0 24px 64px rgba(53, 26, 16, 0.28);
-  border: 2px solid #F0E6DE;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
+    background: #ffffff;
+    border-radius: 32px;
+    padding: 32px 36px 36px;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 24px 64px rgba(53, 26, 16, 0.28);
+    border: 2px solid #f0e6de;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
 }
 
 .pin-modal-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
 }
 
 .pin-modal-title-box {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .pin-title-icon {
-  color: #502A1D;
+    color: #502a1d;
 }
 
 .pin-modal-title {
-  font-family: var(--font-display, inherit);
-  font-size: 1.55rem;
-  font-weight: 800;
-  color: #502A1D;
-  margin: 0;
-  letter-spacing: 0.5px;
+    font-family: var(--font-display, inherit);
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #502a1d;
+    margin: 0;
+    letter-spacing: 0.5px;
 }
 
 .pin-modal-close-btn {
-  background: #FAF7F2;
-  border: 1.5px solid #EAE0D7;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #70594F;
-  cursor: pointer;
-  transition: all 0.2s;
+    background: #faf7f2;
+    border: 1.5px solid #eae0d7;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #70594f;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
 .pin-modal-close-btn:hover {
-  background: #502A1D;
-  color: #FFFFFF;
-  border-color: #502A1D;
+    background: #502a1d;
+    color: #ffffff;
+    border-color: #502a1d;
 }
 
 .pin-modal-desc {
-  font-size: 0.92rem;
-  color: #70594F;
-  text-align: center;
-  margin: 0 0 16px;
-  line-height: 1.45;
-  max-width: 360px;
+    font-size: 0.92rem;
+    color: #70594f;
+    text-align: center;
+    margin: 0 0 16px;
+    line-height: 1.45;
+    max-width: 360px;
 }
 
 /* Ô hiển thị mã số đang gõ */
 .pin-code-display-card {
-  position: relative;
-  width: 100%;
-  height: 64px;
-  background: #FAF7F2;
-  border: 2px solid #EAE0D7;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 48px;
-  box-sizing: border-box;
-  margin-bottom: 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    width: 100%;
+    height: 64px;
+    background: #faf7f2;
+    border: 2px solid #eae0d7;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 48px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .pin-code-display-card:focus-within {
-  border-color: #502A1D;
-  box-shadow: 0 0 0 4px rgba(80, 42, 29, 0.1);
+    border-color: #502a1d;
+    box-shadow: 0 0 0 4px rgba(80, 42, 29, 0.1);
 }
 
 .pin-code-text {
-  font-family: var(--font-display, monospace, inherit);
-  font-size: 2.1rem;
-  font-weight: 900;
-  letter-spacing: 6px;
-  text-transform: uppercase;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-family: var(--font-display, monospace, inherit);
+    font-size: 2.1rem;
+    font-weight: 900;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .pin-code-text.has-code {
-  color: #502A1D;
+    color: #502a1d;
 }
 
 .pin-code-text.placeholder {
-  color: #A8958B;
-  font-size: 1.15rem;
-  letter-spacing: 1px;
-  font-weight: 600;
+    color: #a8958b;
+    font-size: 1.15rem;
+    letter-spacing: 1px;
+    font-weight: 600;
 }
 
 .pin-code-clear-btn {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #EAE0D7;
-  border: none;
-  color: #70594F;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #eae0d7;
+    border: none;
+    color: #70594f;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
 }
 
 .pin-code-clear-btn:hover {
-  background: #C88E78;
-  color: #FFFFFF;
+    background: #c88e78;
+    color: #ffffff;
 }
 
 /* Banner trạng thái */
 .pin-status-banner {
-  width: 100%;
-  border-radius: 14px;
-  padding: 8px 16px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  box-sizing: border-box;
+    width: 100%;
+    border-radius: 14px;
+    padding: 8px 16px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    box-sizing: border-box;
 }
 
 .pin-status-banner.verifying {
-  background: #FDF4E7;
-  color: #8C531B;
-  border: 1px solid #FCD34D;
+    background: #fdf4e7;
+    color: #8c531b;
+    border: 1px solid #fcd34d;
 }
 
 .pin-status-banner.welcome {
-  background: #ECFDF5;
-  color: #065F46;
-  border: 1px solid #A7F3D0;
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
 }
 
 .pin-status-banner.error {
-  background: #FEF2F2;
-  color: #DC2626;
-  border: 1px solid #FECACA;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
 }
 
 /* Bàn phím số Numpad cảm ứng (Lưới 3 x 4) */
 .pin-numpad-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  margin-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 18px;
 }
 
 .pin-numpad-row {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  justify-content: center;
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
 }
 
 .pin-numpad-btn {
-  flex: 1;
-  height: 66px;
-  background: #FAF7F2;
-  border: 1.5px solid #EAE0D7;
-  border-radius: 20px;
-  color: #351A10;
-  font-family: var(--font-display, inherit);
-  font-size: 1.85rem;
-  font-weight: 800;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 8px rgba(53, 26, 16, 0.04);
-  transition: all 0.12s ease;
-  user-select: none;
-  touch-action: manipulation;
+    flex: 1;
+    height: 66px;
+    background: #faf7f2;
+    border: 1.5px solid #eae0d7;
+    border-radius: 20px;
+    color: #351a10;
+    font-family: var(--font-display, inherit);
+    font-size: 1.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(53, 26, 16, 0.04);
+    transition: all 0.12s ease;
+    user-select: none;
+    touch-action: manipulation;
 }
 
 .pin-numpad-btn:hover {
-  border-color: #502A1D;
-  background: #FFFFFF;
-  transform: translateY(-1px);
+    border-color: #502a1d;
+    background: #ffffff;
+    transform: translateY(-1px);
 }
 
 .pin-numpad-btn:active {
-  background: #502A1D !important;
-  color: #FFFFFF !important;
-  border-color: #502A1D !important;
-  transform: scale(0.94);
+    background: #502a1d !important;
+    color: #ffffff !important;
+    border-color: #502a1d !important;
+    transform: scale(0.94);
 }
 
 .pin-numpad-action {
-  color: #8C756B;
+    color: #8c756b;
 }
 
 .pin-numpad-action:hover {
-  color: #502A1D;
+    color: #502a1d;
 }
 
 .pin-numpad-backspace {
-  background: #FDF2F0;
-  border-color: #F5D3CC;
-  color: #C0392B;
+    background: #fdf2f0;
+    border-color: #f5d3cc;
+    color: #c0392b;
 }
 
 .pin-numpad-backspace:hover {
-  background: #FEE2E2;
-  border-color: #FCA5A5;
+    background: #fee2e2;
+    border-color: #fca5a5;
 }
 
 .pin-numpad-backspace:active {
-  background: #C0392B !important;
-  color: #FFFFFF !important;
-  border-color: #C0392B !important;
+    background: #c0392b !important;
+    color: #ffffff !important;
+    border-color: #c0392b !important;
 }
 
 /* Nút hành động Mở Khóa */
 .pin-modal-actions {
-  width: 100%;
-  display: flex;
-  justify-content: center;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
 .btn-unlock-kiosk {
-  width: 100%;
-  height: 58px;
-  border-radius: 20px;
-  background: #502A1D;
-  color: #FFFFFF;
-  border: none;
-  font-family: var(--font-display, inherit);
-  font-size: 1.25rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(80, 42, 29, 0.28);
-  transition: all 0.15s ease;
+    width: 100%;
+    height: 58px;
+    border-radius: 20px;
+    background: #502a1d;
+    color: #ffffff;
+    border: none;
+    font-family: var(--font-display, inherit);
+    font-size: 1.25rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(80, 42, 29, 0.28);
+    transition: all 0.15s ease;
 }
 
 .btn-unlock-kiosk:hover:not(:disabled) {
-  background: #683726;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(80, 42, 29, 0.35);
+    background: #683726;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(80, 42, 29, 0.35);
 }
 
 .btn-unlock-kiosk:active:not(:disabled) {
-  transform: scale(0.98);
+    transform: scale(0.98);
 }
 
 .btn-unlock-kiosk:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
 }

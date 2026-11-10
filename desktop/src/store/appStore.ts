@@ -17,68 +17,77 @@ import { createLayoutThemeSlice } from './slices/layoutThemeSlice'
 import type { PaymentSlice } from './slices/paymentSlice'
 import { createPaymentSlice } from './slices/paymentSlice'
 
-import type { SessionSlice, CapturedPhoto, SessionState } from './slices/sessionSlice'
+import type {
+    SessionSlice,
+    CapturedPhoto,
+    SessionState,
+} from './slices/sessionSlice'
 import { createSessionSlice, generateSessionId } from './slices/sessionSlice'
 
 import type {
-  BeautyCameraSlice,
-  BeautyConfig,
-  BeautyPreset,
+    BeautyCameraSlice,
+    BeautyConfig,
+    BeautyPreset,
 } from './slices/beautyCameraSlice'
 import {
-  createBeautyCameraSlice,
-  loadSavedBeautyConfig,
-  BEAUTY_PRESETS,
-  DEFAULT_BEAUTY_CONFIG,
+    createBeautyCameraSlice,
+    loadSavedBeautyConfig,
+    BEAUTY_PRESETS,
+    DEFAULT_BEAUTY_CONFIG,
 } from './slices/beautyCameraSlice'
 
-import type { AdminSlice, EventConfig, BoothMode, CaptureMode } from './slices/adminSlice'
+import type {
+    AdminSlice,
+    EventConfig,
+    BoothMode,
+    CaptureMode,
+} from './slices/adminSlice'
 import {
-  createAdminSlice,
-  DEFAULT_EVENT_CONFIG,
-  loadSavedEventConfig,
+    createAdminSlice,
+    DEFAULT_EVENT_CONFIG,
+    loadSavedEventConfig,
 } from './slices/adminSlice'
 
 export type {
-  AppScreen,
-  CapturedPhoto,
-  SessionState,
-  BeautyConfig,
-  BeautyPreset,
-  EventConfig,
-  BoothMode,
-  CaptureMode,
-  NavigationSlice,
-  LayoutThemeSlice,
-  PaymentSlice,
-  SessionSlice,
-  BeautyCameraSlice,
-  AdminSlice,
+    AppScreen,
+    CapturedPhoto,
+    SessionState,
+    BeautyConfig,
+    BeautyPreset,
+    EventConfig,
+    BoothMode,
+    CaptureMode,
+    NavigationSlice,
+    LayoutThemeSlice,
+    PaymentSlice,
+    SessionSlice,
+    BeautyCameraSlice,
+    AdminSlice,
 }
 
 export {
-  generateSessionId,
-  loadSavedBeautyConfig,
-  BEAUTY_PRESETS,
-  DEFAULT_BEAUTY_CONFIG,
-  DEFAULT_EVENT_CONFIG,
-  loadSavedEventConfig,
+    generateSessionId,
+    loadSavedBeautyConfig,
+    BEAUTY_PRESETS,
+    DEFAULT_BEAUTY_CONFIG,
+    DEFAULT_EVENT_CONFIG,
+    loadSavedEventConfig,
 }
 
 // ─── 3. Global AppStore Interface (Full Backward Compatibility) ──
 export type AppStore = NavigationSlice &
-  LayoutThemeSlice &
-  PaymentSlice &
-  SessionSlice &
-  BeautyCameraSlice &
-  AdminSlice
+    LayoutThemeSlice &
+    PaymentSlice &
+    SessionSlice &
+    BeautyCameraSlice &
+    AdminSlice
 
 // ─── 4. Zustand Store Composition ──
 export const useAppStore = create<AppStore>()((...a) => ({
-  ...createNavigationSlice(...a),
-  ...createLayoutThemeSlice(...a),
-  ...createPaymentSlice(...a),
-  ...createSessionSlice(...a),
-  ...createBeautyCameraSlice(...a),
-  ...createAdminSlice(...a),
+    ...createNavigationSlice(...a),
+    ...createLayoutThemeSlice(...a),
+    ...createPaymentSlice(...a),
+    ...createSessionSlice(...a),
+    ...createBeautyCameraSlice(...a),
+    ...createAdminSlice(...a),
 }))
