@@ -13,7 +13,7 @@
     "dev:ai": "cd ai-service && python main.py",
     "dev": "concurrently -n vite,electron -c cyan,yellow \"npm run dev:vite\" \"npm run dev:electron\"",
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
-    "build:mac": "npm run build && electron-builder --mac",
+    "build:mac": "npm run build && electron-builder --mac --publish never",
     "build:win": "npm run build && electron-builder --win",
     "preview": "vite preview",
     "lint": "oxlint src",
@@ -36,7 +36,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
-    "electron": "^44.5.1",
+    "electron": "44.10.2",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
@@ -47,6 +47,7 @@
   "build": {
     "appId": "com.fotolism.desktop",
     "productName": "fotolism",
+    "electronVersion": "44.10.2",
     "directories": {
       "output": "release"
     },
@@ -72,7 +73,8 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.photography"
+      "category": "public.app-category.photography",
+      "identity": null
     },
     "dmg": {
       "contents": [
