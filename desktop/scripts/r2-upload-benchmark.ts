@@ -6,7 +6,7 @@ import { URL } from 'node:url'
 import { S3Client, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
 // Cấu hình môi trường
-const CMS_URL = process.env.CMS_URL || 'https://fotolism-cms.vercel.app'
+const CMS_URL = process.env.CMS_STAGING_URL || process.env.CMS_URL || 'https://fotolism-cms.vercel.app'
 const R2_ENDPOINT = process.env.R2_ENDPOINT || ''
 const R2_BUCKET = process.env.R2_BUCKET || 'fotolism-photos'
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || ''

@@ -7,6 +7,13 @@ import { registerSessionIpc } from './ipc/sessionIpc.cjs'
 import { registerWindowAndConfigIpc, ensureAiService, stopAiService } from './ipc/windowIpc.cjs'
 
 // ─── FOTOLISM ELECTRON BACKEND CONFIGURATION ─────────────────────────────────
+try {
+  process.loadEnvFile?.(join(__dirname, '../.env'))
+} catch {}
+try {
+  process.loadEnvFile?.(join(__dirname, '../.env.local'))
+} catch {}
+
 const isDev = process.env.NODE_ENV === 'development'
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173'
 
