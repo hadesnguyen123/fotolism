@@ -29,12 +29,17 @@ export interface WorkerStats {
 
 type ProgressListener = (event: UploadProgressEvent) => void
 
-const DEFAULT_CMS_URL = 'https://fotolism-cms.vercel.app'
+const DEFAULT_CMS_URL =
+  process.env.CMS_STAGING_URL ||
+  process.env.CMS_URL ||
+  process.env.VITE_CMS_STAGING_URL ||
+  process.env.VITE_CMS_URL ||
+  'https://fotolism-cms.vercel.app'
 
 export class R2UploadWorker {
   private static instance: R2UploadWorker | null = null
   private concurrency: number = 4
-  private cmsUrl: string = process.env.CMS_URL || DEFAULT_CMS_URL
+  private cmsUrl: string = DEFAULT_CMS_URL
   private isRunning: boolean = false
   private activeUploads: Set<string> = new Set()
   private listeners: Set<ProgressListener> = new Set()
@@ -65,25 +70,11 @@ export class R2UploadWorker {
 
   public setCmsUrl(url: string): void {
     if (url && url.startsWith('http')) {
-      const cleanUrl = url.replace(/\/$/, '')
-      if (
-        (cleanUrl === 'http://localhost:3000' || cleanUrl === 'http://127.0.0.1:3000') &&
-        !process.env.CMS_URL
-      ) {
-        this.cmsUrl = DEFAULT_CMS_URL
-      } else {
-        this.cmsUrl = cleanUrl
-      }
+      this.cmsUrl = url.replace(/\/$/, '')
     }
   }
 
   public getCmsUrl(): string {
-    if (
-      (this.cmsUrl === 'http://localhost:3000' || this.cmsUrl === 'http://127.0.0.1:3000') &&
-      !process.env.CMS_URL
-    ) {
-      return DEFAULT_CMS_URL
-    }
     return this.cmsUrl
   }
 

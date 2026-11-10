@@ -57,7 +57,14 @@ export interface DeviceConfig {
   activated_at?: string
 }
 
-export const DEFAULT_CMS_URL = 'https://fotolism-cms.vercel.app'
+// Tham chiếu trực tiếp từ biến môi trường (VITE_CMS_STAGING_URL, CMS_STAGING_URL, VITE_CMS_URL, CMS_URL)
+export const ENV_CMS_URL =
+  (typeof import.meta !== 'undefined' &&
+    (import.meta.env?.VITE_CMS_STAGING_URL || import.meta.env?.VITE_CMS_URL)) ||
+  (typeof process !== 'undefined' && (process.env?.CMS_STAGING_URL || process.env?.CMS_URL)) ||
+  ''
+
+export const DEFAULT_CMS_URL = (ENV_CMS_URL || 'https://fotolism-cms.vercel.app').replace(/\/$/, '')
 const DEFAULT_KIOSK_ID = 'kiosk_01'
 const OUTBOX_STORAGE_KEY = 'fotolism_sessions_outbox'
 const CONFIG_VER_KEY = 'fotolism_config_version'
@@ -88,15 +95,6 @@ class CloudSyncService {
     if (savedCfg) {
       try {
         this.deviceConfig = JSON.parse(savedCfg)
-        if (
-          this.deviceConfig?.cms_url &&
-          (this.deviceConfig.cms_url.includes('localhost:3000') ||
-            this.deviceConfig.cms_url.includes('127.0.0.1:3000'))
-        ) {
-          this.deviceConfig.cms_url = DEFAULT_CMS_URL
-          localStorage.setItem('fotolism_device_config', JSON.stringify(this.deviceConfig))
-          localStorage.setItem('fotolism_cms_url', DEFAULT_CMS_URL)
-        }
       } catch {}
     }
     this.refreshPendingCount()
@@ -151,31 +149,19 @@ class CloudSyncService {
   }
 
   public getCmsUrl(): string {
-    // 1. Biến môi trường dev cục bộ (ưu tiên nếu nhà phát triển cấu hình VITE_CMS_URL)
+    // 1. Ưu tiên biến môi trường cấu hình (hỗ trợ cms_staging_url / VITE_CMS_STAGING_URL / VITE_CMS_URL)
     const envUrl =
-      typeof import.meta !== 'undefined' && import.meta.env?.VITE_CMS_URL
-        ? (import.meta.env.VITE_CMS_URL as string)
-        : typeof process !== 'undefined' && process.env?.CMS_URL
-          ? process.env.CMS_URL
-          : undefined
+      (typeof import.meta !== 'undefined' &&
+        (import.meta.env?.VITE_CMS_STAGING_URL || import.meta.env?.VITE_CMS_URL)) ||
+      (typeof process !== 'undefined' && (process.env?.CMS_STAGING_URL || process.env?.CMS_URL))
 
     if (envUrl) {
-      return envUrl.replace(/\/$/, '')
+      return (envUrl as string).replace(/\/$/, '')
     }
 
-    // 2. Cấu hình đã lưu trong LocalStorage
+    // 2. Cấu hình được lưu trong localStorage (nếu có tùy chỉnh) hoặc fallback về DEFAULT_CMS_URL
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('fotolism_cms_url') : null
-    if (saved) {
-      const clean = saved.replace(/\/$/, '')
-      // Tự động chuyển đổi nếu máy trạm còn lưu localhost:3000 từ các phiên bản dev cũ
-      if (clean === 'http://localhost:3000' || clean === 'http://127.0.0.1:3000') {
-        localStorage.setItem('fotolism_cms_url', DEFAULT_CMS_URL)
-        return DEFAULT_CMS_URL
-      }
-      return clean
-    }
-
-    return DEFAULT_CMS_URL
+    return (saved || DEFAULT_CMS_URL).replace(/\/$/, '')
   }
 
   public setCmsUrl(url: string) {
