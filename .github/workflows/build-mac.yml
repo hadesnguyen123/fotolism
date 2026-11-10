@@ -24,6 +24,8 @@ jobs:
           npm install
 
       - name: Build and Package macOS DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           cd desktop
           npm run build:mac
