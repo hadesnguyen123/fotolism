@@ -1,0 +1,123 @@
+/* ── Interactive Repositioning Strip Component Styles ── */
+.interactive-strip-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    max-height: calc(100vh - 170px);
+    width: 100%;
+}
+
+.strip-reposition-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-warm, #fff9f4);
+    border: 1.5px solid var(--border-default, #e6d9cf);
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--brand-primary, #502a1d);
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(80, 42, 29, 0.08);
+    animation: pulseHint 2.5s infinite ease-in-out;
+    user-select: none;
+}
+
+@keyframes pulseHint {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        border-color: var(--color-pink-primary, #f4729a);
+    }
+}
+
+.interactive-strip-preview {
+    position: relative;
+    user-select: none;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.interactive-strip-preview.strip-2x6-view {
+    height: calc(100vh - 220px);
+    width: calc((100vh - 220px) / 3);
+    max-width: 280px;
+}
+
+.interactive-strip-preview.postcard-4x6-view {
+    height: calc(100vh - 220px);
+    width: calc((100vh - 220px) * 2 / 3);
+    max-width: 520px;
+}
+
+.interactive-slot-box {
+    transition: box-shadow 0.2s ease;
+}
+
+.interactive-slot-box:hover,
+.interactive-slot-box.is-dragging {
+    box-shadow: inset 0 0 0 2.5px var(--color-pink-primary, #f4729a);
+    cursor: grabbing !important;
+}
+
+.slot-drag-handle-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.7;
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease,
+        background 0.2s ease;
+    z-index: 5;
+}
+
+.interactive-slot-box:hover .slot-drag-handle-badge,
+.interactive-slot-box.is-dragging .slot-drag-handle-badge {
+    opacity: 1;
+    transform: scale(1.15);
+    background: var(--color-pink-primary, #f4729a);
+}
+
+.strip-branding-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 7.5%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 8;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.theme-slot-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e1e1e;
+    color: #8c7368;
+    font-size: 0.8rem;
+    font-weight: 600;
+}

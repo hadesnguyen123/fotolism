@@ -76,6 +76,10 @@ export default function ProcessingScreen() {
                     photoUrls.length,
                     'photos...'
                 )
+                const effectiveOffsets =
+                    session?.slotOffsets ||
+                    useAppStore.getState().slotOffsets ||
+                    []
                 stripUrl = await generateStripComposite({
                     photos: photoUrls,
                     frameSize: selectedFrameSize,
@@ -85,6 +89,7 @@ export default function ProcessingScreen() {
                     filter: selectedFilter,
                     eventName: eventConfig.eventName,
                     eventDate: eventConfig.date,
+                    slotOffsets: effectiveOffsets,
                 })
 
                 if (stripUrl) {
