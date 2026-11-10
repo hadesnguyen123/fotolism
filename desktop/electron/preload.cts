@@ -16,8 +16,8 @@ export interface EdsdkCapturePayload {
 const api = {
   // ── AI ───────────────────────────────────────────────────────────────────
   ai: {
-    enhance: (imagePath: string, beautyLevel: number): IpcResponse =>
-      ipcRenderer.invoke('ai:enhance', { imagePath, beautyLevel }),
+    enhance: (imagePath: string, beautyLevel?: number, presetId?: string, styleId?: string): IpcResponse =>
+      ipcRenderer.invoke('ai:enhance', { imagePath, beautyLevel, presetId, styleId }),
 
     composite: (imagePath: string, framePath: string): IpcResponse =>
       ipcRenderer.invoke('ai:composite', { imagePath, framePath }),
@@ -170,6 +170,41 @@ const api = {
 
     testDriveWebhook: (webhookUrl: string): IpcResponse<{ message: string; statusCode?: number }> =>
       ipcRenderer.invoke('storage:test-webhook', webhookUrl),
+
+    // Cloudflare R2 Upload Outbox & Worker APIs
+    getUploadStatus: (): IpcResponse<any> =>
+      ipcRenderer.invoke('storage:get-upload-status'),
+
+    setConcurrency: (concurrency: number): IpcResponse<{ concurrency: number }> =>
+      ipcRenderer.invoke('storage:set-concurrency', { concurrency }),
+
+    retryFailedUploads: (): IpcResponse<{ retriedCount: number }> =>
+      ipcRenderer.invoke('storage:retry-failed'),
+
+    enqueueR2Session: (payload: {
+      sessionId: string
+      customerName?: string
+      sessionType?: string
+      cmsUrl?: string
+      files: Array<{
+        imageId: string
+        filePath: string
+        isFinal?: boolean
+        sizeBytes?: number
+      }>
+    }): IpcResponse<{
+      sessionId: string
+      folderKey: string
+      enqueuedCount: number
+    }> => ipcRenderer.invoke('storage:enqueue-r2-session', payload),
+
+    onUploadProgress: (callback: (event: any) => void): (() => void) => {
+      const handler = (_e: any, data: any) => callback(data)
+      ipcRenderer.on('storage:upload-progress', handler)
+      return () => {
+        ipcRenderer.removeListener('storage:upload-progress', handler)
+      }
+    },
   },
 }
 

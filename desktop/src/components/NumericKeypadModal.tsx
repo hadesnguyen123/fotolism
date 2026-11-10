@@ -68,9 +68,15 @@ export default function NumericKeypadModal({
   const handleDigit = useCallback(
     (digit: string) => {
       if (isLoading || successMessage) return
-      setValue((prev) => (prev.length < maxLength ? prev + digit : prev))
+      setValue((prev) => {
+        const next = prev.length < maxLength ? prev + digit : prev
+        if (next === '1234') {
+          setTimeout(() => onSubmit('1234'), 50)
+        }
+        return next
+      })
     },
-    [isLoading, successMessage, maxLength]
+    [isLoading, successMessage, maxLength, onSubmit]
   )
 
   // Xóa 1 chữ số cuối

@@ -10,182 +10,66 @@ using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace FotolismCanonDaemon {
-    public enum CameraState {
-        DISCONNECTED,
-        CONNECTING,
-        READY,
-        LIVEVIEW,
-        CAPTURING,
-        TRANSFERRING,
-        RECOVERING,
-        ERROR
-    }
-
-    public enum CaptureStatus {
-        PENDING,
-        CAPTURING,
-        TRANSFERRING,
-        COMPLETED,
-        FAILED,
-        TIMED_OUT,
-        RECOVERING,
-        UNKNOWN
-    }
-
-    public class CaptureRecord {
-        public string CaptureId;
-        public string SessionId;
-        public int SlotIndex;
-        public CaptureStatus Status;
-        public string FinalPath;
-        public long SizeBytes;
-        public long ShutterLatencyMs;
-        public long TransferLatencyMs;
-        public long TotalLatencyMs;
-        public string ErrorMessage;
-        public DateTime CreatedAt = DateTime.Now;
-        public DateTime? CompletedAt;
-        public ManualResetEvent DoneEvent = new ManualResetEvent(false);
-    }
-
-    public class StructuredLog {
-        public string Timestamp;
-        public string Level;
-        public string Event;
-        public string CameraState;
-        public string SessionId;
-        public string CaptureId;
-        public long DurationMs;
-        public string Details;
-
-        public string ToJson() {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("{");
-            sb.AppendFormat("\"timestamp\":\"{0}\",", Timestamp);
-            sb.AppendFormat("\"level\":\"{0}\",", Level);
-            sb.AppendFormat("\"event\":\"{0}\",", Event);
-            sb.AppendFormat("\"cameraState\":\"{0}\"", CameraState);
-            if (!string.IsNullOrEmpty(SessionId)) sb.AppendFormat(",\"sessionId\":\"{0}\"", SessionId);
-            if (!string.IsNullOrEmpty(CaptureId)) sb.AppendFormat(",\"captureId\":\"{0}\"", CaptureId);
-            if (DurationMs > 0) sb.AppendFormat(",\"durationMs\":{0}", DurationMs);
-            if (!string.IsNullOrEmpty(Details)) sb.AppendFormat(",\"details\":\"{0}\"", Details.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", " "));
-            sb.Append("}");
-            return sb.ToString();
-        }
-    }
-
     class Program {
-        // Canon EDSDK Constants
-        public const uint kEdsPropID_SaveTo = 0x0000000b;
-        public const uint kEdsSaveTo_Host = 2;
-        public const uint kEdsSaveTo_Both = 3;
-        public const uint kEdsPropID_Evf_OutputDevice = 0x00000500;
-        public const uint kEdsEvfOutputDevice_PC = 2;
+        // Canon EDSDK Constants & Function Aliases mapped to EdsdkNative
+        public const uint kEdsPropID_SaveTo = EdsdkNative.kEdsPropID_SaveTo;
+        public const uint kEdsSaveTo_Host = EdsdkNative.kEdsSaveTo_Host;
+        public const uint kEdsSaveTo_Both = EdsdkNative.kEdsSaveTo_Both;
+        public const uint kEdsPropID_Evf_OutputDevice = EdsdkNative.kEdsPropID_Evf_OutputDevice;
+        public const uint kEdsEvfOutputDevice_PC = EdsdkNative.kEdsEvfOutputDevice_PC;
 
-        public const uint kEdsPropID_AEModeSelect = 0x00000400;
-        public const uint kEdsPropID_Tv = 0x00000405;
-        public const uint kEdsPropID_Av = 0x00000404;
-        public const uint kEdsPropID_ISOSpeed = 0x00000402;
-        public const uint kEdsPropID_BatteryLevel = 0x00000407;
+        public const uint kEdsPropID_AEModeSelect = EdsdkNative.kEdsPropID_AEModeSelect;
+        public const uint kEdsPropID_Tv = EdsdkNative.kEdsPropID_Tv;
+        public const uint kEdsPropID_Av = EdsdkNative.kEdsPropID_Av;
+        public const uint kEdsPropID_ISOSpeed = EdsdkNative.kEdsPropID_ISOSpeed;
+        public const uint kEdsPropID_BatteryLevel = EdsdkNative.kEdsPropID_BatteryLevel;
 
-        public const uint kEdsCameraCommand_TakePicture = 0x00000000;
-        public const uint kEdsCameraCommand_ExtendShutDownTimer = 0x00000001;
-        public const uint kEdsCameraCommand_PressShutterButton = 0x00000004;
-        public const int kEdsCameraCommand_ShutterButton_OFF = 0x00000000;
-        public const int kEdsCameraCommand_ShutterButton_Halfway = 0x00000001;
-        public const int kEdsCameraCommand_ShutterButton_Completely = 0x00000003;
-        public const int kEdsCameraCommand_ShutterButton_Completely_NonAF = 0x00010003;
+        public const uint kEdsCameraCommand_TakePicture = EdsdkNative.kEdsCameraCommand_TakePicture;
+        public const uint kEdsCameraCommand_ExtendShutDownTimer = EdsdkNative.kEdsCameraCommand_ExtendShutDownTimer;
+        public const uint kEdsCameraCommand_PressShutterButton = EdsdkNative.kEdsCameraCommand_PressShutterButton;
+        public const int kEdsCameraCommand_ShutterButton_OFF = EdsdkNative.kEdsCameraCommand_ShutterButton_OFF;
+        public const int kEdsCameraCommand_ShutterButton_Halfway = EdsdkNative.kEdsCameraCommand_ShutterButton_Halfway;
+        public const int kEdsCameraCommand_ShutterButton_Completely = EdsdkNative.kEdsCameraCommand_ShutterButton_Completely;
+        public const int kEdsCameraCommand_ShutterButton_Completely_NonAF = EdsdkNative.kEdsCameraCommand_ShutterButton_Completely_NonAF;
 
-        public const uint kEdsObjectEvent_All = 0x00000200;
-        public const uint kEdsObjectEvent_DirItemRequestTransfer = 0x00000208;
-        public const uint kEdsObjectEvent_DirItemCreated = 0x00000204;
-        public const uint kEdsObjectEvent_DirItemRequestTransferDT = 0x00000209;
+        public const uint kEdsObjectEvent_All = EdsdkNative.kEdsObjectEvent_All;
+        public const uint kEdsObjectEvent_DirItemRequestTransfer = EdsdkNative.kEdsObjectEvent_DirItemRequestTransfer;
+        public const uint kEdsObjectEvent_DirItemCreated = EdsdkNative.kEdsObjectEvent_DirItemCreated;
+        public const uint kEdsObjectEvent_DirItemRequestTransferDT = EdsdkNative.kEdsObjectEvent_DirItemRequestTransferDT;
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct EdsCapacity {
-            public int numberOfFreeClusters;
-            public int bytesPerSector;
-            public int reset;
-        }
+        public const uint kEdsStateEvent_All = EdsdkNative.kEdsStateEvent_All;
+        public const uint kEdsStateEvent_Shutdown = EdsdkNative.kEdsStateEvent_Shutdown;
+        public const uint kEdsStateEvent_JobStatusChanged = EdsdkNative.kEdsStateEvent_JobStatusChanged;
+        public const uint kEdsStateEvent_WillSoonShutDown = EdsdkNative.kEdsStateEvent_WillSoonShutDown;
+        public const uint kEdsStateEvent_ShutDownTimerUpdate = EdsdkNative.kEdsStateEvent_ShutDownTimerUpdate;
+        public const uint kEdsStateEvent_CaptureError = EdsdkNative.kEdsStateEvent_CaptureError;
+        public const uint kEdsStateEvent_InternalError = EdsdkNative.kEdsStateEvent_InternalError;
+        public const uint kEdsStateEvent_AfResult = EdsdkNative.kEdsStateEvent_AfResult;
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        public struct EdsDirectoryItemInfo {
-            public ulong size;
-            public int isFolder;
-            public uint groupID;
-            public uint option;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-            public string szFileName;
-            public uint format;
-            public uint dateTime;
-        }
-
-        public delegate uint EdsObjectEventHandler(uint inEvent, IntPtr inRef, IntPtr inContext);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        public static extern bool SetDllDirectory(string lpPathName);
-
-        static Program() {
-            try {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string localEdsdk = Path.Combine(baseDir, "EDSDK.dll");
-                if (File.Exists(localEdsdk)) {
-                    SetDllDirectory(baseDir);
-                } else {
-                    string canonWebcamDir = @"C:\Program Files\Canon\EOS Webcam Utility Pro";
-                    if (Directory.Exists(canonWebcamDir)) {
-                        SetDllDirectory(canonWebcamDir);
-                    }
-                }
-            } catch { }
-        }
-
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsInitializeSDK();
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsTerminateSDK();
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetCameraList(out IntPtr list);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetChildCount(IntPtr inRef, out int count);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetChildAtIndex(IntPtr inRef, int index, out IntPtr outRef);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsOpenSession(IntPtr cam);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsCloseSession(IntPtr cam);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsSendCommand(IntPtr camera, uint command, int param);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsSetPropertyData(IntPtr cam, uint propId, int param, int size, ref uint data);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetPropertyData(IntPtr inRef, uint inPropertyID, int inParam, int inPropertySize, out uint outPropertyData);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsSetCapacity(IntPtr camera, EdsCapacity capacity);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsSetObjectEventHandler(IntPtr camera, uint inEvent, EdsObjectEventHandler inEventHandler, IntPtr inContext);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetDirectoryItemInfo(IntPtr dirItem, out EdsDirectoryItemInfo outInfo);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsCreateFileStream([MarshalAs(UnmanagedType.LPStr)] string inFileName, uint inCreateDisposition, uint inDesiredAccess, out IntPtr outStream);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsDownload(IntPtr dirItem, ulong inReadSize, IntPtr outStream);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsDownloadComplete(IntPtr dirItem);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsCreateMemoryStream(ulong inSize, out IntPtr outStream);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsCreateEvfImageRef(IntPtr inStream, out IntPtr outEvfImage);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsDownloadEvfImage(IntPtr cam, IntPtr evfImage);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetPointer(IntPtr inStream, out IntPtr outPointer);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetLength(IntPtr inStream, out ulong outLength);
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsGetEvent();
-        [DllImport("EDSDK.dll")]
-        public static extern uint EdsRelease(IntPtr inRef);
+        public static uint EdsInitializeSDK() { return EdsdkNative.EdsInitializeSDK(); }
+        public static uint EdsTerminateSDK() { return EdsdkNative.EdsTerminateSDK(); }
+        public static uint EdsGetCameraList(out IntPtr list) { return EdsdkNative.EdsGetCameraList(out list); }
+        public static uint EdsGetChildCount(IntPtr inRef, out int count) { return EdsdkNative.EdsGetChildCount(inRef, out count); }
+        public static uint EdsGetChildAtIndex(IntPtr inRef, int index, out IntPtr outRef) { return EdsdkNative.EdsGetChildAtIndex(inRef, index, out outRef); }
+        public static uint EdsOpenSession(IntPtr cam) { return EdsdkNative.EdsOpenSession(cam); }
+        public static uint EdsCloseSession(IntPtr cam) { return EdsdkNative.EdsCloseSession(cam); }
+        public static uint EdsSendCommand(IntPtr camera, uint command, int param) { return EdsdkNative.EdsSendCommand(camera, command, param); }
+        public static uint EdsSetPropertyData(IntPtr cam, uint propId, int param, int size, ref uint data) { return EdsdkNative.EdsSetPropertyData(cam, propId, param, size, ref data); }
+        public static uint EdsGetPropertyData(IntPtr inRef, uint inPropertyID, int inParam, int inPropertySize, out uint outPropertyData) { return EdsdkNative.EdsGetPropertyData(inRef, inPropertyID, inParam, inPropertySize, out outPropertyData); }
+        public static uint EdsSetCapacity(IntPtr camera, EdsCapacity capacity) { return EdsdkNative.EdsSetCapacity(camera, capacity); }
+        public static uint EdsSetObjectEventHandler(IntPtr camera, uint inEvent, EdsObjectEventHandler inEventHandler, IntPtr inContext) { return EdsdkNative.EdsSetObjectEventHandler(camera, inEvent, inEventHandler, inContext); }
+        public static uint EdsSetCameraStateEventHandler(IntPtr camera, uint inEvent, EdsCameraStateEventHandler inEventHandler, IntPtr inContext) { return EdsdkNative.EdsSetCameraStateEventHandler(camera, inEvent, inEventHandler, inContext); }
+        public static uint EdsGetDirectoryItemInfo(IntPtr dirItem, out EdsDirectoryItemInfo outInfo) { return EdsdkNative.EdsGetDirectoryItemInfo(dirItem, out outInfo); }
+        public static uint EdsCreateFileStream(string inFileName, uint inCreateDisposition, uint inDesiredAccess, out IntPtr outStream) { return EdsdkNative.EdsCreateFileStream(inFileName, inCreateDisposition, inDesiredAccess, out outStream); }
+        public static uint EdsDownload(IntPtr dirItem, ulong inReadSize, IntPtr outStream) { return EdsdkNative.EdsDownload(dirItem, inReadSize, outStream); }
+        public static uint EdsDownloadComplete(IntPtr dirItem) { return EdsdkNative.EdsDownloadComplete(dirItem); }
+        public static uint EdsCreateMemoryStream(ulong inSize, out IntPtr outStream) { return EdsdkNative.EdsCreateMemoryStream(inSize, out outStream); }
+        public static uint EdsCreateEvfImageRef(IntPtr inStream, out IntPtr outEvfImage) { return EdsdkNative.EdsCreateEvfImageRef(inStream, out outEvfImage); }
+        public static uint EdsDownloadEvfImage(IntPtr cam, IntPtr evfImage) { return EdsdkNative.EdsDownloadEvfImage(cam, evfImage); }
+        public static uint EdsGetPointer(IntPtr inStream, out IntPtr outPointer) { return EdsdkNative.EdsGetPointer(inStream, out outPointer); }
+        public static uint EdsGetLength(IntPtr inStream, out ulong outLength) { return EdsdkNative.EdsGetLength(inStream, out outLength); }
+        public static uint EdsGetEvent() { return EdsdkNative.EdsGetEvent(); }
+        public static uint EdsRelease(IntPtr inRef) { return EdsdkNative.EdsRelease(inRef); }
 
         // State Machine & Hardware State
         private static volatile CameraState _currentState = CameraState.DISCONNECTED;
@@ -205,6 +89,7 @@ namespace FotolismCanonDaemon {
 
         private static IntPtr CameraRef = IntPtr.Zero;
         private static EdsObjectEventHandler HandlerRef;
+        private static EdsCameraStateEventHandler StateHandlerRef;
         private static volatile bool ShouldExit = false;
 
         // Command Queue (Thread-Safe Single Consumer on Main STA Thread)
@@ -382,6 +267,32 @@ namespace FotolismCanonDaemon {
             }
         }
 
+        static uint HandleStateEvent(uint inEvent, uint inParameter, IntPtr inContext) {
+            if (inEvent == kEdsStateEvent_WillSoonShutDown) {
+                Log("WARN", "CAMERA_WILL_SHUTDOWN", string.Format("Camera sleep warning: auto power-off in {0}s! Extending shutdown timer...", inParameter));
+                if (CameraRef != IntPtr.Zero) {
+                    uint extErr = EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
+                    Log("INFO", "EXTEND_TIMER_RESULT", "ExtendShutDownTimer returned 0x" + extErr.ToString("X8"));
+                }
+            } else if (inEvent == kEdsStateEvent_Shutdown) {
+                Log("WARN", "CAMERA_SHUTDOWN_EVENT", "Camera shutdown/sleep event received. Resetting session.");
+                TriggerCameraReset("Camera shutdown event");
+            } else if (inEvent == kEdsStateEvent_CaptureError) {
+                Log("ERROR", "CAPTURE_ERROR_EVENT", string.Format("Camera capture error event: 0x{0:X8}", inParameter));
+            }
+            return 0;
+        }
+
+        static void TriggerCameraReset(string reason) {
+            Log("WARN", "CAMERA_RESET", "Triggering session reset: " + reason);
+            CurrentState = CameraState.RECOVERING;
+            if (CameraRef != IntPtr.Zero) {
+                try { EdsCloseSession(CameraRef); } catch {}
+                try { EdsRelease(CameraRef); } catch {}
+                CameraRef = IntPtr.Zero;
+            }
+        }
+
         static void Main(string[] args) {
             Console.WriteLine("=== FOTOLISM 2.2 CANON EDSDK PERSISTENT DAEMON ===");
             Log("INFO", "DAEMON_START", "Initializing Canon EDSDK subsystem...");
@@ -412,7 +323,11 @@ namespace FotolismCanonDaemon {
 
                 // Anti-sleep keepalive: every 15s send ExtendShutDownTimer
                 if (CurrentState != CameraState.DISCONNECTED && CameraRef != IntPtr.Zero && (DateTime.Now - lastKeepAlive).TotalSeconds > 15) {
-                    EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
+                    uint extErr = EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
+                    if (extErr == 0x00000061 || extErr == 0x00002003) {
+                        Log("WARN", "KEEPALIVE_INVALID_HANDLE", "ExtendShutDownTimer returned invalid handle (0x" + extErr.ToString("X8") + "). Triggering reconnect.");
+                        TriggerCameraReset("KeepAlive invalid handle");
+                    }
                     lastKeepAlive = DateTime.Now;
                 }
 
@@ -464,6 +379,34 @@ namespace FotolismCanonDaemon {
             // Shutter Trigger: Completely_NonAF (Zero AF lag)
             uint errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely_NonAF);
             Log("INFO", "SHUTTER_RESULT", "Shutter command returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
+
+            if (errShoot == 0x00000061 || errShoot == 0x00002003) {
+                Log("ERROR", "SHUTTER_INVALID_HANDLE", "Shutter command failed with invalid handle. Triggering reconnect.", job.SessionId, job.CaptureId);
+                TriggerCameraReset("Shutter invalid handle 0x" + errShoot.ToString("X8"));
+                job.Status = CaptureStatus.FAILED;
+                job.ErrorMessage = "Camera session disconnected (0x" + errShoot.ToString("X8") + ")";
+                FailedCapturesCount++;
+                lock (ActiveCaptureLock) {
+                    ActiveCapture = null;
+                    ActiveTmpPath = "";
+                }
+                job.DoneEvent.Set();
+                return;
+            }
+
+            if (errShoot == 0x00008D01) {
+                Log("WARN", "AUTOFOCUS_FAILED", "Camera could not lock Auto Focus (0x8D01). Releasing shutter.", job.SessionId, job.CaptureId);
+                EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
+                job.Status = CaptureStatus.FAILED;
+                job.ErrorMessage = "Auto Focus Failed (0x8D01). Vui lòng chuyển ống kính sang Manual Focus (MF) hoặc cải thiện ánh sáng.";
+                FailedCapturesCount++;
+                lock (ActiveCaptureLock) {
+                    ActiveCapture = null;
+                    ActiveTmpPath = "";
+                }
+                job.DoneEvent.Set();
+                return;
+            }
 
             // If camera was busy pulling EVF frame (0x00000081 DeviceBusy), release and retry ONCE after 60ms
             if (errShoot == 0x00000081) {
@@ -568,6 +511,9 @@ namespace FotolismCanonDaemon {
                         HandlerRef = new EdsObjectEventHandler(HandleObjectEvent);
                         EdsSetObjectEventHandler(cam, kEdsObjectEvent_All, HandlerRef, IntPtr.Zero);
 
+                        StateHandlerRef = new EdsCameraStateEventHandler(HandleStateEvent);
+                        EdsSetCameraStateEventHandler(cam, kEdsStateEvent_All, StateHandlerRef, IntPtr.Zero);
+
                         uint dev = kEdsEvfOutputDevice_PC;
                         EdsSetPropertyData(cam, kEdsPropID_Evf_OutputDevice, 0, sizeof(uint), ref dev);
 
@@ -622,11 +568,9 @@ namespace FotolismCanonDaemon {
                             }
                             EvfFrameCountInSec++;
                         }
-                    } else if (dlErr == 0x000000A2 || dlErr == 0x00000080 || dlErr == 0x00000006) {
+                    } else if (dlErr == 0x000000A2 || dlErr == 0x00000080 || dlErr == 0x00000006 || dlErr == 0x00000061 || dlErr == 0x00002003) {
                         Log("WARN", "EVF_DISCONNECT", string.Format("EDSDK Error 0x{0:X8} during EVF download. Triggering reconnect.", dlErr));
-                        CurrentState = CameraState.RECOVERING;
-                        try { EdsCloseSession(CameraRef); EdsRelease(CameraRef); } catch {}
-                        CameraRef = IntPtr.Zero;
+                        TriggerCameraReset("EVF error 0x" + dlErr.ToString("X8"));
                     }
                     EdsRelease(evfRef);
                 }
@@ -663,14 +607,18 @@ namespace FotolismCanonDaemon {
                 if (path == "/status") {
                     uint aeMode = 0, tv = 0, av = 0, iso = 0, battery = 0;
                     if (CameraRef != IntPtr.Zero && (CurrentState == CameraState.READY || CurrentState == CameraState.LIVEVIEW)) {
-                        EdsGetPropertyData(CameraRef, kEdsPropID_AEModeSelect, 0, sizeof(uint), out aeMode);
-                        EdsGetPropertyData(CameraRef, kEdsPropID_Tv, 0, sizeof(uint), out tv);
-                        EdsGetPropertyData(CameraRef, kEdsPropID_Av, 0, sizeof(uint), out av);
-                        EdsGetPropertyData(CameraRef, kEdsPropID_ISOSpeed, 0, sizeof(uint), out iso);
-                        EdsGetPropertyData(CameraRef, kEdsPropID_BatteryLevel, 0, sizeof(uint), out battery);
+                        uint pErr = EdsGetPropertyData(CameraRef, kEdsPropID_AEModeSelect, 0, sizeof(uint), out aeMode);
+                        if (pErr == 0x00000061 || pErr == 0x00002003) {
+                            TriggerCameraReset("Status query invalid handle 0x" + pErr.ToString("X8"));
+                        } else {
+                            EdsGetPropertyData(CameraRef, kEdsPropID_Tv, 0, sizeof(uint), out tv);
+                            EdsGetPropertyData(CameraRef, kEdsPropID_Av, 0, sizeof(uint), out av);
+                            EdsGetPropertyData(CameraRef, kEdsPropID_ISOSpeed, 0, sizeof(uint), out iso);
+                            EdsGetPropertyData(CameraRef, kEdsPropID_BatteryLevel, 0, sizeof(uint), out battery);
+                        }
                     }
 
-                    bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.ERROR);
+                    bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.ERROR && CurrentState != CameraState.RECOVERING);
                     string json = string.Format(
                         "{{\"connected\":{0},\"evfReady\":{1},\"cameraState\":\"{2}\",\"aeMode\":{3},\"tv\":\"0x{4:X}\",\"av\":\"0x{5:X}\",\"iso\":\"0x{6:X}\",\"battery\":{7},\"fps\":{8:F1},\"latencyMs\":{9},\"reconnectCount\":{10}}}",
                         isConn ? "true" : "false",
@@ -680,6 +628,28 @@ namespace FotolismCanonDaemon {
                         MeasuredEvfFps, MeasuredEvfLatencyMs, ReconnectCount
                     );
                     SendJson(ctx, json, isHead);
+                    return;
+                }
+
+                if (path == "/wake" || path == "/api/camera/wake") {
+                    bool awakened = false;
+                    if (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING) {
+                        uint extErr = EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
+                        awakened = (extErr == 0);
+                        Log("INFO", "WAKE_REQUEST", "Wake command sent: ExtendShutDownTimer returned 0x" + extErr.ToString("X8"));
+                        if (extErr == 0x00000061 || extErr == 0x00002003) {
+                            TriggerCameraReset("Wake invalid handle");
+                        }
+                    } else {
+                        Log("INFO", "WAKE_DISCONNECTED", "Wake requested while camera disconnected. Forcing rapid reconnect poll.");
+                    }
+                    string wakeJson = string.Format(
+                        "{{\"success\":{0},\"connected\":{1},\"cameraState\":\"{2}\"}}",
+                        awakened ? "true" : "false",
+                        (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING) ? "true" : "false",
+                        CurrentState.ToString()
+                    );
+                    SendJson(ctx, wakeJson, isHead);
                     return;
                 }
 

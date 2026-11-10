@@ -12,9 +12,9 @@ import './SelfboothSetupScreen.css'
 
 // Các mốc thời gian chụp Selfbooth tinh gọn (5, 7, 10 phút)
 const SELFBOOTH_MINUTES_OPTIONS = [
-  { minutes: 5, seconds: 300, label: '5 Phút', desc: 'Tiêu chuẩn' },
-  { minutes: 7, seconds: 420, label: '7 Phút', desc: 'Phổ biến' },
-  { minutes: 10, seconds: 600, label: '10 Phút', desc: 'Thoải mái' },
+  { minutes: 5, seconds: 300 },
+  { minutes: 7, seconds: 420 },
+  { minutes: 10, seconds: 600 },
 ]
 
 export default function SelfboothSetupScreen() {
@@ -101,44 +101,13 @@ export default function SelfboothSetupScreen() {
     setScreen('capture')
   }
 
-  // Render SVG Icon đồng bộ với màn Chọn Bộ Lọc Màu
-  const renderFilterIcon = (filterId: string) => {
-    switch (filterId) {
-      case 'normal':
-        return (
-          <svg width="36" height="36" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-            <rect x="7" y="9" width="34" height="30" rx="8" fill="#C48E66" />
-            <circle cx="17" cy="18" r="3.5" fill="#FFFFFF" />
-            <path d="M12 34L20 23L27 30L33 22L38 34H12Z" fill="#FFFFFF" />
-          </svg>
-        )
-      case 'vintage_noir':
-        return (
-          <svg width="36" height="36" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-            <circle cx="24" cy="24" r="18" fill="#FFFFFF" stroke="#2D2D2D" strokeWidth="3" />
-            <path d="M24 6C14.0589 6 6 14.0589 6 24C6 33.9411 14.0589 42 24 42V6Z" fill="#2D2D2D" />
-          </svg>
-        )
-      case 'retro_90s':
-        return (
-          <svg width="38" height="38" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-            <circle cx="17" cy="14" r="5" fill="#E58B44" />
-            <circle cx="28" cy="14" r="5" fill="#E58B44" />
-            <rect x="10" y="19" width="22" height="17" rx="4" fill="#E58B44" />
-            <path d="M32 23.5L41 18V36L32 30.5V23.5Z" fill="#E58B44" />
-          </svg>
-        )
-      default:
-        return null
-    }
-  }
 
   return (
     <div className="selfbooth-setup-container" id="selfbooth-setup-screen">
       {/* ── Fixed Brand Logo góc trên bên trái ── */}
       <img src={BRAND_LOGO_SRC} alt="fotolism" className="selfbooth-fixed-brand-logo" />
 
-      {/* ── Top Header: Icon Camera + Tiêu Đề Trung Tâm ── */}
+      {/* ── Top Header: Icon Camera + Tiêu Đề Trung Tâm (Không mô tả thừa) ── */}
       <header className="selfbooth-setup-header">
         <div className="setup-header-center">
           <div className="setup-header-icon-box" aria-hidden="true">
@@ -157,17 +126,14 @@ export default function SelfboothSetupScreen() {
             </svg>
           </div>
           <h1 className="setup-header-title">Thiết Lập Chụp</h1>
-          <p className="setup-header-subtitle">
-            Tùy chỉnh tông màu và thời gian phiên chụp Selfbooth của bạn
-          </p>
         </div>
       </header>
 
-      {/* ── Main Stage: 2 Cột Cân Đối Hoàn Hảo (Live Camera 16:9 + Tùy Chọn Cài Đặt) ── */}
+      {/* ── Main Stage: 2 Cột Cân Đối Hoàn Hảo (Live Camera 3:2 + Tùy Chọn Cài Đặt) ── */}
       <main className="selfbooth-setup-grid">
-        {/* CỘT TRÁI: LIVE CAMERA PREVIEW TỈ LỆ CHUẨN 16:9 */}
+        {/* CỘT TRÁI: LIVE CAMERA PREVIEW TỈ LỆ CHUẨN 3:2 */}
         <section className="setup-preview-card">
-          <div className="preview-video-container-16-9">
+          <div className="preview-video-container-3-2">
             <video
               ref={videoRef}
               autoPlay
@@ -198,45 +164,53 @@ export default function SelfboothSetupScreen() {
           </div>
         </section>
 
-        {/* CỘT PHẢI: BỘ ĐIỀU KHIỂN TINH GỌN (3 TÔNG MÀU + THỜI GIAN PHÚT) */}
+        {/* CỘT PHẢI: BỘ ĐIỀU KHIỂN TINH GỌN (3 TÔNG MÀU HÌNH TRÒN + THỜI GIAN 5P 7P 10P) */}
         <section className="setup-controls-card">
-          {/* PHẦN 1: BỘ 3 TÔNG MÀU SANG TRỌNG */}
+          {/* PHẦN 1: BỘ 3 TÔNG MÀU HÌNH TRÒN ĐƠN GIẢN NHƯ PHOTOBOOTH */}
           <div className="control-section">
             <div className="control-section-header">
               <span className="section-label">Tông màu</span>
-              <span className="section-hint">Áp dụng trực tiếp vào ảnh</span>
             </div>
 
-            <div className="filters-3-grid">
+            <div className="setup-filter-circles-row">
               {COLOR_FILTERS.map((f) => {
-                const isActive = selectedFilter.id === f.id
+                const isSelected = selectedFilter.id === f.id
+                const circleBg =
+                  f.id === 'natural'
+                    ? '#D8C7B5'
+                    : f.id === 'classic'
+                    ? '#2D2426'
+                    : '#9C5832'
                 return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className={`filter-card-chip ${isActive ? 'active' : ''}`}
-                    onClick={() => handleChooseFilter(f)}
-                    aria-label={`Chọn tông màu ${f.name}`}
-                  >
-                    {isActive && (
-                      <div className="chip-check-badge" aria-hidden="true">
-                        <Check size={12} strokeWidth={3.2} />
-                      </div>
-                    )}
-                    <div className="filter-chip-icon">{renderFilterIcon(f.id)}</div>
-                    <span className="filter-chip-name">{f.name}</span>
-                    <span className="filter-chip-tag">{f.tag}</span>
-                  </button>
+                  <div key={f.id} className="setup-filter-circle-col">
+                    <button
+                      type="button"
+                      className={`setup-filter-circle-btn ${isSelected ? 'selected' : ''}`}
+                      style={{ backgroundColor: circleBg }}
+                      onClick={() => handleChooseFilter(f)}
+                      title={f.name}
+                      aria-label={`Chọn tông màu ${f.name}`}
+                    >
+                      {isSelected && (
+                        <Check
+                          size={24}
+                          strokeWidth={3.2}
+                          color="#FFFFFF"
+                          style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.45))' }}
+                        />
+                      )}
+                    </button>
+                    <span className="setup-filter-circle-label">{f.name}</span>
+                  </div>
                 )
               })}
             </div>
           </div>
 
-          {/* PHẦN 2: THỜI GIAN CHỈ ĐỂ PHÚT (5 Phút, 7 Phút, 10 Phút) */}
+          {/* PHẦN 2: THỜI GIAN CHỤP (5p, 7p, 10p KHÔNG MÔ TẢ) */}
           <div className="control-section">
             <div className="control-section-header">
               <span className="section-label">Thời gian chụp</span>
-              <span className="section-hint">Tự do tạo dáng không giới hạn số ảnh</span>
             </div>
 
             <div className="durations-minutes-grid">
@@ -248,16 +222,15 @@ export default function SelfboothSetupScreen() {
                     type="button"
                     className={`duration-card-chip ${isSelected ? 'selected' : ''}`}
                     onClick={() => handleChooseDuration(opt.seconds)}
-                    aria-label={`Chọn thời gian ${opt.label}`}
+                    aria-label={`Chọn thời gian ${opt.minutes} phút`}
                   >
                     {isSelected && (
                       <div className="chip-check-badge" aria-hidden="true">
                         <Check size={12} strokeWidth={3.2} />
                       </div>
                     )}
-                    <span className="duration-chip-number">{opt.minutes}</span>
-                    <span className="duration-chip-unit">Phút</span>
-                    <span className="duration-chip-desc">{opt.desc}</span>
+                    <span className="duration-chip-number">{opt.minutes}p</span>
+                    <span className="duration-chip-unit">{opt.minutes} phút</span>
                   </button>
                 )
               })}
@@ -266,22 +239,8 @@ export default function SelfboothSetupScreen() {
         </section>
       </main>
 
-      {/* ── Footer Navigation Bar: Nút Quay Lại & Nút Tiếp Tục Không Icon ── */}
-      <footer className="selfbooth-bottom-nav">
-        <button
-          className="btn-selfbooth-back"
-          onClick={() => {
-            if (stream) {
-              stream.getTracks().forEach((t) => t.stop())
-            }
-            setScreen('idle')
-          }}
-          title="Quay lại"
-          aria-label="Quay lại"
-        >
-          Quay lại
-        </button>
-
+      {/* ── Footer Navigation Bar: Nút Tiếp Tục (Không có nút Quay lại) ── */}
+      <footer className="selfbooth-bottom-nav" style={{ justifyContent: 'flex-end' }}>
         <button
           className="btn-selfbooth-proceed"
           onClick={handleStartCapture}

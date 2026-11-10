@@ -443,7 +443,9 @@ export class BeautyEngine {
     let img: HTMLImageElement
     if (typeof imageSource === 'string') {
       img = new Image()
-      img.crossOrigin = 'anonymous'
+      if (imageSource.startsWith('http://') || imageSource.startsWith('https://')) {
+        img.crossOrigin = 'anonymous'
+      }
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve()
         img.onerror = (e) => reject(e)

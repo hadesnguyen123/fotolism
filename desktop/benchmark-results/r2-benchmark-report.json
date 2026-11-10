@@ -1,0 +1,50 @@
+{
+  "benchmarkTitle": "Fotolism 3.0 Cloudflare R2 500MB Upload Benchmark",
+  "timestamp": "2026-11-10T04:36:32.797Z",
+  "dataset": {
+    "fileCount": 50,
+    "fileSizeMb": 10,
+    "totalDataMb": 500
+  },
+  "r2Config": {
+    "bucket": "fotolism-photos",
+    "endpoint": "https://70e55bd2443669e10901a0826fd50ab4.r2.cloudflarestorage.com"
+  },
+  "summaries": [
+    {
+      "scenarioId": "B03",
+      "concurrency": 4,
+      "description": "Mặc định Fotolism (Concurrency 4)",
+      "iterationsCount": 1,
+      "medianPureTimeSec": 184.07,
+      "p95PureTimeSec": 184.07,
+      "medianPureThroughputMbps": 22.79,
+      "p95ThroughputMbps": 22.79,
+      "medianEndToEndSec": 184.27,
+      "avgLatencyPerImageMs": 14577,
+      "p95LatencyPerImageMs": 19960,
+      "timeToFirstImageSec": 13.3,
+      "totalRetries": 0,
+      "successRatePercent": 100,
+      "avgRamDeltaMb": 9.2,
+      "iterations": [
+        {
+          "iteration": 1,
+          "concurrency": 4,
+          "pureUploadDurationSec": 184.07,
+          "endToEndDurationSec": 184.27,
+          "pureThroughputMbps": 22.79,
+          "endToEndThroughputMbps": 22.76,
+          "avgLatencyMs": 14577,
+          "p95LatencyMs": 19960,
+          "timeToFirstImageSec": 13.3,
+          "successfulCount": 50,
+          "failedCount": 0,
+          "retryCount": 0,
+          "ramUsageDeltaMb": 9.18,
+          "cpuUserSec": 3.92
+        }
+      ]
+    }
+  ]
+}

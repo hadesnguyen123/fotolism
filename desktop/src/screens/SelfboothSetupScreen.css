@@ -106,9 +106,9 @@
   box-sizing: border-box;
 }
 
-.preview-video-container-16-9 {
+.preview-video-container-3-2 {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 3 / 2;
   background: #18181B;
   border-radius: 18px;
   overflow: hidden;
@@ -198,85 +198,54 @@
   color: #8C7A70;
 }
 
-/* ── 3 TÔNG MÀU ─────────────────────────────────────────────────────────── */
-.filters-3-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+/* ── 3 TÔNG MÀU HÌNH TRÒN ĐƠN GIẢN NHƯ PHOTOBOOTH ── */
+.setup-filter-circles-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  padding: 12px 0 6px;
 }
 
-.filter-card-chip {
-  height: 116px;
-  background: #FAF6F1;
-  border: 1.5px solid #EFE7DE;
-  border-radius: 20px;
-  padding: 10px 8px;
+.setup-filter-circle-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  outline: none;
-  box-sizing: border-box;
+  gap: 8px;
 }
 
-.filter-card-chip:hover {
-  background: #FFFFFF;
-  border-color: #502A1D;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(80, 42, 29, 0.08);
-}
-
-.filter-card-chip.active {
-  background: #FFFDFB;
-  border-color: #502A1D;
-  border-width: 2px;
-  box-shadow: 0 8px 20px rgba(80, 42, 29, 0.12);
-  transform: translateY(-2px);
-}
-
-.filter-chip-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  margin-bottom: 2px;
-}
-
-.filter-chip-name {
-  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 0.96rem;
-  font-weight: 800;
-  color: #351A10;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.filter-chip-tag {
-  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #8C7A70;
-}
-
-/* Badge Dấu Tích ✓ ở góc trên bên phải của chip */
-.chip-check-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
+.setup-filter-circle-btn {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: #502A1D;
-  color: #FFFFFF;
+  border: 3px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(80, 42, 29, 0.3);
-  z-index: 5;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(53, 28, 21, 0.15);
+  outline: none;
+  position: relative;
+}
+
+.setup-filter-circle-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(53, 28, 21, 0.22);
+}
+
+.setup-filter-circle-btn.selected {
+  border-color: #502A1D;
+  box-shadow: 0 0 0 3px #FAF6F0, 0 8px 24px rgba(80, 42, 29, 0.35);
+  transform: scale(1.12);
+}
+
+.setup-filter-circle-label {
+  font-family: var(--font-display, 'Baloo 2', 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #502A1D;
+  letter-spacing: -0.2px;
 }
 
 /* ── THỜI GIAN CHỤP (5, 7, 10 PHÚT) ─────────────────────────────────────── */
@@ -347,7 +316,7 @@
   height: 72px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 48px 10px;
   box-sizing: border-box;
   width: 100%;

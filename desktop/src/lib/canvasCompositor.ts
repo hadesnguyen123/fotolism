@@ -7,7 +7,12 @@ import type {
 } from '../store/appStore'
 import { DEFAULT_EVENT_NAME, resolveAssetUrl } from './constants'
 
-interface RenderOptions {
+export interface SlotOffset {
+  x: number // -1.0 (trái) đến +1.0 (phải)
+  y: number // -1.0 (lên) đến +1.0 (xuống)
+}
+
+export interface RenderOptions {
   photos: string[] // data URLs or image URLs
   frameSize: FrameSize
   layout: GridLayoutItem
@@ -16,12 +21,15 @@ interface RenderOptions {
   filter: ColorFilterItem
   eventName: string
   eventDate: string
+  slotOffsets?: SlotOffset[]
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    img.crossOrigin = 'anonymous'
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => resolve(img)
     img.onerror = (err) => reject(err)
     img.src = src
@@ -29,13 +37,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Cắt crop ảnh về đúng tỉ lệ ô của khung (528x352, 544x726, 381x580)
- * Giữ nguyên trung tâm ảnh, bảo đảm không bị méo tỉ lệ hoặc lộ viền trắng
+ * Cắt crop ảnh về đúng tỉ lệ ô của khung (528x352, 544x726, 281x580)
+ * Đồng bộ chính xác với khung vàng hiển thị trên Live View 16:9
+ * Xử lý hoàn hảo sự khác biệt tỷ lệ giữa Live View 16:9 và ảnh gốc từ camera (3:2 hoặc 16:9)
  */
 export async function cropImageToAspect(
   sourceDataUrl: string,
   targetW: number,
-  targetH: number
+  targetH: number,
+  viewfinderAspect: number = 16 / 9
 ): Promise<string> {
   if (!sourceDataUrl || !sourceDataUrl.startsWith('data:')) {
     return sourceDataUrl
@@ -47,19 +57,40 @@ export async function cropImageToAspect(
   const srcAspect = srcW / srcH
   const targetAspect = targetW / targetH
 
-  let cropW = srcW
-  let cropH = srcH
-  let cropX = 0
-  let cropY = 0
+  // 1. Xác định vùng Live View 16:9 tương ứng trên ảnh gốc từ camera
+  let viewW = srcW
+  let viewH = srcH
+  let viewX = 0
+  let viewY = 0
 
-  if (srcAspect > targetAspect) {
-    // Nguồn rộng hơn tỉ lệ target -> cắt đều 2 bên trái/phải
-    cropW = Math.round(srcH * targetAspect)
-    cropX = Math.round((srcW - cropW) / 2)
+  if (Math.abs(srcAspect - viewfinderAspect) > 0.01) {
+    if (srcAspect < viewfinderAspect) {
+      // Ảnh gốc hẹp hơn 16:9 (ví dụ cảm biến vật lý Canon 3:2 = 1.5) -> Live View đã crop bớt đỉnh/đáy
+      viewH = Math.round(srcW / viewfinderAspect)
+      viewY = Math.round((srcH - viewH) / 2)
+    } else {
+      // Ảnh gốc rộng hơn 16:9 -> Live View đã crop bớt 2 bên
+      viewW = Math.round(srcH * viewfinderAspect)
+      viewX = Math.round((srcW - viewW) / 2)
+    }
+  }
+
+  // 2. Tính toán vùng Khung Vàng (Safe Area) nằm trong vùng Live View 16:9
+  let cropW = viewW
+  let cropH = viewH
+  let cropX = viewX
+  let cropY = viewY
+
+  if (targetAspect <= viewfinderAspect) {
+    // Ưu tiên giữ chiều cao tối đa của Live View, co từ 2 bên vào
+    cropH = viewH
+    cropW = Math.round(viewH * targetAspect)
+    cropX = Math.round(viewX + (viewW - cropW) / 2)
   } else {
-    // Nguồn cao hơn tỉ lệ target -> cắt đều trên/dưới
-    cropH = Math.round(srcW / targetAspect)
-    cropY = Math.round((srcH - cropH) / 2)
+    // Nếu ô rộng hơn 16:9, giữ chiều rộng tối đa, co chiều cao
+    cropW = viewW
+    cropH = Math.round(viewW / targetAspect)
+    cropY = Math.round(viewY + (viewH - cropH) / 2)
   }
 
   const canvas = document.createElement('canvas')
@@ -231,23 +262,46 @@ export async function generateStripComposite(opts: RenderOptions): Promise<strin
           ctx.filter = 'none'
         }
 
-        // Fit & Center crop (aspect fill)
+        // Fit & Center crop (aspect fill) đồng bộ chuẩn xác với Live View 16:9 kèm bù offset
         const imgAspect = img.width / img.height
-        const slotAspect = drawW / drawH
-        let dw = drawW
-        let dh = drawH
-        let dx = drawX
-        let dy = drawY
+        const viewfinderAspect = 16 / 9
+        let baseSrcX = 0
+        let baseSrcY = 0
+        let baseSrcW = img.width
+        let baseSrcH = img.height
 
-        if (imgAspect > slotAspect) {
-          dw = drawH * imgAspect
-          dx = drawX - (dw - drawW) / 2
-        } else {
-          dh = drawW / imgAspect
-          dy = drawY - (dh - drawH) / 2
+        // Nếu ảnh gốc có tỷ lệ khác Live View 16:9 (ví dụ cảm biến Canon 3:2 = 1.5):
+        // Live View 16:9 đã crop đỉnh/đáy -> chuẩn hóa vùng nguồn theo đúng những gì khách thấy trên Live View
+        if (imgAspect < viewfinderAspect - 0.02) {
+          baseSrcH = Math.round(img.width / viewfinderAspect)
+          baseSrcY = Math.round((img.height - baseSrcH) / 2)
+        } else if (imgAspect > viewfinderAspect + 0.02) {
+          baseSrcW = Math.round(img.height * viewfinderAspect)
+          baseSrcX = Math.round((img.width - baseSrcW) / 2)
         }
 
-        ctx.drawImage(img, dx, dy, dw, dh)
+        const effectiveAspect = baseSrcW / baseSrcH
+        const slotAspect = drawW / drawH
+        const offset = (opts.slotOffsets && opts.slotOffsets[i]) ? opts.slotOffsets[i] : { x: 0, y: 0 }
+        const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
+        const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
+
+        let finalSrcW = baseSrcW
+        let finalSrcH = baseSrcH
+        let finalSrcX = baseSrcX
+        let finalSrcY = baseSrcY
+
+        if (effectiveAspect > slotAspect) {
+          finalSrcW = Math.round(baseSrcH * slotAspect)
+          const maxSlack = (baseSrcW - finalSrcW) / 2
+          finalSrcX = Math.round(baseSrcX + maxSlack - clampedX * maxSlack)
+        } else {
+          finalSrcH = Math.round(baseSrcW / slotAspect)
+          const maxSlack = (baseSrcH - finalSrcH) / 2
+          finalSrcY = Math.round(baseSrcY + maxSlack - clampedY * maxSlack)
+        }
+
+        ctx.drawImage(img, finalSrcX, finalSrcY, finalSrcW, finalSrcH, drawX, drawY, drawW, drawH)
 
         // Phủ lớp hạt phim cổ điển (Film grain noise) cho màu Retro 90s
         if (opts.filter && (opts.filter.id === 'retro_90s' || opts.filter.hasGrain)) {

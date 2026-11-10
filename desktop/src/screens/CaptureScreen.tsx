@@ -11,6 +11,8 @@ import {
   isRemoteTriggerEvent,
 } from '../lib/constants'
 import { BeautyCameraView, type BeautyCameraHandle } from '../components/BeautyCameraView'
+import { CaptureAspectGuide } from '../components/capture/CaptureAspectGuide'
+import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
 import { cropImageToAspect } from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
@@ -89,17 +91,36 @@ export default function CaptureScreen() {
     }
   }, [isSelfboothMode, photoboothSessionEndTime, startPhotoboothSessionTimer])
 
-  // Xác định tỉ lệ và kích thước ô chuẩn theo yêu cầu:
-  // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 1.5)
-  // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 0.7493)
-  // - Khung 9 ảnh 4x6: 381 x 580 (tỉ lệ 0.6569)
+  // Xác định tỉ lệ và kích thước ô chuẩn theo Single Source of Truth:
+  // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 3:2 = 1.5)
+  // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 272:363 ≈ 0.7493)
+  // - Khung 9 ảnh 4x6: 281 x 580 (tỉ lệ 281:580 ≈ 0.4845)
   const is2x6 = selectedFrameSize === '2x6'
   const is9Grid = selectedLayout.photosCount === 9
   const targetSlotDimensions = is2x6
     ? { w: 528, h: 352, label: '528×352' }
     : is9Grid
-      ? { w: 381, h: 580, label: '381×580' }
+      ? { w: 281, h: 580, label: '281×580' }
       : { w: 544, h: 726, label: '544×726' }
+
+  // ── Tính toán khung vàng (Safe Area Viewfinder Guide) trong vùng Live View 16:9 ──
+  // - Khung vàng sử dụng chính xác tỷ lệ của ô ảnh trong layout.
+  // - Tự động co từ hai bên vào, căn giữa Live View.
+  // - Ưu tiên giữ chiều cao tối đa (100%) trong Live View; tính lại chiều rộng theo tỷ lệ.
+  // - Nếu chiều rộng vượt quá hiển thị, tự động thu nhỏ cả hai chiều để nằm trọn trong Live View.
+  const slotAspect = targetSlotDimensions.w / targetSlotDimensions.h
+  const liveAspect = 16 / 9
+  const guideBoxStyle: React.CSSProperties = slotAspect <= liveAspect
+    ? {
+        height: '100%',
+        width: `${((slotAspect / liveAspect) * 100).toFixed(4)}%`,
+        aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
+      }
+    : {
+        width: '100%',
+        height: `${((liveAspect / slotAspect) * 100).toFixed(4)}%`,
+        aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
+      }
 
   const [hasCamera, setHasCamera] = useState<boolean>(false)
   const [activeFlyout, setActiveFlyout] = useState<'filter' | null>(null)
@@ -127,6 +148,9 @@ export default function CaptureScreen() {
   const [sessionResetCount, setSessionResetCount] = useState<number>(0)
 
   useEffect(() => {
+    // Đánh thức Canon Daemon và gia hạn shutdown timer
+    fetch('http://127.0.0.1:8899/wake').catch(() => {})
+
     // Khởi tạo phiên trong SQLite persistent session storage (FR-06)
     api.session?.create({
       id: sessionId,
@@ -149,6 +173,8 @@ export default function CaptureScreen() {
 
   // Khởi động Camera thiết bị
   const startCamera = useCallback(async (deviceId?: string) => {
+    // Gửi tín hiệu đánh thức camera daemon trước khi khởi động luồng
+    fetch('http://127.0.0.1:8899/wake').catch(() => {})
     // 0. Kiểm tra Canon Persistent Daemon (Direct EDSDK)
     const userCameraType = useAppStore.getState().cameraType
     let daemonActive = false
@@ -484,7 +510,7 @@ export default function CaptureScreen() {
   const isPhotoboothFull = filledSlotsCount === totalShots
 
   async function handleTakePhotoboothShot() {
-    if (isCapturingShot) return
+    if (isCapturingShot || isFlashCoolingDown) return
     if (isPhotoboothFull && retakeSlotIndex === null) return
 
     // Xác định ô sẽ được gán ảnh vào
@@ -519,6 +545,8 @@ export default function CaptureScreen() {
       setCurrentCountdown(0)
       setShowFlash(true)
       setTimeout(() => setShowFlash(false), 450)
+      setIsFlashCoolingDown(true)
+      setTimeout(() => setIsFlashCoolingDown(false), SELFBOOTH_FLASH_RECYCLE_MS)
 
       // 2. Chụp khung hình tại đúng 0s (người dùng đã cười tươi tạo dáng xong)
       let photoDataUrl = grabVideoFrame()
@@ -711,6 +739,8 @@ export default function CaptureScreen() {
       setCurrentCountdown(0)
       setShowFlash(true)
       setTimeout(() => setShowFlash(false), 450)
+      setIsFlashCoolingDown(true)
+      setTimeout(() => setIsFlashCoolingDown(false), SELFBOOTH_FLASH_RECYCLE_MS)
 
       let photoDataUrl = grabVideoFrame()
       if (photoDataUrl) {
@@ -960,8 +990,8 @@ export default function CaptureScreen() {
             </div>
           ) : (
             <div className="countdown-capsule-group">
-              {[5, 3].map((sec) => {
-                const isLocked = isSessionActive || slots.some(Boolean) || isCapturingShot
+              {[8, 5].map((sec) => {
+                const isLocked = isSessionActive || slots.some(Boolean) || isCapturingShot || isFlashCoolingDown
                 return (
                   <button
                     key={sec}
@@ -1133,27 +1163,11 @@ export default function CaptureScreen() {
 
             {/* ── Khung Giới Hạn Tỉ Lệ Chuẩn (Safe Area Viewfinder Guide) cho khách đứng đúng khuôn hình (Chỉ dùng cho Photobooth) ── */}
             {!isSelfboothMode && (
-              <div className="capture-aspect-guide-overlay">
-                <div
-                  className="capture-aspect-guide-box"
-                  style={{
-                    aspectRatio: `${targetSlotDimensions.w} / ${targetSlotDimensions.h}`,
-                  }}
-                >
-                  <div className="guide-corner top-left" />
-                  <div className="guide-corner top-right" />
-                  <div className="guide-corner bottom-left" />
-                  <div className="guide-corner bottom-right" />
-
-                  <div className="guide-hint-text">
-                    Đứng trong khung này để không bị cắt ảnh
-                  </div>
-                </div>
-              </div>
+              <CaptureAspectGuide guideBoxStyle={guideBoxStyle} />
             )}
 
-            {/* ── Màn hình Lazy Loading xoay xoay trong 2.5s hồi đèn flash cho Selfbooth ── */}
-            {isSelfboothMode && isFlashCoolingDown && (
+            {/* ── Màn hình Lazy Loading xoay tròn 2.5s sau mỗi lần chụp (hồi đèn flash & xử lý ảnh) ── */}
+            {isFlashCoolingDown && (
               <div className="selfbooth-loading-overlay animate-fade-in">
                 <div className="selfbooth-loading-spinner-box">
                   <div className="selfbooth-spinner-ring" />
@@ -1197,77 +1211,20 @@ export default function CaptureScreen() {
 
         {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth ── */}
         {!isSelfboothMode && (
-          <aside className="slots-grid-col-2 right-slots-dock">
-            <div className={`live-slots-deck vertical-slots-deck ${totalShots >= 6 ? 'multi-col-deck' : ''} shots-${totalShots} frame-${selectedFrameSize}`}>
-              <div className={`live-slots-list ${totalShots >= 6 ? 'slots-grid-2cols' : ''} shots-${totalShots}`}>
-                {Array.from({ length: totalShots }).map((_, index) => {
-                  const slotItem = slots[index]
-                  const isFilled = slotItem !== null
-                  const isRetaking = retakeSlotIndex === index
-                  const isJustCaptured = justCapturedSlot === index
-                  const isCenteredLast = totalShots === 9 && index === 8
-                  const deleteCount = slotDeleteCounts[index] || 0
-                  const canDelete = deleteCount < 2
-
-                  return (
-                    <div
-                      key={index}
-                      className={`live-slot-thumb slot-ratio-${is2x6 ? '2x6' : is9Grid ? '4x6-9' : '4x6-4'} ${isFilled ? 'filled' : 'empty'} ${isRetaking ? 'retaking-target' : ''} ${isJustCaptured ? 'just-captured' : ''} ${isCenteredLast ? 'slot-thumb-centered-last' : ''}`}
-                      onClick={() => {
-                        if (!isCapturingShot) {
-                          if (isFilled) {
-                            if (canDelete) {
-                              handleDeleteSlot(index)
-                            }
-                          } else {
-                            setRetakeSlotIndex(index)
-                          }
-                        }
-                      }}
-                      title={
-                        isFilled
-                          ? canDelete
-                            ? `Bấm ✕ để xóa ảnh ô ${index + 1} và chụp lại ảnh khác (còn ${2 - deleteCount} lần)`
-                            : `Ô ${index + 1} đã hết 2 lượt xóa chụp lại`
-                          : `Ô ${index + 1} đang chờ chụp`
-                      }
-                    >
-                      {isFilled ? (
-                        <>
-                          <img src={slotItem.compositedPath || slotItem.rawPath} alt={`Slot ${index + 1}`} />
-                          <span className="slot-index-badge">{index + 1}</span>
-                          {!isCapturingShot && canDelete && (
-                            <button
-                              className="slot-delete-btn"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteSlot(index)
-                              }}
-                              title={`Xóa ảnh ô ${index + 1} để chụp lại (còn ${2 - deleteCount} lần)`}
-                              aria-label={`Xóa ảnh ô ${index + 1}`}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="slot-empty-content">
-                          <span className="slot-empty-plus">+</span>
-                          <span className="slot-empty-label">Ô {index + 1}</span>
-                          {isRetaking && (
-                            <span className="slot-retake-used-tag">Chụp lại</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="live-slots-counter">
-                {filledSlotsCount}/{totalShots}
-              </div>
-            </div>
-          </aside>
+          <LiveSlotsDock
+            totalShots={totalShots}
+            selectedFrameSize={selectedFrameSize}
+            slots={slots}
+            retakeSlotIndex={retakeSlotIndex}
+            justCapturedSlot={justCapturedSlot}
+            slotDeleteCounts={slotDeleteCounts}
+            isCapturingShot={isCapturingShot}
+            targetSlotDimensions={targetSlotDimensions}
+            is2x6={is2x6}
+            is9Grid={is9Grid}
+            onDeleteSlot={handleDeleteSlot}
+            onSelectRetakeSlot={setRetakeSlotIndex}
+          />
         )}
       </div>
 
@@ -1295,18 +1252,20 @@ export default function CaptureScreen() {
                   <button
                     className="start-capture-btn-pink"
                     id="start-capture-button"
-                    disabled={isCapturingShot}
+                    disabled={isCapturingShot || isFlashCoolingDown}
                     onClick={handleTakePhotoboothShot}
                   >
                     <Camera size={26} strokeWidth={2} />
                     <span>
                       {isCapturingShot
                         ? `Đang đếm ngược...`
-                        : retakeSlotIndex !== null
-                          ? `📸 Chụp Lại Ô ${retakeSlotIndex + 1}`
-                          : filledSlotsCount === 0
-                            ? `Bắt đầu chụp (Ảnh 1 / ${totalShots})`
-                            : `Chụp tiếp ảnh ${filledSlotsCount + 1} / ${totalShots}`}
+                        : isFlashCoolingDown
+                          ? `Đang xử lý ảnh...`
+                          : retakeSlotIndex !== null
+                            ? `📸 Chụp Lại Ô ${retakeSlotIndex + 1}`
+                            : filledSlotsCount === 0
+                              ? `Bắt đầu chụp (Ảnh 1 / ${totalShots})`
+                              : `Chụp tiếp ảnh ${filledSlotsCount + 1} / ${totalShots}`}
                     </span>
                   </button>
                 )}

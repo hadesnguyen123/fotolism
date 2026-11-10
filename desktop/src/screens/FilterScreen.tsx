@@ -275,17 +275,8 @@ export default function FilterScreen() {
         </section>
       </main>
 
-      {/* ── Bottom Bar: Nút Quay Lại (Trái) & Nút Tiếp Tục (Phải) Không Icon ── */}
-      <footer className="filter-bottom-nav">
-        <button
-          className="btn-filter-back"
-          onClick={() => setScreen('select-theme')}
-          title="Quay lại"
-          aria-label="Quay lại"
-        >
-          Quay lại
-        </button>
-
+      {/* ── Bottom Bar: Nút Tiếp Tục (Phải) Không Icon ── */}
+      <footer className="filter-bottom-nav" style={{ justifyContent: 'flex-end' }}>
         <button
           className="btn-filter-proceed"
           onClick={() => setShowFinishConfirm(true)}

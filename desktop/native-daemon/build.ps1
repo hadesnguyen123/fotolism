@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sourceFile = Join-Path $scriptDir "CanonDaemon.cs"
+$sourceFiles = Get-ChildItem -Path $scriptDir -Filter *.cs | ForEach-Object { $_.FullName }
 $outputExe = Join-Path (Split-Path -Parent $scriptDir) "electron\fotolism_canon_daemon.exe"
 $cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 
@@ -18,10 +18,9 @@ try {
 } catch {}
 
 Write-Host "=== ĐANG BIÊN DỊCH FOTOLISM CANON DAEMON 64-BIT ===" -ForegroundColor Cyan
-Write-Host "Source: $sourceFile"
 Write-Host "Output: $outputExe"
 
-& $cscPath /target:exe /platform:x64 /optimize+ "/out:$outputExe" "$sourceFile"
+& $cscPath /target:exe /platform:x64 /optimize+ "/out:$outputExe" $sourceFiles
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path $outputExe)) {
     $size = (Get-Item $outputExe).Length

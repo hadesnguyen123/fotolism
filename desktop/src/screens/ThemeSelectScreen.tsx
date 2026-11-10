@@ -1,8 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { useAppStore, THEME_OPTIONS, COLOR_FILTERS, type ThemeItem, type ColorFilterItem } from '../store/appStore'
+import { useAppStore, THEME_OPTIONS, type ThemeItem } from '../store/appStore'
 import { DEFAULT_EVENT_NAME, resolveAssetUrl } from '../lib/constants'
-import { Check, Camera, Layers, Palette, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Camera, Layers } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
+import { FrameCarousel } from '../components/theme/FrameCarousel'
+import { FilterSelectorDeck } from '../components/theme/FilterSelectorDeck'
 import './ThemeSelectScreen.css'
 
 export default function ThemeSelectScreen() {
@@ -53,7 +55,6 @@ export default function ThemeSelectScreen() {
 
   const photos = session?.photos || []
   const photosCount = selectedLayout.photosCount || 4
-  const isSelfbooth = eventConfig.captureMode === 'selfbooth'
   const displayedPhotos = photos.length > 0 
     ? photos.slice(0, photosCount) 
     : Array.from({ length: photosCount }).map((_, i) => ({
@@ -367,204 +368,33 @@ export default function ThemeSelectScreen() {
 
         {/* CỘT PHẢI: Gồm 2 section (Khung chọn Frame bên trên & Khung chọn Filter bên dưới) */}
         <section className="theme-control-column">
-          {/* ── SECTION 1: CHỌN FRAME ── */}
-          <div className="theme-carousel-card">
-            {/* Card Header: Tiêu đề "Chọn frame" + Tag bố cục */}
-            <div className="carousel-card-header">
-              <div className="carousel-card-title-group">
-                <Layers className="control-header-icon" size={20} strokeWidth={2.4} />
-                <h2 className="carousel-card-title">Chọn frame</h2>
-              </div>
-              <div className="carousel-card-meta-right">
-                <span className="carousel-layout-tag">
-                  {selectedLayout.photosCount || 4} ảnh / {selectedFrameSize === '2x6' ? 'dải dọc' : 'khổ 4x6'}
-                </span>
-              </div>
-            </div>
+          <FrameCarousel
+            sortedThemes={sortedThemes}
+            selectedTheme={selectedTheme}
+            selectedLayout={selectedLayout}
+            selectedFrameSize={selectedFrameSize}
+            isGrid={isGrid}
+            activeSlideIndex={activeSlideIndex}
+            trackRef={trackRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUpOrLeave={handlePointerUpOrLeave}
+            onTrackScroll={handleTrackScroll}
+            onScrollPrev={handleScrollPrev}
+            onScrollNext={handleScrollNext}
+            onSelectTheme={handleSelectThemeItem}
+            onDotClick={handleDotClick}
+          />
 
-            {/* Vùng Trượt Cảm Ứng (Touch-First Slide Viewport kèm nút mũi tên tiện ích) */}
-            <div className="carousel-slider-wrapper">
-              <button
-                type="button"
-                className="carousel-nav-btn prev"
-                onClick={handleScrollPrev}
-                aria-label="Khung trước"
-              >
-                <ChevronLeft size={20} strokeWidth={2.6} />
-              </button>
-
-              <div className="carousel-touch-viewport">
-                <div
-                  className="carousel-items-track"
-                  ref={trackRef}
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUpOrLeave}
-                  onPointerLeave={handlePointerUpOrLeave}
-                  onPointerCancel={handlePointerUpOrLeave}
-                  onScroll={handleTrackScroll}
-                >
-                  {sortedThemes.map((theme, index) => {
-                    const isSelected = selectedTheme.id === theme.id
-                    return (
-                      <div
-                        key={theme.id}
-                        className={`frame-mini-wrapper ${isSelected ? 'selected' : ''}`}
-                        onClick={() => handleSelectThemeItem(theme, index)}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={theme.name}
-                      >
-                        {/* Badge tích chọn màu nâu góc trên bên phải */}
-                        {isSelected && (
-                          <div className="frame-selected-badge" aria-hidden="true">
-                            <Check size={14} strokeWidth={3.2} />
-                          </div>
-                        )}
-
-                        {/* Khung dải mini thể hiện màu sắc / phong cách */}
-                        <div
-                          className={`frame-mini-item frame-style-${theme.id} ${isGrid ? 'layout-4x6' : 'layout-2x6'}`}
-                          style={{
-                            backgroundColor: theme.bgColor,
-                            borderColor: theme.borderColor,
-                          }}
-                        >
-                          {/* Hiển thị hình ảnh khung đồ họa nếu có */}
-                          {theme.overlayUrl ? (
-                            <img
-                              src={resolveAssetUrl(theme.overlayUrl)}
-                              alt={theme.name}
-                              className="frame-mini-overlay-img"
-                            />
-                          ) : (
-                            <>
-                              {/* Các ô chữ nhật rỗng màu trắng mô phỏng bố cục */}
-                              <div
-                                className={`frame-mini-slots ${isGrid ? 'mini-grid' : 'mini-strip'}`}
-                                style={
-                                  isGrid
-                                    ? {
-                                        gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
-                                        gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
-                                      }
-                                    : undefined
-                                }
-                              >
-                                {Array.from({
-                                  length: selectedLayout.photosCount || 4,
-                                }).map((_, slotIdx) => (
-                                  <div key={slotIdx} className="frame-mini-slot-box" />
-                                ))}
-                              </div>
-
-                              {/* Chân dải mini in chữ fotolism */}
-                              <div
-                                className="frame-mini-brand-footer"
-                                style={{ color: theme.textColor }}
-                              >
-                                fotolism
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="carousel-nav-btn next"
-                onClick={handleScrollNext}
-                aria-label="Khung tiếp theo"
-              >
-                <ChevronRight size={20} strokeWidth={2.6} />
-              </button>
-            </div>
-
-            {/* Dải chấm tròn phân trang (Dots Indicator) */}
-            <div className="carousel-dots-row" aria-label="Bộ chọn trang theme">
-              {sortedThemes.map((theme, index) => (
-                <button
-                  key={theme.id}
-                  className={`carousel-dot ${index === activeSlideIndex ? 'active' : ''}`}
-                  onClick={() => handleDotClick(index)}
-                  title={theme.name}
-                  aria-label={`Chọn ${theme.name}`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* ── SECTION 2: CHỌN FILTER (3 BỘ LỌC MÀU - DẠNG HÌNH TRÒN MÀU SẮC) ── */}
-          <div className="theme-filter-card">
-            <div className="filter-section-header">
-              <div className="carousel-card-title-group">
-                <Palette className="control-header-icon" size={20} strokeWidth={2.4} />
-                <h2 className="carousel-card-title">Chọn filter</h2>
-              </div>
-            </div>
-
-            <div className="filter-circles-row" role="radiogroup" aria-label="Chọn bộ lọc màu">
-              {COLOR_FILTERS.map((filter: ColorFilterItem) => {
-                const isSelected = selectedFilter.id === filter.id
-                const circleBg =
-                  filter.id === 'normal'
-                    ? '#E4D2C3'
-                    : filter.id === 'vintage_noir'
-                    ? '#262626'
-                    : '#96532B'
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    className={`filter-circle-btn ${isSelected ? 'selected' : ''}`}
-                    style={{
-                      backgroundColor: circleBg,
-                      ['--circle-color' as any]: circleBg,
-                    }}
-                    onClick={() => selectFilter(filter)}
-                    title={filter.name}
-                    aria-label={`Bộ lọc ${filter.name}`}
-                  >
-                    {isSelected && (
-                      <Check
-                        size={20}
-                        strokeWidth={3}
-                        color="#FFFFFF"
-                        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }}
-                      />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <FilterSelectorDeck
+            selectedFilter={selectedFilter}
+            onSelectFilter={selectFilter}
+          />
         </section>
       </main>
 
-      {/* ── Bottom Nav: Nút Quay lại (bên trái) & Nút Tiếp tục (bên phải) ── */}
+      {/* ── Bottom Nav: Nút Tiếp tục (bên phải) ── */}
       <footer className="theme-bottom-nav">
-        <button
-          type="button"
-          className="btn-theme-back"
-          onClick={() => {
-            if (isSelfbooth) {
-              setScreen('selfbooth-setup')
-            } else {
-              setScreen('capture')
-            }
-          }}
-          title="Quay lại"
-          aria-label="Quay lại"
-        >
-          Quay lại
-        </button>
-
         <button
           type="button"
           className="btn-theme-proceed"

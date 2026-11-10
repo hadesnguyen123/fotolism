@@ -28,8 +28,8 @@ const edsdkDevPlugin = (): Plugin => ({
           if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true })
           }
-          const canonExe = 'F:/JoyBooth/desktop/electron/fotolism_canon_capture.exe'
-          const script = 'F:/JoyBooth/desktop/electron/canon_edsdk_capture.ps1'
+          const canonExe = 'F:/Fotolism/desktop/electron/fotolism_canon_capture.exe'
+          const script = 'F:/Fotolism/desktop/electron/canon_edsdk_capture.ps1'
           const captureCmd = fs.existsSync(canonExe)
             ? `"${canonExe}" -savePath "${targetPath}"`
             : `powershell -NoProfile -ExecutionPolicy Bypass -File "${script}" -savePath "${targetPath}"`

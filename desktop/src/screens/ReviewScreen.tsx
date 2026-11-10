@@ -1,20 +1,21 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
-import { generateStripComposite, preparePrintImageForDNP } from '../lib/canvasCompositor'
+import { generateStripComposite, preparePrintImageForDNP, type SlotOffset } from '../lib/canvasCompositor'
 import {
   FILE_PREFIX_SHOT,
   FILE_PREFIX_FINAL,
   SESSION_FOLDER_PREFIX,
-  BRAND_NAME,
   DEFAULT_GDRIVE_FOLDER_ID,
   DEFAULT_GDRIVE_WEBHOOK_URL,
   DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
 import QRCode from 'qrcode'
-import { QrCode, Loader2, AlertCircle, RefreshCw, Printer } from 'lucide-react'
+import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
+import { InteractiveStripPreview } from '../components/review/InteractiveStripPreview'
+import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import './ReviewScreen.css'
 
 export default function ReviewScreen() {
@@ -39,6 +40,7 @@ export default function ReviewScreen() {
     setDriveSyncError: setSyncError,
     cloudFolderUrl,
     setCloudFolderUrl,
+    deviceConfig,
   } = useAppStore()
 
   const defaultCopies = session?.paidCopies || selectedCopies || (selectedFrameSize === '2x6' ? 2 : 1)
@@ -66,15 +68,147 @@ export default function ReviewScreen() {
 
   const isSelfboothMode = eventConfig.captureMode === 'selfbooth'
 
-  // Link đích của mã QR: Ưu tiên link thư mục Google Drive vừa được tạo khi bật gdriveEnabled
-  const webGalleryUrl = `http://localhost:3000/gallery/${session?.sessionId || subfolderName}`
-  const targetCloudUrl = (eventConfig.gdriveEnabled && cloudFolderUrl)
-    ? cloudFolderUrl
-    : (session?.storageUrl || (isSelfboothMode ? webGalleryUrl : `https://pub-r2.fotolism.vn/sessions/${subfolderName}/${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`))
+  // ── Offset cân chỉnh vị trí ảnh từng ô (Normalized Offset -1.0 đến +1.0) ──
+  const [slotOffsets, setSlotOffsets] = useState<SlotOffset[]>(() =>
+    Array(photos.length).fill({ x: 0, y: 0 })
+  )
+  const slotOffsetsRef = useRef<SlotOffset[]>(slotOffsets)
+  slotOffsetsRef.current = slotOffsets
 
-  // Tạo mã QR Code CHỈ KHI link hợp lệ và đã đồng bộ xong hoàn toàn
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null)
+  const dragStartRef = useRef<{
+    index: number
+    startX: number
+    startY: number
+    initOffset: SlotOffset
+    slotPixelWidth: number
+    slotPixelHeight: number
+  } | null>(null)
+
+  const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
+  const totalW = is2x6 ? 600 : 1200
+  const totalH = 1800
+
+  const frameSlots = useMemo(() => {
+    if (selectedTheme?.slots && selectedTheme.slots.length > 0) {
+      return selectedTheme.slots.map((s: { x: number; y: number; w: number; h: number }) => ({
+        xPercent: (s.x / totalW) * 100,
+        yPercent: (s.y / totalH) * 100,
+        wPercent: (s.w / totalW) * 100,
+        hPercent: (s.h / totalH) * 100,
+        slotW: s.w,
+        slotH: s.h,
+        aspectRatio: s.w / s.h,
+      }))
+    }
+    const totalSlots = selectedLayout.photosCount || 4
+    const cols = selectedLayout.cols || (is2x6 ? 1 : 2)
+    const rows = selectedLayout.rows || Math.max(1, Math.ceil(totalSlots / cols))
+    const footerHeight = selectedTheme?.hideFooter ? 0 : 150
+    const padX = is2x6 ? 36 : 50
+    const padTop = 40
+    const gap = 20
+    const availableHeight = totalH - padTop - footerHeight
+    const defW = (totalW - padX * 2 - gap * (cols - 1)) / cols
+    const defH = (availableHeight - gap * (rows - 1)) / rows
+
+    return Array.from({ length: totalSlots }).map((_, i) => {
+      const colIdx = i % cols
+      const rowIdx = Math.floor(i / cols)
+      const sx = padX + colIdx * (defW + gap)
+      const sy = padTop + rowIdx * (defH + gap)
+      return {
+        xPercent: (sx / totalW) * 100,
+        yPercent: (sy / totalH) * 100,
+        wPercent: (defW / totalW) * 100,
+        hPercent: (defH / totalH) * 100,
+        slotW: defW,
+        slotH: defH,
+        aspectRatio: defW / defH,
+      }
+    })
+  }, [selectedTheme, selectedLayout, is2x6, totalW, totalH])
+
+  const regenerateComposite = useCallback(
+    async (offsets: SlotOffset[]) => {
+      try {
+        const photoUrls = photos.map((p) => p.compositedPath || p.enhancedPath || p.rawPath).filter(Boolean)
+        const stripUrl = await generateStripComposite({
+          photos: photoUrls,
+          frameSize: selectedFrameSize,
+          layout: selectedLayout,
+          theme: selectedTheme,
+          stickers: placedStickers,
+          filter: selectedFilter,
+          eventName: eventConfig.eventName,
+          eventDate: eventConfig.date,
+          slotOffsets: offsets,
+        })
+        setCompositeStripUrl(stripUrl)
+      } catch (err) {
+        console.warn('Error regenerating strip composite:', err)
+      }
+    },
+    [photos, selectedFrameSize, selectedLayout, selectedTheme, placedStickers, selectedFilter, eventConfig]
+  )
+
+  const handlePointerDown = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.currentTarget
+    try {
+      target.setPointerCapture(e.pointerId)
+    } catch {}
+    const rect = target.getBoundingClientRect()
+    dragStartRef.current = {
+      index,
+      startX: e.clientX,
+      startY: e.clientY,
+      initOffset: slotOffsetsRef.current[index] || { x: 0, y: 0 },
+      slotPixelWidth: rect.width,
+      slotPixelHeight: rect.height,
+    }
+    setActiveDragIndex(index)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current || activeDragIndex === null) return
+    const { index, startX, startY, initOffset, slotPixelWidth, slotPixelHeight } = dragStartRef.current
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+
+    // Sensitivity: vuốt 45% bề rộng ô tương ứng dịch chuyển hết biên (offset 1.0)
+    const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
+    const sensitivityY = Math.max(slotPixelHeight * 0.45, 40)
+
+    const nextX = Math.max(-1, Math.min(1, initOffset.x + dx / sensitivityX))
+    const nextY = Math.max(-1, Math.min(1, initOffset.y + dy / sensitivityY))
+
+    setSlotOffsets((prev) => {
+      const next = [...prev]
+      next[index] = { x: nextX, y: nextY }
+      return next
+    })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeDragIndex !== null) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+      const finalOffsets = [...slotOffsetsRef.current]
+      dragStartRef.current = null
+      setActiveDragIndex(null)
+      regenerateComposite(finalOffsets)
+    }
+  }
+
+  // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
+  const cmsBaseUrl = (deviceConfig?.cms_url || 'https://fotolism-cms.vercel.app').replace(/\/$/, '')
+  const webGalleryUrl = `${cmsBaseUrl}/gallery/${session?.sessionId || subfolderName}`
+  const targetCloudUrl = webGalleryUrl
+
+  // Tạo mã QR Code cho Cloud Gallery
   useEffect(() => {
-    if (!targetCloudUrl || (eventConfig.gdriveEnabled && !driveSyncDone)) {
+    if (!targetCloudUrl) {
       setQrDataUrl('')
       return
     }
@@ -86,7 +220,7 @@ export default function ReviewScreen() {
     })
       .then((url) => setQrDataUrl(url))
       .catch((err) => console.error('Error generating QR:', err))
-  }, [targetCloudUrl, eventConfig.gdriveEnabled, driveSyncDone])
+  }, [targetCloudUrl])
 
   // Sinh bản ghép canvas composite chất lượng cao & Đẩy ảnh lên Google Drive
   useEffect(() => {
@@ -205,6 +339,7 @@ export default function ReviewScreen() {
           filter: selectedFilter,
           eventName: eventConfig.eventName,
           eventDate: eventConfig.date,
+          slotOffsets: slotOffsetsRef.current,
         })
 
         if (!isMounted) return
@@ -564,14 +699,6 @@ export default function ReviewScreen() {
       }
     }
 
-    const isGrid =
-      selectedLayout.strip === false ||
-      selectedLayout.previewType === '4_grid' ||
-      selectedLayout.previewType === '6_grid' ||
-      selectedLayout.previewType === '8_grid' ||
-      selectedLayout.previewType === '9_grid' ||
-      (selectedLayout.cols !== undefined && selectedLayout.cols > 1)
-
     return (
       <div className="review-screen-pastel" id="review-screen">
         {/* ── Fixed Brand Logo góc trên bên trái ── */}
@@ -678,65 +805,20 @@ export default function ReviewScreen() {
                       Đang hoàn thiện dải ảnh in...
                     </span>
                   </div>
-                ) : compositeStripUrl ? (
-                  <div className="final-rendered-strip-box animate-pop">
-                    <img
-                      src={compositeStripUrl}
-                      alt={`${BRAND_NAME} Final Print`}
-                      className={`final-rendered-strip-img ${selectedFrameSize === '2x6' ? 'strip-2x6-view' : 'postcard-4x6-view'}`}
-                    />
-                  </div>
                 ) : (
-                  /* Fallback preview nếu chưa tải xong canvas */
-                  <div
-                    className={`photobooth-strip-paper ${selectedFrameSize === '4x6' ? 'frame-4x6-postcard' : 'frame-2x6-strip'}`}
-                    style={{
-                      background: selectedTheme.bgGradient || selectedTheme.bgColor,
-                      borderColor: selectedTheme.borderColor,
-                    }}
-                  >
-                    <div className="strip-header-deco">
-                      <span>{selectedTheme.decorations ? selectedTheme.decorations[0] : '🌸'}</span>
-                      <span className="strip-event-tag" style={{ color: selectedTheme.textColor }}>
-                        {eventConfig.eventName}
-                      </span>
-                      <span>{selectedTheme.decorations ? selectedTheme.decorations[1] : '✨'}</span>
-                    </div>
-
-                    <div
-                      className={`strip-photos-grid ${isGrid ? 'grid-mode' : 'stack-mode'}`}
-                      style={
-                        isGrid
-                          ? {
-                              gridTemplateColumns: `repeat(${selectedLayout.cols || 2}, 1fr)`,
-                              gridTemplateRows: `repeat(${selectedLayout.rows || 2}, 1fr)`,
-                            }
-                          : undefined
-                      }
-                    >
-                      {photos.map((photo, index) => (
-                        <div key={photo.id || index} className="strip-photo-item" style={{ position: 'relative' }}>
-                          <img
-                            src={photo.compositedPath || photo.enhancedPath || photo.rawPath}
-                            alt={`Shot ${index + 1}`}
-                            style={{ filter: selectedFilter.cssFilter }}
-                          />
-                          {(selectedFilter.id === 'retro_90s' || selectedFilter.hasGrain) && (
-                            <div className="retro-film-grain-overlay" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="strip-footer-deco">
-                      <span className="strip-logo-text" style={{ color: selectedTheme.textColor }}>
-                        {BRAND_NAME}
-                      </span>
-                      <span className="strip-date-text" style={{ color: selectedTheme.textColor }}>
-                        {eventConfig.date}
-                      </span>
-                    </div>
-                  </div>
+                  <InteractiveStripPreview
+                    selectedFrameSize={selectedFrameSize}
+                    selectedTheme={selectedTheme}
+                    selectedFilter={selectedFilter}
+                    is2x6={is2x6}
+                    frameSlots={frameSlots}
+                    photos={photos}
+                    slotOffsets={slotOffsets}
+                    activeDragIndex={activeDragIndex}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                  />
                 )}
               </div>
             </section>
@@ -808,93 +890,24 @@ export default function ReviewScreen() {
               </div>
 
               {/* Card In Ảnh */}
-              <div className="delivery-card-pastel">
-                <div className="card-title-pastel">
-                  <Printer size={20} strokeWidth={2.2} color="var(--brand-primary, #502A1D)" />
-                  <span>In Ảnh</span>
-                </div>
-
-                <div className="print-copies-row">
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Số bản in:</span>
-                    {session?.paidCopies && (
-                      <span style={{ fontSize: '0.76rem', color: '#059669', fontWeight: 600 }}>
-                        Đã thanh toán: {session.paidCopies} {selectedFrameSize === '2x6' ? 'dải' : 'tấm'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <button
-                      className="copies-btn-pastel"
-                      onClick={() => {
-                        const step = selectedFrameSize === '2x6' ? 2 : 1
-                        const min = selectedFrameSize === '2x6' ? 2 : 1
-                        setPrintCopies((c) => Math.max(min, c - step))
-                      }}
-                      disabled={Boolean(session?.hasPrinted) || isPrinting || printCopies <= (selectedFrameSize === '2x6' ? 2 : 1)}
-                    >
-                      -
-                    </button>
-                    <span style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--color-pink-primary)' }}>
-                      {printCopies} {selectedFrameSize === '2x6' ? 'dải' : 'tấm'}
-                    </span>
-                    <button
-                      className="copies-btn-pastel"
-                      onClick={() => {
-                        const step = selectedFrameSize === '2x6' ? 2 : 1
-                        setPrintCopies((c) => Math.min(12, c + step))
-                      }}
-                      disabled={Boolean(session?.hasPrinted) || isPrinting || printCopies >= 12}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  className="print-btn-pastel"
-                  id="print-button"
-                  disabled={Boolean(session?.hasPrinted) || isPrinting || isGeneratingComposite}
-                  onClick={handlePrint}
-                >
-                  {isPrinting ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      Đang in ảnh...
-                    </>
-                  ) : session?.hasPrinted ? (
-                    'Đã in ảnh'
-                  ) : printError ? (
-                    'Thử in lại'
-                  ) : (
-                    'In ảnh'
-                  )}
-                </button>
-                {printError && (
-                  <p style={{ color: '#EF4444', fontSize: '0.85rem', marginTop: '8px', textAlign: 'center', fontWeight: 600 }}>
-                    {printError}
-                  </p>
-                )}
-              </div>
+              <PrintActionDeck
+                selectedFrameSize={selectedFrameSize}
+                paidCopies={session?.paidCopies}
+                hasPrinted={session?.hasPrinted}
+                isPrinting={isPrinting}
+                isGeneratingComposite={isGeneratingComposite}
+                printCopies={printCopies}
+                printError={printError}
+                onSetPrintCopies={setPrintCopies}
+                onPrint={handlePrint}
+              />
             </section>
           </main>
         )}
 
-        {/* ── Bottom Bar: Cách lề mặc định 100px với 2 chữ 'Quay lại' và 'Tiếp tục' ── */}
+        {/* ── Bottom Bar: Nút Tiếp Tục / Hoàn Thành ── */}
         {(Boolean(qrDataUrl) || Boolean(syncError)) && (
-          <footer className="kiosk-bottom-nav-bar review-bottom-bar-pastel animate-pop">
-            {!isSelfboothMode && (
-              <button
-                className="kiosk-nav-btn btn-nav-back"
-                onClick={() => setScreen('select-theme')}
-                title="Quay lại"
-                aria-label="Quay lại"
-              >
-                Quay lại
-              </button>
-            )}
-
+          <footer className="kiosk-bottom-nav-bar review-bottom-bar-pastel animate-pop" style={{ justifyContent: 'flex-end' }}>
             <button
               className={`kiosk-nav-btn btn-nav-next ${(isSyncingDrive || isGeneratingComposite) ? 'disabled' : ''}`}
               id="finish-button"
@@ -902,7 +915,7 @@ export default function ReviewScreen() {
               onClick={handleFinish}
               title={isSyncingDrive ? 'Đang hoàn tất lưu ảnh ngầm...' : 'Tiếp tục'}
               aria-label="Tiếp tục"
-              style={isSelfboothMode ? { margin: '0 auto' } : undefined}
+              style={{ margin: '0 0 0 auto' }}
             >
               {isSyncingDrive ? 'Đang lưu ảnh ngầm...' : `Tiếp tục (${countdownToIdle}s)`}
             </button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Cpu,
   FileText,
@@ -13,9 +13,12 @@ import {
   Eye,
   EyeOff,
   Code2,
+  Server,
+  RefreshCw,
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { GOOGLE_APPS_SCRIPT_SAMPLE } from '../../lib/gdriveWebhookScript'
+import { fotolismApi, isBrowser } from '../../lib/api'
 
 interface AdminSystemTabProps {
   daemonStatus: { running: boolean; url: string; state?: string } | null
@@ -52,6 +55,72 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
     useState<boolean>(true)
   const [showToken, setShowToken] = useState<boolean>(false)
   const [heartbeatInterval, setHeartbeatInterval] = useState<number>(30)
+
+  // Cloudflare R2 Upload Worker State
+  const [r2Concurrency, setR2Concurrency] = useState<number>(4)
+  const [r2QueueStats, setR2QueueStats] = useState<{
+    pending: number
+    uploading: number
+    uploaded: number
+    failedTasks: number
+  }>({ pending: 0, uploading: 0, uploaded: 0, failedTasks: 0 })
+  const [isRetryingUploads, setIsRetryingUploads] = useState<boolean>(false)
+  const [retryNotice, setRetryNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadR2Status() {
+      try {
+        const api = isBrowser ? null : fotolismApi
+        if (api?.storage?.getUploadStatus) {
+          const res = await api.storage.getUploadStatus()
+          if (res.success && res.data) {
+            setR2Concurrency(res.data.concurrency || 4)
+            setR2QueueStats({
+              pending: res.data.pendingTasks || 0,
+              uploading: res.data.uploadingTasks || 0,
+              uploaded: res.data.uploadedTasks || 0,
+              failedTasks: res.data.failedTasks || 0,
+            })
+          }
+        }
+      } catch {}
+    }
+
+    loadR2Status()
+    const timer = setInterval(loadR2Status, 4000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const handleChangeConcurrency = async (val: number) => {
+    setR2Concurrency(val)
+    try {
+      const api = isBrowser ? null : fotolismApi
+      if (api?.storage?.setConcurrency) {
+        await api.storage.setConcurrency(val)
+      }
+    } catch {}
+  }
+
+  const handleRetryFailedUploads = async () => {
+    setIsRetryingUploads(true)
+    setRetryNotice(null)
+    try {
+      const api = isBrowser ? null : fotolismApi
+      if (api?.storage?.retryFailedUploads) {
+        const res = await api.storage.retryFailedUploads()
+        if (res.success) {
+          setRetryNotice(`Đã khôi phục ${res.data?.retriedCount || 0} ảnh vào hàng đợi tải lên.`)
+        } else {
+          setRetryNotice(`Lỗi: ${res.error}`)
+        }
+      }
+    } catch (e: any) {
+      setRetryNotice(`Lỗi: ${e.message}`)
+    } finally {
+      setIsRetryingUploads(false)
+      setTimeout(() => setRetryNotice(null), 4000)
+    }
+  }
 
   const isCameraOnline = Boolean(daemonStatus?.running)
 
@@ -434,6 +503,148 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
           {isCopiedFolderId && (
             <span className="token-copied-pill">Đã sao chép Folder ID!</span>
           )}
+        </div>
+      </div>
+
+      {/* ── Card 6: Cloudflare R2 Storage & Upload Worker (Fotolism 3.0) ── */}
+      <div className="panel-card-touch">
+        <div className="panel-card-header">
+          <div className="panel-title-group">
+            <Server size={24} strokeWidth={2.2} />
+            <span className="panel-title-text">
+              Cloudflare R2 Storage (Fotolism 3.0)
+            </span>
+            <span className="pill-badge pill-green">
+              <span className="badge-dot-green" />
+              Sẵn sàng (R2 Bucket)
+            </span>
+          </div>
+
+          <button
+            className="btn-touch-outline"
+            disabled={isRetryingUploads}
+            onClick={handleRetryFailedUploads}
+          >
+            <RefreshCw size={18} className={isRetryingUploads ? 'animate-spin' : ''} />
+            <span>{isRetryingUploads ? 'Đang thử lại...' : 'Thử lại ảnh lỗi'}</span>
+          </button>
+        </div>
+
+        {retryNotice && (
+          <div className="shutter-result-notice" style={{ marginBottom: '14px' }}>
+            {retryNotice}
+          </div>
+        )}
+
+        <div className="system-grid-2col" style={{ marginBottom: '16px' }}>
+          <div className="form-group-touch">
+            <label className="form-label-touch">Luồng Upload Đồng Thời (Concurrency)</label>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+              {[1, 2, 4, 8].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => handleChangeConcurrency(c)}
+                  className={`btn-touch-outline ${r2Concurrency === c ? 'active' : ''}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontWeight: 'bold',
+                    backgroundColor: r2Concurrency === c ? '#502A1D' : '#ffffff',
+                    color: r2Concurrency === c ? '#ffffff' : '#502A1D',
+                    borderColor: '#502A1D',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {c} {c === 4 ? '(Chuẩn)' : 'luồng'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group-touch">
+            <label className="form-label-touch">Hàng Đợi Upload SQLite (Outbox)</label>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '8px',
+                marginTop: '6px',
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: '#f8f9fa',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  border: '1px solid #e9ecef',
+                }}
+              >
+                <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: 'bold' }}>Chờ tải</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333' }}>
+                  {r2QueueStats.pending}
+                </div>
+              </div>
+              <div
+                style={{
+                  backgroundColor: '#e7f5ff',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  border: '1px solid #d0ebff',
+                }}
+              >
+                <div style={{ fontSize: '10px', color: '#1971c2', fontWeight: 'bold' }}>Đang tải</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1971c2' }}>
+                  {r2QueueStats.uploading}
+                </div>
+              </div>
+              <div
+                style={{
+                  backgroundColor: '#ebfbee',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  border: '1px solid #d3f9d8',
+                }}
+              >
+                <div style={{ fontSize: '10px', color: '#2b8a3e', fontWeight: 'bold' }}>Hoàn tất</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#2b8a3e' }}>
+                  {r2QueueStats.uploaded}
+                </div>
+              </div>
+              <div
+                style={{
+                  backgroundColor: r2QueueStats.failedTasks > 0 ? '#fff5f5' : '#f8f9fa',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  border: r2QueueStats.failedTasks > 0 ? '1px solid #ffc9c9' : '1px solid #e9ecef',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: r2QueueStats.failedTasks > 0 ? '#e03131' : '#6c757d',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  Lỗi
+                </div>
+                <div
+                  style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    color: r2QueueStats.failedTasks > 0 ? '#e03131' : '#333',
+                  }}
+                >
+                  {r2QueueStats.failedTasks}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

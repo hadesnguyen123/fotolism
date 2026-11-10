@@ -47,6 +47,27 @@ export default function IdleScreen() {
     setIsVerifying(true)
     setPinError(null)
 
+    // ── ƯU TIÊN 0: MÃ TEST 1234 TỰ ĐỘNG VÀO NGAY LẬP TỨC ──
+    if (rawCode === '1234') {
+      setWelcomeGuest('Mã test 1234: Mở buồng chụp thành công!')
+      setTimeout(() => {
+        setShowPinModal(false)
+        setCaptureMode(pendingMode)
+        startNewSession()
+        setCustomerInfo({
+          customerName: 'Khách Test 1234',
+          customerPhone: null,
+          pinCode: '1234',
+        })
+        if (pendingMode === 'selfbooth') {
+          setScreen('selfbooth-setup')
+        } else {
+          setScreen('select-layout')
+        }
+      }, 300)
+      return
+    }
+
     // ── ƯU TIÊN 1: BACKUP VỚI MÃ PIN CỦA MÁY (OFFLINE / KHẨN CẤP / NHÂN VIÊN) ──
     const machineAdminPin = (eventConfig.adminPin || DEFAULT_ADMIN_PIN || '8888').trim()
     if (rawCode === machineAdminPin || rawCode === '8888') {
