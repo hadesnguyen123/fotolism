@@ -2,7 +2,17 @@
 Fotolism AI Service — FastAPI Application
 Chạy local: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 """
+import sys
 from contextlib import asynccontextmanager
+
+# Đảm bảo console Windows luôn encode UTF-8 an toàn, tránh lỗi UnicodeEncodeError
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,10 +25,10 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     # Startup
     await init_db()
-    print("✅ Fotolism AI Service ready on http://localhost:8000")
+    print("[AI Service] Fotolism AI Service ready on http://localhost:8000")
     yield
     # Shutdown
-    print("🛑 Fotolism AI Service shutting down")
+    print("[AI Service] Fotolism AI Service shutting down")
 
 
 app = FastAPI(

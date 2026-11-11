@@ -45,6 +45,10 @@ export async function ensureAiService(): Promise<boolean> {
             detached: true,
             stdio: 'ignore',
             windowsHide: true,
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',
+            },
         })
         aiServiceProc.unref()
 
