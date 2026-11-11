@@ -251,18 +251,21 @@ void main() {
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            float dy = uv.y - noseY;
+            float jawW = max(faceW * 0.52, 0.04);
             float jawRange = max(chinY - noseY, 0.05);
+            float dy = uv.y - noseY;
 
-            if (dy > 0.0 && uv.y < chinY + faceH * 0.05) {
+            // Chỉ nắn chỉnh vùng xương hàm (từ dưới mũi đến đáy cằm)
+            if (dy > 0.0 && uv.y < chinY) {
                 float yNorm = clamp(dy / jawRange, 0.0, 1.0);
                 float wY = 4.0 * yNorm * (1.0 - yNorm);
 
                 float dx = uv.x - centerX;
-                float jawW = max(faceW * 0.52, 0.04);
                 float xNorm = abs(dx) / jawW;
 
-                if (xNorm > 0.15 && xNorm < 1.05 && yNorm > 0.02 && yNorm < 0.98) {
+                // BẢO VỆ 100% VÙNG GIỮA MẶT (miệng, môi, nhân trung xNorm < 0.15)
+                // VÀ BẢO VỆ PHÔNG NỀN NGOÀI XƯƠNG HÀM (xNorm > 1.05)
+                if (xNorm > 0.15 && xNorm < 1.05) {
                     float tX = clamp((xNorm - 0.15) / 0.90, 0.0, 1.0);
                     float wX = 4.0 * tX * (1.0 - tX);
                     float warp = wY * wX * effectiveSlimFace;
@@ -277,7 +280,7 @@ void main() {
 
     vec3 centerColor = texture2D(u_image, uv).rgb;
 
-    // ── 4. LÀM MỊN DA DỊU NHẸ CHUẨN K-BEAUTY (KHÔNG VỠ HẠT, KHÔNG MOSAIC) ──
+    // ── 4. LÀM MỊN DA 65% (KOREAN SOFT BEAUTY CONTINUOUS SMOOTHING) ──
     float faceSmoothMask = 0.0;
     if (u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
@@ -289,64 +292,70 @@ void main() {
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            // Khóa cứng đáy cằm để bảo toàn 100% cổ áo và ngực
+            // Khóa chặn đáy cằm mượt mà, không lem ra cổ và ngực áo
             float chinCutoff = smoothstep(chinY + faceH * 0.03, chinY - faceH * 0.02, uv.y);
 
-            // Bán kính oval khuôn mặt với gradient mượt liên tục
+            // Bán kính oval khuôn mặt chuẩn C^1 smooth
             float halfW = max(faceW * 0.46, 0.03);
-            float halfH = max(faceH * 0.46, 0.04);
+            float halfH = max(faceH * 0.48, 0.04);
             vec2 normDist = vec2((uv.x - fCenter.x) / halfW, (uv.y - fCenter.y) / halfH);
             float ellipDist = length(normDist);
 
             if (ellipDist < 1.0) {
-                float m = smoothstep(1.0, 0.25, ellipDist) * chinCutoff;
+                float m = smoothstep(1.0, 0.20, ellipDist) * chinCutoff;
                 faceSmoothMask = max(faceSmoothMask, m);
             }
         }
     }
 
-    // Làm mịn dịu nhẹ (Soft blur 4 góc đối xứng, bảo toàn cấu trúc chi tiết mắt mũi)
+    // Làm mịn 65% dịu nhẹ (Bảo toàn 100% cấu trúc mắt, lông mi, lông mày)
     vec3 finalColor = centerColor;
     if (faceSmoothMask > 0.005) {
         vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y) * 2.2;
-        vec3 softBlur = centerColor * 0.36;
-        softBlur += texture2D(u_image, uv + vec2(-1.0, -1.0) * stepUV).rgb * 0.16;
-        softBlur += texture2D(u_image, uv + vec2(1.0, -1.0) * stepUV).rgb * 0.16;
-        softBlur += texture2D(u_image, uv + vec2(-1.0, 1.0) * stepUV).rgb * 0.16;
-        softBlur += texture2D(u_image, uv + vec2(1.0, 1.0) * stepUV).rgb * 0.16;
+        vec3 softBlur = centerColor * 0.35;
+        softBlur += texture2D(u_image, uv + vec2(-1.0, -1.0) * stepUV).rgb * 0.1625;
+        softBlur += texture2D(u_image, uv + vec2(1.0, -1.0) * stepUV).rgb * 0.1625;
+        softBlur += texture2D(u_image, uv + vec2(-1.0, 1.0) * stepUV).rgb * 0.1625;
+        softBlur += texture2D(u_image, uv + vec2(1.0, 1.0) * stepUV).rgb * 0.1625;
 
-        // Hòa trộn mịn dịu mượt mà (~35%), không làm mất chi tiết mắt mũi
-        finalColor = mix(centerColor, softBlur, faceSmoothMask * 0.35);
+        // Tỷ lệ mịn 65% theo chuẩn Korean Soft Beauty
+        float blendFactor = faceSmoothMask * 0.65;
+        finalColor = mix(centerColor, softBlur, blendFactor);
     }
 
-    // ── 5. MÁ HỒNG THÍCH ỨNG 15% (ROSY BLUSH CHUẨN KOREAN SOFT BEAUTY) ──
+    // ── 5. MÁ HỒNG THÍCH ỨNG 15% (Zygomatic Apple Cheek Flush) ──
     if (u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
-            vec4 vline = u_faceVLine[i];
-            float centerX = bounds.x;
-            float noseY = vline.w;
+            vec4 eyes = u_faceEyes[i];
+            vec2 leftEye = vec2(eyes.x, eyes.y);
+            vec2 rightEye = vec2(eyes.z, eyes.w);
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            vec2 leftCheek = vec2(centerX - faceW * 0.20, noseY - faceH * 0.02);
-            vec2 rightCheek = vec2(centerX + faceW * 0.20, noseY - faceH * 0.02);
-            float cheekRad = max(faceW * 0.15, 0.025);
+            vec2 rBlushCenter = vec2(leftEye.x - faceW * 0.04, leftEye.y + faceH * 0.15);
+            vec2 lBlushCenter = vec2(rightEye.x + faceW * 0.04, rightEye.y + faceH * 0.15);
+            float bRx = max(faceW * 0.16, 0.03);
+            float bRy = max(faceH * 0.11, 0.03);
 
-            float dL = distance(uv, leftCheek);
-            float dR = distance(uv, rightCheek);
-            float blushMask = max(smoothstep(cheekRad, 0.0, dL), smoothstep(cheekRad, 0.0, dR));
+            vec2 dR = (uv - rBlushCenter) / vec2(bRx, bRy);
+            vec2 dL = (uv - lBlushCenter) / vec2(bRx, bRy);
+            float distR = dot(dR, dR);
+            float distL = dot(dL, dL);
 
-            if (blushMask > 0.005) {
-                finalColor.r += blushMask * 0.022; // Sắc hồng đào tự nhiên 15%
-                finalColor.g -= blushMask * 0.006;
-                finalColor.b -= blushMask * 0.008;
-            }
+            float blushR = exp(-distR * 2.2) * clamp(1.0 - distR * 0.35, 0.0, 1.0);
+            float blushL = exp(-distL * 2.2) * clamp(1.0 - distL * 0.35, 0.0, 1.0);
+            float blushIntensity = max(blushR, blushL) * faceSmoothMask * 0.15;
+
+            // Thêm sắc hồng má đào tự nhiên (Soft Peach / Strawberry)
+            finalColor.r += blushIntensity * 0.08;
+            finalColor.g -= blushIntensity * 0.015;
+            finalColor.b += blushIntensity * 0.02;
         }
     }
 
-    // ── 6. BẢO TOÀN ÁNH SÁNG ĐÈN STUDIO (0.00 NÂNG SÁNG NHÂN TẠO) ──
+    // Nâng sáng đèn studio: 0.00 (Bảo toàn 100% ánh sáng tự nhiên từ máy ảnh Canon)
     if (u_brightness != 1.0) {
         finalColor *= u_brightness;
     }
