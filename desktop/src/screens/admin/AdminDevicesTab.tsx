@@ -11,7 +11,8 @@ import {
     Settings,
     Ban,
 } from 'lucide-react'
-import { useAppStore, BEAUTY_PRESETS } from '../../store/appStore'
+import { useAppStore } from '../../store/appStore'
+import { BeautyCameraView } from '../../components/BeautyCameraView'
 
 export type HardwareSubTab = 'camera' | 'printer' | 'remote'
 
@@ -45,6 +46,7 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
     setHardwareSubTab,
     daemonStatus,
     webcamVideoRef,
+    webcamStream,
     isTestingShutter,
     shutterTestResult,
     handleTestShutter,
@@ -72,8 +74,6 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         setBrightnessAdjust,
         beautyEnabled,
         setBeautyEnabled,
-        selectedBeautyPreset,
-        applyBeautyPreset,
         vLine,
         setVLine,
         bigEyes,
@@ -239,18 +239,20 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Viewfinder 16:9 */}
+                            {/* Viewfinder 16:9 với WebGL Beauty Real-time đồng bộ */}
                             <div className="liveview-viewfinder-box">
                                 {cameraType === 'eos' ? (
                                     isCameraOnline ? (
-                                        <img
-                                            src="http://127.0.0.1:8899/liveview"
-                                            alt="Canon Live View"
+                                        <BeautyCameraView
+                                            mjpegUrl="http://127.0.0.1:8899/liveview"
+                                            mirrorCamera={true}
+                                            beautyEnabled={beautyEnabled}
+                                            skinSmoothing={skinSmoothing}
+                                            skinToneEvenness={skinToneEvenness}
+                                            vLine={vLine}
+                                            bigEyes={bigEyes}
+                                            blush={blush}
                                             className="liveview-feed-media"
-                                            style={{
-                                                transform: 'scaleX(-1)',
-                                                filter: getBeautyFilterCss(),
-                                            }}
                                         />
                                     ) : (
                                         <div className="liveview-offline-placeholder">
@@ -266,6 +268,18 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                             </span>
                                         </div>
                                     )
+                                ) : webcamStream ? (
+                                    <BeautyCameraView
+                                        stream={webcamStream}
+                                        mirrorCamera={true}
+                                        beautyEnabled={beautyEnabled}
+                                        skinSmoothing={skinSmoothing}
+                                        skinToneEvenness={skinToneEvenness}
+                                        vLine={vLine}
+                                        bigEyes={bigEyes}
+                                        blush={blush}
+                                        className="liveview-feed-media"
+                                    />
                                 ) : (
                                     <video
                                         ref={webcamVideoRef}
@@ -561,21 +575,6 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         </button>
                                     </div>
                                 )}
-
-                                {/* Presets Nhanh */}
-                                <div className="beauty-presets-touch-row">
-                                    {BEAUTY_PRESETS.map((preset) => (
-                                        <button
-                                            key={preset.id}
-                                            className={`preset-pill-touch ${selectedBeautyPreset === preset.id ? 'active' : ''}`}
-                                            onClick={() =>
-                                                applyBeautyPreset(preset.id)
-                                            }
-                                        >
-                                            <span>{preset.name}</span>
-                                        </button>
-                                    ))}
-                                </div>
 
                                 {/* 5 Thanh Kéo Hiệu Ứng Live View Chuẩn Hóa */}
                                 <div

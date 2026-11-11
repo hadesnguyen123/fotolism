@@ -168,20 +168,38 @@ export const createBeautyCameraSlice: StateCreator<
             })
         },
 
-        setSlimFace: (slimFace) =>
-            set({ slimFace, selectedBeautyPreset: null }),
-        setVLine: (vLine) => set({ vLine, selectedBeautyPreset: null }),
-        setBigEyes: (bigEyes) => set({ bigEyes, selectedBeautyPreset: null }),
-        setSkinSmoothing: (skinSmoothing) =>
-            set({ skinSmoothing, selectedBeautyPreset: null }),
-        setSkinToneEvenness: (skinToneEvenness) =>
-            set({ skinToneEvenness, selectedBeautyPreset: null }),
-        setWhiteningTone: (whiteningTone) =>
-            set({ whiteningTone, selectedBeautyPreset: null }),
-        setRosyTone: (rosyTone) =>
-            set({ rosyTone, blush: rosyTone, selectedBeautyPreset: null }),
-        setBlush: (blush) =>
-            set({ blush, rosyTone: blush, selectedBeautyPreset: null }),
+        setSlimFace: (slimFace) => {
+            set({ slimFace, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ slimFace })
+        },
+        setVLine: (vLine) => {
+            set({ vLine, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ vLine })
+        },
+        setBigEyes: (bigEyes) => {
+            set({ bigEyes, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ bigEyes })
+        },
+        setSkinSmoothing: (skinSmoothing) => {
+            set({ skinSmoothing, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ skinSmoothing })
+        },
+        setSkinToneEvenness: (skinToneEvenness) => {
+            set({ skinToneEvenness, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ skinToneEvenness })
+        },
+        setWhiteningTone: (whiteningTone) => {
+            set({ whiteningTone, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ whiteningTone })
+        },
+        setRosyTone: (rosyTone) => {
+            set({ rosyTone, blush: rosyTone, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ rosyTone, blush: rosyTone })
+        },
+        setBlush: (blush) => {
+            set({ blush, rosyTone: blush, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ blush, rosyTone: blush })
+        },
         setGlowClarity: (glowClarity) =>
             set({ glowClarity, selectedBeautyPreset: null }),
         setBrightnessAdjust: (brightnessAdjust) =>

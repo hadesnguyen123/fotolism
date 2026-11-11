@@ -211,8 +211,8 @@ void main() {
         return;
     }
 
-    // ── 1. PHÓNG TO MẮT TỰ NHIÊN 5% (BIG EYES: 0.05) ──
-    float effBigEyes = clamp(u_bigEyes, 0.0, 0.15);
+    // ── 1. PHÓNG TO MẮT TỰ NHIÊN (BIG EYES: Target 0.05) ──
+    float effBigEyes = clamp(u_bigEyes * 0.40, 0.0, 0.40);
     if (effBigEyes > 0.001) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
@@ -220,7 +220,7 @@ void main() {
             vec2 lEye = vec2(eyes.x, eyes.y);
             vec2 rEye = vec2(eyes.z, eyes.w);
             float eyeDist = distance(lEye, rEye);
-            float eyeRad = max(eyeDist * 0.28, 0.025);
+            float eyeRad = max(eyeDist * 0.32, 0.030);
 
             // Mắt trái
             float dL = distance(uv, lEye);
@@ -242,8 +242,9 @@ void main() {
         }
     }
 
-    // ── 2. CẰM THON GỌN V-LINE 4% (V-LINE: 0.04) ──
-    float effVLine = clamp(max(u_vLine, u_slimFace), 0.0, 0.12);
+    // ── 2. CẰM THON GỌN V-LINE (V-LINE: Target 0.04) ──
+    float vLineParam = max(u_vLine, u_slimFace);
+    float effVLine = clamp(vLineParam * 0.28, 0.0, 0.28);
     if (effVLine > 0.001) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
@@ -264,10 +265,10 @@ void main() {
                 float dx = uv.x - centerX;
                 float xNorm = abs(dx) / max(faceW * 0.50, 0.03);
 
-                // BẢO VỆ 100% KHU VỰC MIỆNG/MÔI (xNorm < 0.22)
+                // BẢO VỆ 100% KHU VỰC MIỆNG/MÔI (xNorm < 0.20)
                 // VÀ BẢO VỆ 100% PHÔNG NỀN NGOÀI KHUÔN MẶT (xNorm > 1.0)
-                if (xNorm > 0.22 && xNorm < 1.0) {
-                    float tX = (xNorm - 0.22) / 0.78;
+                if (xNorm > 0.20 && xNorm < 1.0) {
+                    float tX = (xNorm - 0.20) / 0.80;
                     float wX = 4.0 * tX * (1.0 - tX);
                     uv.x += dx * wY * wX * effVLine;
                 }
@@ -334,36 +335,40 @@ void main() {
 
     vec3 resultColor = centerColor;
 
-    // ── 4. LÀM MỊN DA (0.45) & ĐỀU MÀU DA (0.30) VỚI BILATERAL EDGE-PROTECTION ──
+    // ── 4. LÀM MỊN DA & ĐỀU MÀU DA VỚI MULTI-TAP BILATERAL FILTER ──
     if (faceSkinMask > 0.01 && (u_skinSmooth > 0.001 || u_skinTone > 0.001)) {
-        vec2 stepUV = vec2(1.8 / u_resolution.x, 1.8 / u_resolution.y);
+        float rSmooth = 2.0 + clamp(u_skinSmooth, 0.0, 1.0) * 6.0;
+        vec2 stepUV = vec2(rSmooth / u_resolution.x, rSmooth / u_resolution.y);
         vec3 s1 = texture2D(u_image, uv + vec2(-stepUV.x, -stepUV.y)).rgb;
         vec3 s2 = texture2D(u_image, uv + vec2( stepUV.x, -stepUV.y)).rgb;
         vec3 s3 = texture2D(u_image, uv + vec2(-stepUV.x,  stepUV.y)).rgb;
         vec3 s4 = texture2D(u_image, uv + vec2( stepUV.x,  stepUV.y)).rgb;
-        vec3 softBlur = centerColor * 0.36 + (s1 + s2 + s3 + s4) * 0.16;
+        vec3 s5 = texture2D(u_image, uv + vec2(-stepUV.x * 0.5, 0.0)).rgb;
+        vec3 s6 = texture2D(u_image, uv + vec2( stepUV.x * 0.5, 0.0)).rgb;
+        vec3 s7 = texture2D(u_image, uv + vec2(0.0, -stepUV.y * 0.5)).rgb;
+        vec3 s8 = texture2D(u_image, uv + vec2(0.0,  stepUV.y * 0.5)).rgb;
+        vec3 softBlur = (centerColor * 0.24) + ((s1 + s2 + s3 + s4) * 0.10) + ((s5 + s6 + s7 + s8) * 0.09);
 
         // Giữ lại đường nét và vân da tự nhiên (Edge Protection, chống da nhựa)
         float diff = length(centerColor - softBlur);
-        float edgeFactor = 1.0 - smoothstep(0.04, 0.16, diff);
+        float edgeFactor = 1.0 - smoothstep(0.03, 0.22, diff);
 
-        // A. Làm mịn da (Skin Smoothing 0.45)
-        float smoothFactor = clamp(u_skinSmooth, 0.0, 1.0) * faceSkinMask * edgeFactor;
+        // A. Làm mịn da (Skin Smoothing: 0.45 Target, tỉ lệ với thanh trượt)
+        float smoothFactor = clamp(u_skinSmooth * 1.25, 0.0, 1.0) * faceSkinMask * edgeFactor;
         resultColor = mix(centerColor, softBlur, smoothFactor);
 
-        // B. Đều màu da (Skin Tone Evenness 0.30)
-        float evenFactor = clamp(u_skinTone, 0.0, 1.0) * faceSkinMask * 0.35 * edgeFactor;
-        vec3 avgTone = (centerColor + s1 + s2 + s3 + s4) * 0.20;
+        // B. Đều màu da (Skin Tone Evenness: 0.30 Target, tỉ lệ với thanh trượt)
+        float evenFactor = clamp(u_skinTone, 0.0, 1.0) * faceSkinMask * 0.65 * edgeFactor;
+        vec3 avgTone = (softBlur + s5 + s6 + s7 + s8) * 0.20;
         resultColor = mix(resultColor, avgTone, evenFactor);
     }
 
-    // ── 5. MÁ HỒNG TỰ NHIÊN (BLUSH: 0.10) ──
+    // ── 5. MÁ HỒNG TỰ NHIÊN (BLUSH: 0.10 Target, tỉ lệ với thanh trượt) ──
     float effBlush = clamp(u_rosyTone, 0.0, 1.0);
     if (blushMask > 0.01 && effBlush > 0.001) {
-        float bIntensity = blushMask * effBlush * 0.15;
-        resultColor.r += bIntensity * 0.08;
-        resultColor.g -= bIntensity * 0.015;
-        resultColor.b += bIntensity * 0.01;
+        vec3 blushPeach = vec3(0.96, 0.45, 0.50);
+        float bWeight = blushMask * effBlush * 0.55;
+        resultColor = mix(resultColor, mix(resultColor, blushPeach, 0.40), bWeight);
     }
 
     gl_FragColor = vec4(clamp(resultColor, 0.0, 1.0), 1.0);
