@@ -37,10 +37,10 @@ MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "face_dete
 class EnhanceRequest(BaseModel):
     imagePath: str
     beautyLevel: int = Field(50, ge=0, le=100, description="Cường độ Beauty tổng thể (0 = tắt beauty, chỉ áp dụng style)")
-    skinEvening: float = Field(0.83, ge=0.0, le=1.0, description="Mức làm đều màu da (0.0 đến 1.0)")
-    blemishRemoval: float = Field(0.61, ge=0.0, le=1.0, description="Mức giảm khuyết điểm (0.0 đến 1.0)")
-    darkCirclesReduction: float = Field(0.70, ge=0.0, le=1.0, description="Mức giảm quầng thâm mắt (0.0 đến 1.0)")
-    clarityGlow: float = Field(-48.0, ge=-100.0, le=100.0, description="Độ mềm / độ trong bề mặt")
+    skinEvening: float = Field(0.55, ge=0.0, le=1.0, description="Mức làm đều màu da (0.0 đến 1.0)")
+    blemishRemoval: float = Field(0.55, ge=0.0, le=1.0, description="Mức giảm khuyết điểm (0.0 đến 1.0)")
+    darkCirclesReduction: float = Field(0.40, ge=0.0, le=1.0, description="Mức giảm quầng thâm mắt (0.0 đến 1.0)")
+    clarityGlow: float = Field(-10.0, ge=-100.0, le=100.0, description="Độ mềm / độ trong bề mặt")
     rosyGlow: float = Field(0.00, ge=0.0, le=1.0, description="Sắc hồng tự nhiên trên midtone (0.0 đến 1.0)")
     sharpen: bool = Field(False, description="Bật/tắt sharpening bổ sung (mặc định False theo C1)")
     styleId: str = Field("c1_test_style", description="Mã Style LUT")
@@ -166,7 +166,7 @@ def apply_under_eye_correction(
             loc_x1 = max(0, ex - int(bw * 0.10))
             loc_x2 = min(w, ex + int(bw * 0.10))
             loc_patch = gray[loc_y1:loc_y2, loc_x1:loc_x2]
-            target_local_lum = float(np.percentile(loc_patch, 75)) if loc_patch.size > 0 else 185.0
+            target_local_lum = float(np.percentile(loc_patch, 50)) if loc_patch.size > 0 else 160.0
 
             x1 = max(0, cen_x - rx)
             x2 = min(w, cen_x + rx)
@@ -199,7 +199,7 @@ def apply_under_eye_correction(
             patch_lum = gray[y1:y2, x1:x2]
             deficit = np.maximum(0.0, target_local_lum - patch_lum)
 
-            lift = deficit * crescent_w * (0.86 * intensity)
+            lift = deficit * crescent_w * (0.45 * intensity)
             out[y1:y2, x1:x2] += lift[..., np.newaxis]
 
     return np.clip(out, 0, 255).astype(np.uint8)
@@ -424,6 +424,9 @@ async def enhance_image(req: EnhanceRequest):
                     k_cfg.rosyBlush = float(np.clip(k_cfg.rosyBlush * scale, 0.0, 1.0))
                     k_cfg.lipEnhancement = float(np.clip(k_cfg.lipEnhancement * scale, 0.0, 1.0))
                     k_cfg.eyeSharpening = float(np.clip(k_cfg.eyeSharpening * scale, 0.0, 1.0))
+                    k_cfg.slimFace = float(np.clip(k_cfg.slimFace * scale, 0.0, 0.20))
+                    k_cfg.bigEyes = float(np.clip(k_cfg.bigEyes * scale, 0.0, 0.20))
+                    k_cfg.slimNose = float(np.clip(k_cfg.slimNose * scale, 0.0, 0.20))
                 final_img = korean_beauty_engine.process_image(styled_img, k_cfg, original_img=img)
             else:
                 final_img = apply_beauty_engine(

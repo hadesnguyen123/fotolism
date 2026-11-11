@@ -24,6 +24,8 @@ export interface ThemeItem {
     layoutId?: string // '4_strip_classic' | '4_grid_2x2' | '9_grid_3x3'
     frameSize?: FrameSize // '2x6' | '4x6'
     slots?: ThemeSlot[]
+    canvasWidth?: number
+    canvasHeight?: number
 }
 
 export const THEME_OPTIONS: ThemeItem[] = [
@@ -144,6 +146,48 @@ export const THEME_OPTIONS: ThemeItem[] = [
     },
 
     // ── KHUNG 4x6 (4 ảnh - layout 4_grid_2x2) ──────────────────────────────────
+    {
+        id: 'theme_4x6_cream_1240x1844',
+        name: 'Kem Studio (1240×1844)',
+        category: 'Thời trang',
+        bgColor: '#FAF7F2',
+        bgGradient: '#FAF7F2',
+        textColor: '#502A1D',
+        borderColor: '#E5DDD5',
+        overlayUrl: './frames/4x6_4_Cream_1240x1844.png',
+        hideFooter: true,
+        layoutId: '4_grid_2x2',
+        frameSize: '4x6',
+        canvasWidth: 1240,
+        canvasHeight: 1844,
+        slots: [
+            { x: 68, y: 70, w: 534, h: 712 },
+            { x: 638, y: 70, w: 534, h: 712 },
+            { x: 68, y: 818, w: 534, h: 712 },
+            { x: 638, y: 818, w: 534, h: 712 },
+        ],
+    },
+    {
+        id: 'theme_4x6_blackfilm_1240x1844',
+        name: 'Film Đen (1240×1844)',
+        category: 'Thời trang',
+        bgColor: '#141414',
+        bgGradient: '#141414',
+        textColor: '#FFFFFF',
+        borderColor: '#2A2A2A',
+        overlayUrl: './frames/4x6_4_BlackFilm_1240x1844.png',
+        hideFooter: true,
+        layoutId: '4_grid_2x2',
+        frameSize: '4x6',
+        canvasWidth: 1240,
+        canvasHeight: 1844,
+        slots: [
+            { x: 68, y: 70, w: 534, h: 712 },
+            { x: 638, y: 70, w: 534, h: 712 },
+            { x: 68, y: 818, w: 534, h: 712 },
+            { x: 638, y: 818, w: 534, h: 712 },
+        ],
+    },
     {
         id: 'theme_4x6_black_film',
         name: 'Film Đen Cổ Điển',

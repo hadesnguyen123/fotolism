@@ -11,6 +11,7 @@ Thư mục này chứa các file khung viền ảnh mẫu (Frame Overlays) cho h
 | **Dải Đơn 2x6 Strip** | `600 x 1800 px` | 1:3 | PNG-24 (Alpha trong suốt) | Photobooth 3 ô / 4 ô kinh điển |
 | **Dải Kép 2x6 Strip (Dual)** | `1200 x 1800 px` | 2:3 | PNG-24 (Alpha trong suốt) | Dải đôi cắt 2-inch cut trên DNP DS-RX1 |
 | **Khổ 4x6 Dọc (Postcard)** | `1200 x 1800 px` | 2:3 | PNG-24 (Alpha trong suốt) | Lưới 4 ô (2x2), 6 ô (2x3), 1 ô lớn |
+| **Khổ 4x6 Tràn Viền DNP (Full Bleed)** | `1240 x 1844 px` | ~2:3 | PNG-24 (Alpha trong suốt) | Khổ in tràn viền chuẩn máy in nhiệt DNP DS-RX1 / DS620 |
 | **Khổ 4x6 Ngang (Landscape)** | `1800 x 1200 px` | 3:2 | PNG-24 (Alpha trong suốt) | Tiệc cưới, sự kiện công ty |
 
 > [!IMPORTANT]
