@@ -190,8 +190,10 @@ export interface FotolismAPI {
             customerName?: string
             sessionType?: string
             cmsUrl?: string
-            compositeDataUrl: string
+            compositeDataUrl?: string
             compositeFileName?: string
+            pairedPrintDataUrl?: string
+            pairedPrintFileName?: string
             shots: Array<{
                 slotIndex: number
                 rawPath?: string
@@ -205,7 +207,8 @@ export interface FotolismAPI {
             sessionDir: string
             rawDir: string
             finalDir: string
-            compositePath: string
+            compositePath?: string
+            pairedPrintPath?: string
             enqueuedCount: number
             files: Array<{
                 imageId: string
@@ -637,6 +640,9 @@ const defaultMockApi: FotolismAPI = {
                 rawDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\raw`,
                 finalDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final`,
                 compositePath: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final\\${payload.compositeFileName || 'fotolism_final.jpg'}`,
+                pairedPrintPath: payload.pairedPrintFileName
+                    ? `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final\\${payload.pairedPrintFileName}`
+                    : undefined,
                 enqueuedCount: payload.shots.length + 1,
                 files: [],
             },

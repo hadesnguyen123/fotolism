@@ -8,6 +8,8 @@ import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
 import {
     FILE_PREFIX_SHOT,
     FILE_PREFIX_SELF,
+    FILE_PREFIX_FINAL,
+    DEFAULT_PRINT_SCALE,
     SESSION_FOLDER_PREFIX,
     DEFAULT_GDRIVE_FOLDER_ID,
     DEFAULT_GDRIVE_WEBHOOK_URL,
@@ -20,7 +22,11 @@ import {
 } from '../components/BeautyCameraView'
 import { CaptureAspectGuide } from '../components/capture/CaptureAspectGuide'
 import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
-import { cropImageToAspect } from '../lib/canvasCompositor'
+import {
+    cropImageToAspect,
+    generateStripComposite,
+    preparePrintImageForDNP,
+} from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
 
@@ -55,6 +61,9 @@ export default function CaptureScreen() {
         session,
         setScreen,
         setSessionPhotos,
+        setCompositeStripUrl,
+        selectedTheme,
+        placedStickers,
         countdownSeconds,
         setCountdownSeconds,
         selectedLayout,
@@ -878,7 +887,7 @@ export default function CaptureScreen() {
         if (validPhotos.length < totalShots) return
 
         setIsAiProcessingBeforeTheme(true)
-        setAiProgressText('Đang hoàn thiện xử lý làm đẹp AI cho các bức ảnh...')
+        setAiProgressText('Đang xử lý ảnh')
 
         // Đợi toàn bộ tiến trình chụp và AI hoàn tất trong nền
         if (pendingCapturesRef.current.size > 0) {
@@ -888,70 +897,132 @@ export default function CaptureScreen() {
                         clearInterval(interval)
                         resolve(true)
                     }
-                }, 150)
+                }, 100)
                 setTimeout(() => {
                     clearInterval(interval)
                     resolve(false)
-                }, 30000)
+                }, 10000)
             })
         }
 
-        // Đảm bảo 100% các ô đều đã hoàn thành AI Enhance vào thư mục final
+        // Đảm bảo 100% các ô đều hoàn thành AI Enhance vào thư mục final (chạy song song đồng thời)
         const currentSlots = [...slotsRef.current]
         const api = isBrowser ? mockApi : fotolismApi
-        for (let i = 0; i < currentSlots.length; i++) {
-            const slot = currentSlots[i]
-            if (!slot) continue
-            const hasAiEnhance =
-                slot.enhancedPath &&
-                (slot.enhancedPath.includes('fotolism_enhanced_') ||
-                    slot.enhancedPath.includes('final'))
-            if (!hasAiEnhance) {
-                setAiProgressText(
-                    `Đang làm đẹp AI Korean Soft Beauty cho ảnh ${i + 1}/${totalShots}...`
-                )
-                try {
-                    const timestamp = slot.timestamp || Date.now()
-                    const enhancedFileName = `fotolism_enhanced_${i + 1}_${timestamp}.jpg`
-                    const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
-                    let rawPath = slot.rawPath
-                    if (rawPath && rawPath.startsWith('data:image')) {
-                        const rawFileName = `${FILE_PREFIX_SHOT}_${i + 1}_${timestamp}.jpg`
-                        const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
-                        await api.storage.savePhoto(rawPath, rawSavePath)
-                        rawPath = rawSavePath
-                    }
-                    if (rawPath && !rawPath.startsWith('data:image')) {
-                        const enhRes = await api.ai.enhance(
-                            rawPath,
-                            50,
-                            undefined,
-                            undefined,
-                            enhancedSavePath
-                        )
-                        if (enhRes?.success && enhRes?.data?.enhancedPath) {
-                            const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
-                            currentSlots[i] = {
-                                ...slot,
+        await Promise.all(
+            currentSlots.map(async (slot, i) => {
+                if (!slot) return
+                const hasAiEnhance =
+                    slot.enhancedPath &&
+                    (slot.enhancedPath.includes('fotolism_enhanced_') ||
+                        slot.enhancedPath.includes('final'))
+                if (!hasAiEnhance) {
+                    try {
+                        const timestamp = slot.timestamp || Date.now()
+                        const enhancedFileName = `fotolism_enhanced_${i + 1}_${timestamp}.jpg`
+                        const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
+                        let rawPath = slot.rawPath
+                        if (rawPath && rawPath.startsWith('data:image')) {
+                            const rawFileName = `${FILE_PREFIX_SHOT}_${i + 1}_${timestamp}.jpg`
+                            const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+                            await api.storage.savePhoto(rawPath, rawSavePath)
+                            rawPath = rawSavePath
+                        }
+                        if (rawPath && !rawPath.startsWith('data:image')) {
+                            const enhRes = await api.ai.enhance(
                                 rawPath,
-                                enhancedPath: enhUrl,
-                                compositedPath: enhUrl,
+                                50,
+                                undefined,
+                                undefined,
+                                enhancedSavePath
+                            )
+                            if (enhRes?.success && enhRes?.data?.enhancedPath) {
+                                const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                currentSlots[i] = {
+                                    ...slot,
+                                    rawPath,
+                                    enhancedPath: enhUrl,
+                                    compositedPath: enhUrl,
+                                }
                             }
                         }
+                    } catch (enhErr) {
+                        console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
                     }
-                } catch (enhErr) {
-                    console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
                 }
-            }
-        }
+            })
+        )
 
         const finalPhotos = currentSlots.filter(
             (s): s is CapturedPhoto => s !== null
         )
         setSlots(currentSlots)
-        setSessionPhotos(
+        const chosenPhotos =
             finalPhotos.length === totalShots ? finalPhotos : validPhotos
-        )
+        setSessionPhotos(chosenPhotos)
+
+        // ── TỰ ĐỘNG TẠO DẢI ẢNH THÀNH PHẨM & BẢN IN GHÉP 4X6 NGAY KHI KẾT THÚC LƯỢT CHỤP ──
+        try {
+            const photoUrls = chosenPhotos
+                .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
+                .filter(Boolean)
+            if (photoUrls.length >= totalShots) {
+                const initialStrip = await generateStripComposite({
+                    photos: photoUrls,
+                    frameSize: selectedFrameSize,
+                    layout: selectedLayout,
+                    theme: selectedTheme,
+                    stickers: placedStickers || [],
+                    filter: selectedFilter,
+                    eventName: eventConfig.eventName,
+                    eventDate: eventConfig.date,
+                    slotOffsets: [],
+                })
+                if (initialStrip) {
+                    setCompositeStripUrl(initialStrip)
+                    const currentPrintScale =
+                        useAppStore.getState().printScale || DEFAULT_PRINT_SCALE
+                    let paired4x6: string | null = null
+                    try {
+                        paired4x6 = await preparePrintImageForDNP(
+                            initialStrip,
+                            currentPrintScale
+                        )
+                    } catch (pairErr) {
+                        console.warn(
+                            '[CaptureScreen] preparePrintImageForDNP warning:',
+                            pairErr
+                        )
+                    }
+                    const compositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
+                    const pairedFileName =
+                        selectedFrameSize === '2x6'
+                            ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
+                            : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
+
+                    await api.storage.finalizeSessionMedia({
+                        sessionId,
+                        sessionType: 'photobooth',
+                        compositeDataUrl: initialStrip,
+                        compositeFileName,
+                        pairedPrintDataUrl: paired4x6 || undefined,
+                        pairedPrintFileName: pairedFileName,
+                        shots: chosenPhotos.map((p, idx) => ({
+                            slotIndex: idx,
+                            id: p.id || `shot_${idx + 1}`,
+                            fileName: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
+                            rawPath: p.rawPath,
+                            enhancedPath: p.enhancedPath,
+                        })),
+                    })
+                }
+            }
+        } catch (compErr) {
+            console.warn(
+                '[CaptureScreen] Auto-generating initial composite warning:',
+                compErr
+            )
+        }
+
         setIsAiProcessingBeforeTheme(false)
         setIsSessionActive(false)
         setScreen('select-theme')
@@ -1191,9 +1262,7 @@ export default function CaptureScreen() {
         }
 
         setIsAiProcessingBeforeTheme(true)
-        setAiProgressText(
-            'Đang hoàn thiện xử lý làm đẹp AI cho kho ảnh Selfbooth...'
-        )
+        setAiProgressText('Đang xử lý ảnh')
 
         // Đợi toàn bộ ảnh hoàn tất lưu và xử lý AI trong nền nếu đang chụp
         if (pendingCapturesRef.current.size > 0) {
@@ -1203,64 +1272,62 @@ export default function CaptureScreen() {
                         clearInterval(interval)
                         resolve(true)
                     }
-                }, 150)
+                }, 100)
                 setTimeout(() => {
                     clearInterval(interval)
                     resolve(false)
-                }, 30000)
+                }, 10000)
             })
         }
 
-        // Đảm bảo 100% kho ảnh Selfbooth đã có ảnh AI Enhance vào thư mục final
+        // Đảm bảo 100% kho ảnh Selfbooth đã có ảnh AI Enhance vào thư mục final (chạy song song đồng thời)
         const selfApi = isBrowser ? mockApi : fotolismApi
-        for (let idx = 0; idx < finalPhotos.length; idx++) {
-            const p = finalPhotos[idx]
-            const hasEnhance =
-                p.enhancedPath &&
-                (p.enhancedPath.includes('fotolism_enhanced_') ||
-                    p.enhancedPath.includes('final'))
-            if (!hasEnhance) {
-                setAiProgressText(
-                    `Đang làm đẹp AI cho ảnh Selfbooth ${idx + 1}/${finalPhotos.length}...`
-                )
-                const timestamp = p.timestamp || Date.now()
-                const photoNum = idx + 1
-                const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
-                const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
-                let rawP = p.rawPath
-                if (rawP && rawP.startsWith('data:image')) {
-                    const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
-                    const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
-                    await selfApi.storage.savePhoto(rawP, rawSavePath)
-                    rawP = rawSavePath
-                }
-                if (rawP && !rawP.startsWith('data:image')) {
-                    try {
-                        const enhRes = await selfApi.ai.enhance(
-                            rawP,
-                            50,
-                            undefined,
-                            undefined,
-                            enhancedSavePath
-                        )
-                        if (enhRes?.success && enhRes?.data?.enhancedPath) {
-                            const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
-                            finalPhotos[idx] = {
-                                ...p,
-                                rawPath: rawP,
-                                enhancedPath: enhUrl,
-                                compositedPath: enhUrl,
+        await Promise.all(
+            finalPhotos.map(async (p, idx) => {
+                const hasEnhance =
+                    p.enhancedPath &&
+                    (p.enhancedPath.includes('fotolism_enhanced_') ||
+                        p.enhancedPath.includes('final'))
+                if (!hasEnhance) {
+                    const timestamp = p.timestamp || Date.now()
+                    const photoNum = idx + 1
+                    const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
+                    const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
+                    let rawP = p.rawPath
+                    if (rawP && rawP.startsWith('data:image')) {
+                        const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
+                        const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+                        await selfApi.storage.savePhoto(rawP, rawSavePath)
+                        rawP = rawSavePath
+                    }
+                    if (rawP && !rawP.startsWith('data:image')) {
+                        try {
+                            const enhRes = await selfApi.ai.enhance(
+                                rawP,
+                                50,
+                                undefined,
+                                undefined,
+                                enhancedSavePath
+                            )
+                            if (enhRes?.success && enhRes?.data?.enhancedPath) {
+                                const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                finalPhotos[idx] = {
+                                    ...p,
+                                    rawPath: rawP,
+                                    enhancedPath: enhUrl,
+                                    compositedPath: enhUrl,
+                                }
                             }
+                        } catch (e) {
+                            console.warn(
+                                `Fallback enhance selfbooth photo ${idx + 1}:`,
+                                e
+                            )
                         }
-                    } catch (e) {
-                        console.warn(
-                            `Fallback enhance selfbooth photo ${idx + 1}:`,
-                            e
-                        )
                     }
                 }
-            }
-        }
+            })
+        )
         setSelfboothLibrary(finalPhotos)
         setIsAiProcessingBeforeTheme(false)
 
@@ -1937,60 +2004,44 @@ export default function CaptureScreen() {
                     <div
                         style={{
                             background:
-                                'linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98))',
-                            padding: '36px 48px',
-                            borderRadius: '24px',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                                'linear-gradient(145deg, #FFF5F7 0%, #FFE4E9 50%, #FFDCE2 100%)',
+                            padding: '44px 56px',
+                            borderRadius: '28px',
+                            border: '2px solid rgba(255, 141, 161, 0.65)',
+                            boxShadow:
+                                '0 25px 60px -10px rgba(255, 75, 114, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.8) inset',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            maxWidth: '520px',
+                            minWidth: '380px',
+                            maxWidth: '460px',
                             textAlign: 'center',
                         }}
                     >
+                        {/* Dấu quay tròn màu hồng */}
                         <div
                             className="selfbooth-spinner-ring"
                             style={{
                                 width: '64px',
                                 height: '64px',
-                                borderWidth: '4px',
+                                borderWidth: '5px',
+                                borderColor: 'rgba(255, 75, 114, 0.2)',
+                                borderTopColor: '#FF4B72',
+                                borderRightColor: '#FF758F',
                                 marginBottom: '24px',
                             }}
                         />
                         <h2
                             style={{
-                                fontSize: '24px',
+                                fontSize: '26px',
                                 fontWeight: 700,
-                                margin: '0 0 12px 0',
-                                background:
-                                    'linear-gradient(90deg, #ec4899, #f43f5e, #fb923c)',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                            }}
-                        >
-                            ✨ Đang Xử Lý Làm Đẹp AI
-                        </h2>
-                        <p
-                            style={{
-                                fontSize: '16px',
-                                color: '#cbd5e1',
-                                margin: '0 0 8px 0',
-                                lineHeight: 1.5,
-                            }}
-                        >
-                            {aiProgressText ||
-                                'Đang tối ưu làn da và đường nét tự nhiên theo chuẩn Korean Soft Beauty...'}
-                        </p>
-                        <p
-                            style={{
-                                fontSize: '13px',
-                                color: '#94a3b8',
                                 margin: 0,
+                                color: '#9F1239',
+                                letterSpacing: '-0.01em',
                             }}
                         >
-                            Ảnh hiển thị trên khung sẽ là ảnh đã qua AI xử lý hoàn hảo
-                        </p>
+                            {aiProgressText || 'Đang xử lý ảnh'}
+                        </h2>
                     </div>
                 </div>
             )}

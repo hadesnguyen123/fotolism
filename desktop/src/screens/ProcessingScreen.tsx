@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
-import { generateStripComposite } from '../lib/canvasCompositor'
+import {
+    generateStripComposite,
+    preparePrintImageForDNP,
+} from '../lib/canvasCompositor'
 import { fotolismApi, mockApi } from '../lib/api'
 import { cloudSyncService } from '../services/cloudSyncService'
 import {
     DEFAULT_GDRIVE_FOLDER_ID,
     DEFAULT_GDRIVE_WEBHOOK_URL,
+    DEFAULT_PRINT_SCALE,
     FILE_PREFIX_FINAL,
     FILE_PREFIX_SHOT,
 } from '../lib/constants'
@@ -64,6 +68,10 @@ export default function ProcessingScreen() {
             const photos = session?.photos || []
             let stripUrl: string | null = null
 
+            let pairedPrintUrl: string | null = null
+            const currentPrintScale =
+                useAppStore.getState().printScale || DEFAULT_PRINT_SCALE
+
             if (isSelfbooth) {
                 // Selfbooth: Không ghép khung in ấn, chuẩn bị kho ảnh chụp tự do
                 setCompositeDone(true)
@@ -96,6 +104,19 @@ export default function ProcessingScreen() {
                 if (stripUrl) {
                     setCompositeStripUrl(stripUrl)
                     setCompositeDone(true)
+
+                    // Sinh bản in ghép 4x6 (cho khổ 2x6 kép) hoặc bản in scale chuẩn (cho khổ 4x6) với printScale (mặc định 95.5%)
+                    try {
+                        pairedPrintUrl = await preparePrintImageForDNP(
+                            stripUrl,
+                            currentPrintScale
+                        )
+                    } catch (pairErr) {
+                        console.warn(
+                            '[ProcessingScreen] preparePrintImageForDNP warning:',
+                            pairErr
+                        )
+                    }
                 } else {
                     throw new Error('Không thể tạo dải ảnh thành phẩm.')
                 }
@@ -107,6 +128,10 @@ export default function ProcessingScreen() {
                 session?.pinCode || session?.sessionId || `ses_${Date.now()}`
             const cmsUrl = cloudSyncService.getCmsUrl()
             const finalCompositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
+            const pairedPrintFileName =
+                selectedFrameSize === '2x6'
+                    ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
+                    : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
             const galleryTargetUrl = `${cmsUrl}/gallery/${sessionId}`
 
             const sourcePhotos =
@@ -136,6 +161,8 @@ export default function ProcessingScreen() {
                     cmsUrl,
                     compositeDataUrl: stripUrl || '',
                     compositeFileName: finalCompositeFileName,
+                    pairedPrintDataUrl: pairedPrintUrl || undefined,
+                    pairedPrintFileName,
                     shots: mediaShots,
                 })
             } catch (finalizeErr) {

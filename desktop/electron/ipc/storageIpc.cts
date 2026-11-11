@@ -600,6 +600,8 @@ export function registerStorageIpc(): void {
                 cmsUrl?: string
                 compositeDataUrl?: string
                 compositeFileName: string // e.g. fotolism_final_4x6.jpg
+                pairedPrintDataUrl?: string
+                pairedPrintFileName?: string // e.g. fotolism_final_2x6_paired_4x6.jpg
                 shots: Array<{
                     id: string
                     rawPath?: string
@@ -617,6 +619,8 @@ export function registerStorageIpc(): void {
                     cmsUrl,
                     compositeDataUrl,
                     compositeFileName,
+                    pairedPrintDataUrl,
+                    pairedPrintFileName,
                     shots,
                 } = payload
 
@@ -697,22 +701,77 @@ export function registerStorageIpc(): void {
                 }
 
                 // 2. Lưu ảnh hoàn tất sau khi chọn khung dán sticker, bộ lọc (Full resolution, KHÔNG NÉN)
-                if (compositeDataUrl && compositeDataUrl.startsWith('data:')) {
-                    const finalCompositeTarget = path.join(
+                let finalCompositeTarget: string | null = null
+                if (compositeDataUrl) {
+                    finalCompositeTarget = path.join(
                         finalDir,
                         compositeFileName || 'fotolism_final.jpg'
                     )
-                    const compBuf = Buffer.from(
-                        compositeDataUrl.replace(/^data:[^;]+;base64,/, ''),
-                        'base64'
-                    )
-                    fs.writeFileSync(finalCompositeTarget, compBuf)
+                    if (compositeDataUrl.startsWith('data:')) {
+                        const compBuf = Buffer.from(
+                            compositeDataUrl.replace(/^data:[^;]+;base64,/, ''),
+                            'base64'
+                        )
+                        fs.writeFileSync(finalCompositeTarget, compBuf)
+                    } else {
+                        const cleanSrc = cleanFilePath(compositeDataUrl)
+                        if (
+                            cleanSrc &&
+                            fs.existsSync(cleanSrc) &&
+                            path.resolve(cleanSrc) !==
+                                path.resolve(finalCompositeTarget)
+                        ) {
+                            fs.copyFileSync(cleanSrc, finalCompositeTarget)
+                        }
+                    }
 
-                    finalFilesToEnqueue.push({
-                        imageId: 'final_composite',
-                        filePath: finalCompositeTarget,
-                        isFinal: true,
-                    })
+                    if (fs.existsSync(finalCompositeTarget)) {
+                        finalFilesToEnqueue.push({
+                            imageId: 'final_composite',
+                            filePath: finalCompositeTarget,
+                            isFinal: true,
+                        })
+                    }
+                }
+
+                // 2b. Lưu bản in ghép đôi 4x6 (cho 2x6) hoặc bản in scale chuẩn để kiểm tra in ấn sau này
+                let finalPairedTarget: string | null = null
+                if (pairedPrintDataUrl) {
+                    finalPairedTarget = path.join(
+                        finalDir,
+                        pairedPrintFileName ||
+                            (compositeFileName
+                                ? compositeFileName.replace(
+                                      '.jpg',
+                                      '_paired_4x6.jpg'
+                                  )
+                                : 'fotolism_final_paired_4x6.jpg')
+                    )
+                    if (pairedPrintDataUrl.startsWith('data:')) {
+                        const pairedBuf = Buffer.from(
+                            pairedPrintDataUrl.replace(/^data:[^;]+;base64,/, ''),
+                            'base64'
+                        )
+                        fs.writeFileSync(finalPairedTarget, pairedBuf)
+                    } else {
+                        const cleanSrc = cleanFilePath(pairedPrintDataUrl)
+                        if (
+                            cleanSrc &&
+                            fs.existsSync(cleanSrc) &&
+                            path.resolve(cleanSrc) !==
+                                path.resolve(finalPairedTarget)
+                        ) {
+                            fs.copyFileSync(cleanSrc, finalPairedTarget)
+                        }
+                    }
+
+                    if (fs.existsSync(finalPairedTarget)) {
+                        finalFilesToEnqueue.push({
+                            imageId: 'final_paired_print',
+                            filePath: finalPairedTarget,
+                            isFinal: true,
+                        })
+                    }
                 }
 
                 // 3. Đẩy folder final này lên R2
@@ -734,6 +793,8 @@ export function registerStorageIpc(): void {
                         sessionDir,
                         rawDir,
                         finalDir,
+                        compositePath: finalCompositeTarget,
+                        pairedPrintPath: finalPairedTarget,
                         finalFilesCount: finalFilesToEnqueue.length,
                         r2Result,
                     },

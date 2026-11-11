@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '../store/appStore'
-import { fotolismApi, isBrowser, mockApi } from '../lib/api'
+import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
 import {
     generateStripComposite,
     preparePrintImageForDNP,
@@ -289,6 +289,51 @@ export default function ReviewScreen() {
 
                 setCompositeStripUrl(stripUrl)
                 setIsGeneratingComposite(false)
+
+                // Đảm bảo dải ảnh thành phẩm & bản in ghép 4x6 luôn được lưu vào session disk
+                const sId = session?.pinCode || session?.sessionId
+                if (sId && stripUrl) {
+                    try {
+                        const pairedUrl = await preparePrintImageForDNP(
+                            stripUrl,
+                            printScale
+                        )
+                        const compositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
+                        const pairedFileName =
+                            selectedFrameSize === '2x6'
+                                ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
+                                : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
+                        api.storage
+                            .finalizeSessionMedia({
+                                sessionId: sId,
+                                sessionType: isSelfboothMode
+                                    ? 'selfbooth'
+                                    : 'photobooth',
+                                compositeDataUrl: stripUrl,
+                                compositeFileName,
+                                pairedPrintDataUrl: pairedUrl,
+                                pairedPrintFileName: pairedFileName,
+                                shots: photos.map((p, idx) => ({
+                                    slotIndex: idx,
+                                    id: p.id || `shot_${idx + 1}`,
+                                    fileName: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
+                                    rawPath: p.rawPath,
+                                    enhancedPath: p.enhancedPath,
+                                })),
+                            })
+                            .catch((finErr: any) =>
+                                console.warn(
+                                    '[ReviewScreen] Fallback finalizeSessionMedia warning:',
+                                    finErr
+                                )
+                            )
+                    } catch (finErr: any) {
+                        console.warn(
+                            '[ReviewScreen] preparePrintImageForDNP warning:',
+                            finErr
+                        )
+                    }
+                }
 
                 // Tự động tạo thư mục con & đẩy toàn bộ ảnh lên Google Drive (và lưu cục bộ)
                 if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
@@ -613,6 +658,24 @@ export default function ReviewScreen() {
                     pathToPrint,
                     printScale
                 )
+
+                // Đảm bảo bản in ghép đôi 4x6 (cho 2x6) hoặc bản scale chuẩn luôn được lưu vào thư mục final/ để kiểm tra
+                const sId = session?.pinCode || session?.sessionId
+                if (sId && pathToPrint.startsWith('data:')) {
+                    const printTargetFileName =
+                        selectedFrameSize === '2x6'
+                            ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
+                            : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
+                    const printTargetPath = `F:\\Fotolism_image\\sessions\\${sId}\\final\\${printTargetFileName}`
+                    api.storage
+                        .savePhoto(pathToPrint, printTargetPath)
+                        .catch((err) =>
+                            console.warn(
+                                '[ReviewScreen] Save print copy warning:',
+                                err
+                            )
+                        )
+                }
             }
 
             // Số tờ vật lý cần in: Khổ 2x6 kép 1 tờ chứa 2 dải, khổ 4x6 1 tờ chứa 1 ảnh

@@ -5,7 +5,11 @@ import type {
     ColorFilterItem,
     FrameSize,
 } from '../store/appStore'
-import { DEFAULT_EVENT_NAME, resolveAssetUrl } from './constants'
+import {
+    DEFAULT_EVENT_NAME,
+    DEFAULT_PRINT_SCALE,
+    resolveAssetUrl,
+} from './constants'
 
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
@@ -516,9 +520,11 @@ export async function preparePrintImageForDNP(
     const srcW = img.naturalWidth || img.width
     const srcH = img.naturalHeight || img.height
 
-    // Xác định tỉ lệ scale (mặc định 100% nếu không truyền hoặc đọc từ localStorage)
+    // Xác định tỉ lệ scale (mặc định DEFAULT_PRINT_SCALE = 95.50% nếu không truyền hoặc đọc từ localStorage)
     let effectiveScale =
-        typeof printScalePercent === 'number' ? printScalePercent : 100.0
+        typeof printScalePercent === 'number'
+            ? printScalePercent
+            : DEFAULT_PRINT_SCALE
     if (
         typeof printScalePercent !== 'number' &&
         typeof window !== 'undefined'

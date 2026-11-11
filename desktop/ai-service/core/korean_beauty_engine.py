@@ -362,6 +362,56 @@ class KoreanBeautyEngine:
             logger.info("Không phát hiện khuôn mặt; giữ nguyên ảnh gốc.")
             return clean_bg.copy()
 
+        # Tăng tốc độ đột phá (15x) cho ảnh độ phân giải cao (24MP 6000x4000):
+        # Chỉ xử lý vùng ROI bao quanh các khuôn mặt thay vì tính toán 24 triệu điểm ảnh toàn phông nền
+        if (w > 1800 or h > 1800) and len(faces) > 0:
+            min_x = min(f["box"][0] for f in faces)
+            min_y = min(f["box"][1] for f in faces)
+            max_x = max(f["box"][0] + f["box"][2] for f in faces)
+            max_y = max(f["box"][1] + f["box"][3] for f in faces)
+
+            avg_bw = float(np.mean([f["box"][2] for f in faces]))
+            avg_bh = float(np.mean([f["box"][3] for f in faces]))
+            pad_x = int(avg_bw * 0.45)
+            pad_y = int(avg_bh * 0.45)
+
+            rx1 = max(0, min_x - pad_x)
+            ry1 = max(0, min_y - pad_y)
+            rx2 = min(w, max_x + pad_x)
+            ry2 = min(h, max_y + pad_y)
+
+            roi_img = img_bgr[ry1:ry2, rx1:rx2].copy()
+            roi_clean = clean_bg[ry1:ry2, rx1:rx2].copy()
+
+            roi_faces = []
+            for f in faces:
+                r_box = f["box"].copy()
+                r_box[0] -= rx1
+                r_box[1] -= ry1
+                r_lm = f["landmarks"].copy()
+                r_lm[:, 0] -= rx1
+                r_lm[:, 1] -= ry1
+                roi_faces.append({"box": r_box, "landmarks": r_lm, "conf": f["conf"]})
+
+            proc_roi = self._process_core(roi_img, roi_faces, cfg, roi_clean)
+
+            out_img = clean_bg.copy()
+            out_img[ry1:ry2, rx1:rx2] = proc_roi
+            logger.info(f"Hoàn tất Korean Soft Beauty ROI ({rx2-rx1}x{ry2-ry1}) trong {(time.time() - t0)*1000:.1f}ms.")
+            return out_img
+
+        return self._process_core(img_bgr, faces, cfg, clean_bg)
+
+    def _process_core(
+        self,
+        img_bgr: np.ndarray,
+        faces: List[Dict[str, Any]],
+        cfg: KoreanBeautyConfig,
+        clean_bg: np.ndarray
+    ) -> np.ndarray:
+        t0 = time.time()
+        h, w, _ = img_bgr.shape
+
         # 1.5. Vi chỉnh hình thể nhẹ nhàng (Subtle Reshaping: Mặt thon, Mắt to, Mũi nhỏ 4-5%)
         proc_img, reshape_mask = self.apply_subtle_reshaping(
             img_bgr, faces,

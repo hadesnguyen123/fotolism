@@ -243,8 +243,10 @@ const api = {
             customerName?: string
             sessionType?: string
             cmsUrl?: string
-            compositeDataUrl: string
+            compositeDataUrl?: string
             compositeFileName?: string
+            pairedPrintDataUrl?: string
+            pairedPrintFileName?: string
             shots: Array<{
                 slotIndex: number
                 rawPath?: string
@@ -258,7 +260,8 @@ const api = {
             sessionDir: string
             rawDir: string
             finalDir: string
-            compositePath: string
+            compositePath?: string
+            pairedPrintPath?: string
             enqueuedCount: number
             files: Array<{
                 imageId: string

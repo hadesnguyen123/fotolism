@@ -387,7 +387,7 @@ def apply_beauty_engine(
     return blended
 
 @router.post("", response_model=EnhanceResponse)
-async def enhance_image(req: EnhanceRequest):
+def enhance_image(req: EnhanceRequest):
     start_time = time.time()
     input_path = Path(req.imagePath).resolve()
 
