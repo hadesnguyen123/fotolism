@@ -79,13 +79,17 @@ export function registerStorageIpc(): void {
         async (_event, payload: { dataUrl: string; fileName: string }) => {
             try {
                 const dir = getFotolismDir()
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+                const targetFile = path.isAbsolute(payload.fileName)
+                    ? payload.fileName
+                    : path.join(dir, payload.fileName)
+                const targetDir = path.dirname(targetFile)
+                if (!fs.existsSync(targetDir))
+                    fs.mkdirSync(targetDir, { recursive: true })
                 const base64Data = payload.dataUrl.replace(
                     /^data:[^;]+;base64,/,
                     ''
                 )
                 const buffer = Buffer.from(base64Data, 'base64')
-                const targetFile = path.join(dir, payload.fileName)
                 fs.writeFileSync(targetFile, buffer)
                 return { success: true, data: { savedPath: targetFile } }
             } catch (err: any) {
@@ -386,6 +390,169 @@ export function registerStorageIpc(): void {
         }
     })
 
+    async function enqueueR2SessionInternal(payload: {
+    sessionId: string
+    customerName?: string
+    sessionType?: string
+    cmsUrl?: string
+    files: Array<{
+        imageId: string
+        filePath: string
+        isFinal?: boolean
+        sizeBytes?: number
+    }>
+}): Promise<{
+    success: boolean
+    data?: {
+        sessionId: string
+        folderKey: string
+        enqueuedCount: number
+    }
+    error?: string
+}> {
+    try {
+        const {
+            sessionId,
+            customerName,
+            sessionType = 'selfbooth',
+            files,
+            cmsUrl,
+        } = payload
+        if (!sessionId || !Array.isArray(files) || files.length === 0) {
+            return {
+                success: false,
+                error: 'Thiếu thông tin session hoặc danh sách file ảnh',
+            }
+        }
+
+        if (cmsUrl) {
+            r2UploadWorker.setCmsUrl(cmsUrl)
+        }
+
+        // 1. Kiểm tra và chuẩn bị danh sách files
+        const filesPayload: Array<{
+            fileName: string
+            type: 'original' | 'final'
+            sizeBytes: number
+        }> = []
+
+        const validFiles = files.filter((f) => fs.existsSync(f.filePath))
+        for (const file of validFiles) {
+            const stat = fs.statSync(file.filePath)
+            const fileName = path.basename(file.filePath)
+            filesPayload.push({
+                fileName,
+                type: file.isFinal ? 'final' : 'original',
+                sizeBytes: stat.size,
+            })
+        }
+
+        if (validFiles.length === 0) {
+            return {
+                success: false,
+                error: 'Không tìm thấy file ảnh hợp lệ trên đĩa để tải lên R2',
+            }
+        }
+
+        // 2. Yêu cầu CMS cấp Presigned PUT URLs theo batch
+        const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
+        const cmsRes = await fetch(`${effectiveCms}/api/storage/upload-urls`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId,
+                customerName,
+                sessionType,
+                files: filesPayload,
+            }),
+        })
+
+        if (!cmsRes.ok) {
+            const errText = await cmsRes.text()
+            return {
+                success: false,
+                error: `CMS từ chối cấp Upload URLs (HTTP ${cmsRes.status}): ${errText}`,
+            }
+        }
+
+        const cmsData: any = await cmsRes.json()
+        if (!cmsData.success || !Array.isArray(cmsData.urls)) {
+            return {
+                success: false,
+                error: cmsData.error || 'CMS không trả về danh sách URLs hợp lệ',
+            }
+        }
+
+        // 3. Đưa vào SQLite UploadTasks Outbox Queue
+        const urlMap = new Map<
+            string,
+            { putUrl: string; objectKey: string; expiresInSec: number }
+        >()
+        for (const u of cmsData.urls) {
+            urlMap.set(u.fileName, {
+                putUrl: u.putUrl,
+                objectKey: u.objectKey,
+                expiresInSec: u.expiresInSec || 900,
+            })
+        }
+
+        const tasksToInsert: Array<
+            Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
+        > = []
+        for (const file of validFiles) {
+            const fileName = path.basename(file.filePath)
+            const urlInfo = urlMap.get(fileName)
+            const stat = fs.statSync(file.filePath)
+
+            tasksToInsert.push({
+                id: `task_${sessionId}_${file.imageId}_${Date.now()}`,
+                session_id: sessionId,
+                image_id: file.imageId,
+                file_path: file.filePath,
+                object_key:
+                    urlInfo?.objectKey ||
+                    `fotolism-photos/${sessionId}/${fileName}`,
+                size_bytes: stat.size,
+                is_final: file.isFinal ? 1 : 0,
+                status: 'PENDING',
+                attempts: 0,
+                presigned_url: urlInfo?.putUrl,
+                url_expires_at: urlInfo
+                    ? Date.now() + urlInfo.expiresInSec * 1000
+                    : undefined,
+            })
+        }
+
+        try {
+            SessionDB.createSession({
+                id: sessionId,
+                status: 'ACTIVE',
+                started_at: new Date().toISOString(),
+                total_slots: validFiles.length,
+                payment_status: 'PAID',
+                print_copies: 1,
+            })
+        } catch {}
+
+        SessionDB.enqueueBatchUploadTasks(tasksToInsert)
+
+        // 4. Khởi động worker xử lý nền ngay lập tức
+        r2UploadWorker.triggerProcessing()
+
+        return {
+            success: true,
+            data: {
+                sessionId,
+                folderKey: cmsData.folderKey,
+                enqueuedCount: tasksToInsert.length,
+            },
+        }
+    } catch (err: any) {
+        console.error('[Storage IPC] Enqueue R2 session failed:', err)
+        return { success: false, error: err.message }
+    }
+}
+
     ipcMain.handle(
         'storage:enqueue-r2-session',
         async (
@@ -402,135 +569,160 @@ export function registerStorageIpc(): void {
                     sizeBytes?: number
                 }>
             }
+        ) => enqueueR2SessionInternal(payload)
+    )
+
+    ipcMain.handle(
+        'storage:finalize-session-media',
+        async (
+            _event,
+            payload: {
+                sessionId: string
+                customerName?: string
+                sessionType?: string
+                cmsUrl?: string
+                compositeDataUrl?: string
+                compositeFileName: string // e.g. fotolism_final_4x6.jpg
+                shots: Array<{
+                    id: string
+                    rawPath?: string
+                    enhancedPath?: string
+                    dataUrl?: string
+                    fileName: string // e.g. fotolism_shot_1.jpg
+                }>
+            }
         ) => {
             try {
                 const {
                     sessionId,
                     customerName,
-                    sessionType = 'selfbooth',
-                    files,
+                    sessionType = 'photobooth',
                     cmsUrl,
+                    compositeDataUrl,
+                    compositeFileName,
+                    shots,
                 } = payload
-                if (!sessionId || !Array.isArray(files) || files.length === 0) {
-                    return {
-                        success: false,
-                        error: 'Thiếu thông tin session hoặc danh sách file ảnh',
-                    }
-                }
 
-                if (cmsUrl) {
-                    r2UploadWorker.setCmsUrl(cmsUrl)
-                }
+                const baseDir = getFotolismDir()
+                const sessionsDir = path.join(baseDir, 'sessions')
+                const sessionDir = path.join(sessionsDir, sessionId)
+                const rawDir = path.join(sessionDir, 'raw')
+                const finalDir = path.join(sessionDir, 'final')
 
-                // 1. Kiểm tra và chuẩn bị danh sách files
-                const filesPayload: Array<{
-                    fileName: string
-                    type: 'original' | 'final'
-                    sizeBytes: number
+                if (!fs.existsSync(rawDir))
+                    fs.mkdirSync(rawDir, { recursive: true })
+                if (!fs.existsSync(finalDir))
+                    fs.mkdirSync(finalDir, { recursive: true })
+
+                const finalFilesToEnqueue: Array<{
+                    imageId: string
+                    filePath: string
+                    isFinal: boolean
                 }> = []
 
-                const validFiles = files.filter((f) =>
-                    fs.existsSync(f.filePath)
-                )
-                for (const file of validFiles) {
-                    const stat = fs.statSync(file.filePath)
-                    const fileName = path.basename(file.filePath)
-                    filesPayload.push({
-                        fileName,
-                        type: file.isFinal ? 'final' : 'original',
-                        sizeBytes: stat.size,
+                // 1. Lưu các ảnh chụp đơn lẻ vào raw/ và final/
+                if (Array.isArray(shots)) {
+                    for (let i = 0; i < shots.length; i++) {
+                        const s = shots[i]
+                        const shotBaseName =
+                            s.fileName || `fotolism_shot_${i + 1}.jpg`
+                        const rawTarget = path.join(rawDir, shotBaseName)
+                        const enhancedBaseName = shotBaseName.startsWith(
+                            'fotolism_shot_'
+                        )
+                            ? shotBaseName.replace(
+                                  'fotolism_shot_',
+                                  'fotolism_enhanced_'
+                              )
+                            : `enhanced_${shotBaseName}`
+                        const finalTarget = path.join(finalDir, enhancedBaseName)
+
+                        // Lưu raw file
+                        if (s.rawPath && fs.existsSync(s.rawPath)) {
+                            if (
+                                path.resolve(s.rawPath) !==
+                                path.resolve(rawTarget)
+                            ) {
+                                fs.copyFileSync(s.rawPath, rawTarget)
+                            }
+                        } else if (s.dataUrl && s.dataUrl.startsWith('data:')) {
+                            const rawBuf = Buffer.from(
+                                s.dataUrl.replace(/^data:[^;]+;base64,/, ''),
+                                'base64'
+                            )
+                            fs.writeFileSync(rawTarget, rawBuf)
+                        }
+
+                        // Lưu final file (ảnh enhance bắt buộc)
+                        if (s.enhancedPath && fs.existsSync(s.enhancedPath)) {
+                            if (
+                                path.resolve(s.enhancedPath) !==
+                                path.resolve(finalTarget)
+                            ) {
+                                fs.copyFileSync(s.enhancedPath, finalTarget)
+                            }
+                        } else if (fs.existsSync(rawTarget)) {
+                            // Nếu chưa có file enhance riêng thì copy raw sang final đảm bảo luôn có đủ ảnh
+                            fs.copyFileSync(rawTarget, finalTarget)
+                        }
+
+                        if (fs.existsSync(finalTarget)) {
+                            finalFilesToEnqueue.push({
+                                imageId: s.id || `shot_${i + 1}`,
+                                filePath: finalTarget,
+                                isFinal: false,
+                            })
+                        }
+                    }
+                }
+
+                // 2. Lưu ảnh hoàn tất sau khi chọn khung dán sticker, bộ lọc (Full resolution, KHÔNG NÉN)
+                if (compositeDataUrl && compositeDataUrl.startsWith('data:')) {
+                    const finalCompositeTarget = path.join(
+                        finalDir,
+                        compositeFileName || 'fotolism_final.jpg'
+                    )
+                    const compBuf = Buffer.from(
+                        compositeDataUrl.replace(/^data:[^;]+;base64,/, ''),
+                        'base64'
+                    )
+                    fs.writeFileSync(finalCompositeTarget, compBuf)
+
+                    finalFilesToEnqueue.push({
+                        imageId: 'final_composite',
+                        filePath: finalCompositeTarget,
+                        isFinal: true,
                     })
                 }
 
-                // 2. Yêu cầu CMS cấp Presigned PUT URLs theo batch
-                const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
-                const cmsRes = await fetch(
-                    `${effectiveCms}/api/storage/upload-urls`,
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sessionId,
-                            customerName,
-                            sessionType,
-                            files: filesPayload,
-                        }),
-                    }
-                )
-
-                if (!cmsRes.ok) {
-                    const errText = await cmsRes.text()
-                    return {
-                        success: false,
-                        error: `CMS từ chối cấp Upload URLs (HTTP ${cmsRes.status}): ${errText}`,
-                    }
-                }
-
-                const cmsData: any = await cmsRes.json()
-                if (!cmsData.success || !Array.isArray(cmsData.urls)) {
-                    return {
-                        success: false,
-                        error:
-                            cmsData.error ||
-                            'CMS không trả về danh sách URLs hợp lệ',
-                    }
-                }
-
-                // 3. Đưa vào SQLite UploadTasks Outbox Queue
-                const urlMap = new Map<
-                    string,
-                    { putUrl: string; objectKey: string; expiresInSec: number }
-                >()
-                for (const u of cmsData.urls) {
-                    urlMap.set(u.fileName, {
-                        putUrl: u.putUrl,
-                        objectKey: u.objectKey,
-                        expiresInSec: u.expiresInSec || 900,
+                // 3. Đẩy folder final này lên R2
+                let r2Result = null
+                if (finalFilesToEnqueue.length > 0) {
+                    r2Result = await enqueueR2SessionInternal({
+                        sessionId,
+                        customerName,
+                        sessionType,
+                        cmsUrl,
+                        files: finalFilesToEnqueue,
                     })
                 }
-
-                const tasksToInsert: Array<
-                    Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
-                > = []
-                for (const file of validFiles) {
-                    const fileName = path.basename(file.filePath)
-                    const urlInfo = urlMap.get(fileName)
-                    const stat = fs.statSync(file.filePath)
-
-                    tasksToInsert.push({
-                        id: `task_${sessionId}_${file.imageId}_${Date.now()}`,
-                        session_id: sessionId,
-                        image_id: file.imageId,
-                        file_path: file.filePath,
-                        object_key:
-                            urlInfo?.objectKey ||
-                            `fotolism-photos/${sessionId}/${fileName}`,
-                        size_bytes: stat.size,
-                        is_final: file.isFinal ? 1 : 0,
-                        status: 'PENDING',
-                        attempts: 0,
-                        presigned_url: urlInfo?.putUrl,
-                        url_expires_at: urlInfo
-                            ? Date.now() + urlInfo.expiresInSec * 1000
-                            : undefined,
-                    })
-                }
-
-                SessionDB.enqueueBatchUploadTasks(tasksToInsert)
-
-                // 4. Khởi động worker xử lý nền ngay lập tức
-                r2UploadWorker.triggerProcessing()
 
                 return {
                     success: true,
                     data: {
                         sessionId,
-                        folderKey: cmsData.folderKey,
-                        enqueuedCount: tasksToInsert.length,
+                        sessionDir,
+                        rawDir,
+                        finalDir,
+                        finalFilesCount: finalFilesToEnqueue.length,
+                        r2Result,
                     },
                 }
             } catch (err: any) {
-                console.error('[Storage IPC] Enqueue R2 session failed:', err)
+                console.error(
+                    '[Storage IPC] Finalize session media error:',
+                    err
+                )
                 return { success: false, error: err.message }
             }
         }

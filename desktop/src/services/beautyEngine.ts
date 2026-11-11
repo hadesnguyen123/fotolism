@@ -254,14 +254,23 @@ void main() {
 
     vec3 centerColor = texture2D(u_image, uv).rgb;
 
-    // ── 3. NHẬN DIỆN MẶT NẠ DA NGƯỜI (DUAL YCBCR + RGB ADAPTIVE & EXCLUDE RED FABRIC) ──
+    // ── 3. NHẬN DIỆN MẶT NẠ DA NGƯỜI (CHUẨN XÁC, LOẠI TRỪ ÁO TỐI MÀU, TÓC VÀ RÈM ĐỎ) ──
+    float luma = 0.299 * centerColor.r + 0.587 * centerColor.g + 0.114 * centerColor.b;
+    // Bắt buộc pixel phải có độ sáng tối thiểu để loại bỏ hoàn toàn áo đen, tóc, bóng tối (luma < 0.16)
+    bool isNotTooDarkOrBright = (luma >= 0.16 && luma <= 0.96);
+
     float Cb = -0.168736 * centerColor.r - 0.331264 * centerColor.g + 0.5 * centerColor.b + 0.5;
     float Cr = 0.5 * centerColor.r - 0.418688 * centerColor.g - 0.081312 * centerColor.b + 0.5;
-    bool colorIsSkinYCbCr = (Cb >= 0.22 && Cb <= 0.64 && Cr >= 0.43 && Cr <= 0.82);
-    bool colorIsSkinRGB = (centerColor.r > centerColor.g * 0.95) && (centerColor.g > centerColor.b * 0.85) && (centerColor.r > 0.12) && ((centerColor.r - centerColor.b) > 0.02);
-    // Loại trừ triệt để vải rèm nhung đỏ có sắc đỏ và độ bão hòa cực lớn
-    bool isRedFabric = (centerColor.r > centerColor.g * 1.65) && (centerColor.r > centerColor.b * 2.1);
-    bool isLikelySkin = (colorIsSkinYCbCr || colorIsSkinRGB) && !isRedFabric;
+    // Da người thực tế luôn có Cr >= 0.525 (loại bỏ màu xám/đen trung tính Cr = 0.50)
+    bool colorIsSkinYCbCr = (Cb >= 0.28 && Cb <= 0.52 && Cr >= 0.525 && Cr <= 0.72);
+    // Điều kiện RGB: Sắc tố đỏ trội hơn xanh lá và xanh dương, mức đỏ tối thiểu > 0.18
+    bool colorIsSkinRGB = (centerColor.r > centerColor.g * 1.02) && 
+                          (centerColor.g > centerColor.b * 1.01) && 
+                          ((centerColor.r - centerColor.b) > 0.04) && 
+                          (centerColor.r > 0.18);
+    // Loại trừ vải rèm nhung đỏ có sắc đỏ và độ bão hòa quá lớn
+    bool isRedFabric = (centerColor.r > centerColor.g * 1.65) && (centerColor.r > centerColor.b * 2.0);
+    bool isLikelySkin = isNotTooDarkOrBright && (colorIsSkinYCbCr || colorIsSkinRGB) && !isRedFabric;
 
     float isSkin = 0.0;
     if (u_numFaces > 0) {
@@ -269,17 +278,31 @@ void main() {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
+            vec4 vline = u_faceVLine[i];
+            float chinY = vline.y;
             vec2 fCenter = vec2(bounds.x, bounds.y);
-            float fRad = max(bounds.z, bounds.w) * 0.62;
-            float dFace = distance(uv, fCenter);
-            if (dFace < fRad) {
-                faceProx = max(faceProx, smoothstep(fRad, fRad * 0.6, dFace));
+            float faceW = bounds.z;
+            float faceH = bounds.w;
+
+            // Khóa cứng đáy cằm: Tuyệt đối không cho filter lem xuống cổ và ngực áo
+            float chinCutoff = smoothstep(chinY + faceH * 0.04, chinY - faceH * 0.02, uv.y);
+
+            // Mặt nạ hình elip khớp tỷ lệ khuôn mặt (thay vì hình tròn làm lem sang hai bên và ngực)
+            float halfW = max(faceW * 0.52, 0.03);
+            float halfH = max(faceH * 0.52, 0.04);
+            vec2 normDist = vec2((uv.x - fCenter.x) / halfW, (uv.y - fCenter.y) / halfH);
+            float ellipDist = length(normDist);
+
+            if (ellipDist < 1.0 && chinCutoff > 0.001) {
+                float p = smoothstep(1.0, 0.45, ellipDist) * chinCutoff;
+                faceProx = max(faceProx, p);
             }
         }
-        // CHỈ XÁC NHẬN VÙNG DA BÊN TRONG BÁN KÍNH KHUÔN MẶT, HOÀN TOÀN KHÔNG LEM RA PHÔNG NỀN
-        isSkin = faceProx * (isLikelySkin ? 1.0 : 0.3);
+        // CHỈ ÁP DỤNG TRÊN ĐÚNG VÙNG DA THẬT SỰ BÊN TRONG KHUÔN MẶT, KHÔNG ÁP DỤNG LÊN ÁO HAY TÓC
+        isSkin = faceProx * (isLikelySkin ? 1.0 : 0.0);
     } else {
-        isSkin = isLikelySkin ? 0.85 : 0.0;
+        // Mất khuôn mặt: TUYỆT ĐỐI KHÔNG ÁP DỤNG FILTER ĐỂ KHÔNG CHỚP NHÁY
+        isSkin = 0.0;
     }
 
     // ── 4. LÀM MỊN DA BILATERAL FILTER GIỮ NGUYÊN CHI TIẾT (SKIN SMOOTHING) ──
@@ -327,7 +350,7 @@ void main() {
     }
 
     // ── 7. SÁNG NÉT CHI TIẾT (CLARITY - BẢO VỆ MẮT, LÔNG MI, TÓC) ──
-    if (u_clarity > 0.0 && isSkin > 0.01) {
+    if (u_clarity > 0.0 && isSkin > 0.01 && luma > 0.20) {
         vec3 detail = centerColor - smoothedColor;
         result += detail * (u_clarity * 0.50 * isSkin);
     }

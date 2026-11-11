@@ -36,6 +36,7 @@ MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "face_dete
 
 class EnhanceRequest(BaseModel):
     imagePath: str
+    outputPath: Optional[str] = Field(None, description="Đường dẫn file đầu ra tùy chọn (VD: F:/Fotolism_image/sessions/.../final/...)")
     beautyLevel: int = Field(50, ge=0, le=100, description="Cường độ Beauty tổng thể (0 = tắt beauty, chỉ áp dụng style)")
     skinEvening: float = Field(0.55, ge=0.0, le=1.0, description="Mức làm đều màu da (0.0 đến 1.0)")
     blemishRemoval: float = Field(0.55, ge=0.0, le=1.0, description="Mức giảm khuyết điểm (0.0 đến 1.0)")
@@ -394,8 +395,12 @@ async def enhance_image(req: EnhanceRequest):
         logger.error(f"File ảnh đầu vào không tồn tại: {input_path}")
         raise HTTPException(status_code=404, detail=f"Image not found: {req.imagePath}")
 
-    out_filename = f"enhanced_{int(start_time * 1000)}.jpg"
-    out_path = STORAGE["enhanced"] / out_filename
+    if req.outputPath:
+        out_path = Path(req.outputPath).resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out_filename = f"enhanced_{int(start_time * 1000)}.jpg"
+        out_path = STORAGE["enhanced"] / out_filename
 
     try:
         img = cv2.imread(str(input_path))
@@ -443,7 +448,7 @@ async def enhance_image(req: EnhanceRequest):
         else:
             final_img = styled_img
 
-        cv2.imwrite(str(out_path), final_img, [cv2.IMWRITE_JPEG_QUALITY, 98])
+        cv2.imwrite(str(out_path), final_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
         duration_ms = int((time.time() - start_time) * 1000)
 
         return EnhanceResponse(

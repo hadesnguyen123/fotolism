@@ -622,9 +622,10 @@ export default function CaptureScreen() {
 
         try {
             const timestamp = Date.now()
-            const fileName = `${FILE_PREFIX_SHOT}_${targetIndex + 1}_${timestamp}.jpg`
-
-            const canonSavePath = `F:\\Fotolism_image\\${fileName}`
+            const rawFileName = `${FILE_PREFIX_SHOT}_${targetIndex + 1}_${timestamp}.jpg`
+            const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+            const enhancedFileName = `fotolism_enhanced_${targetIndex + 1}_${timestamp}.jpg`
+            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
             const api = isBrowser ? mockApi : fotolismApi
 
             // Đếm ngược mượt mà (3s, 5s hoặc 10s), giữ nguyên luồng video cho người dùng tạo dáng
@@ -677,10 +678,45 @@ export default function CaptureScreen() {
             // Reset lại retake index sau khi chụp xong
             setRetakeSlotIndex(null)
 
-            // Lưu ảnh preview/fallback vào đĩa trong nền bất đồng bộ (không chặn giao diện người dùng)
+            // Lưu ảnh preview/fallback vào đĩa trong raw và kích hoạt AI Enhance lưu vào final
             if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
                 api.storage
-                    .savePhoto(photoDataUrl, fileName)
+                    .savePhoto(photoDataUrl, rawSavePath)
+                    .then(() => {
+                        api.ai
+                            .enhance(
+                                rawSavePath,
+                                50,
+                                undefined,
+                                undefined,
+                                enhancedSavePath
+                            )
+                            .then((enhRes) => {
+                                if (
+                                    enhRes &&
+                                    enhRes.success &&
+                                    enhRes.data &&
+                                    enhRes.data.enhancedPath
+                                ) {
+                                    const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                    setSlots((prev) => {
+                                        const next = [...prev]
+                                        if (next[targetIndex]) {
+                                            next[targetIndex] = {
+                                                ...next[targetIndex]!,
+                                                rawPath: rawSavePath,
+                                                enhancedPath: enhUrl,
+                                                compositedPath: enhUrl,
+                                            }
+                                        }
+                                        return next
+                                    })
+                                }
+                            })
+                            .catch((err) =>
+                                console.warn('AI enhance webcam shot error:', err)
+                            )
+                    })
                     .catch((err) => console.warn('Save photo error:', err))
             }
 
@@ -695,7 +731,7 @@ export default function CaptureScreen() {
                         captureId,
                         sessionId,
                         slotIndex: targetIndex,
-                        savePath: canonSavePath,
+                        savePath: rawSavePath,
                         shotIndex: targetIndex,
                     })
                     .then(async (res) => {
@@ -714,11 +750,14 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── ƯU TIÊN 1: Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP gốc ──
+                            // ── ƯU TIÊN 1: Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP gốc lưu vào final ──
                             try {
                                 const enhanceRes = await api.ai.enhance(
                                     canonData.savedPath,
-                                    50
+                                    50,
+                                    undefined,
+                                    undefined,
+                                    enhancedSavePath
                                 )
                                 if (
                                     enhanceRes &&
@@ -865,9 +904,10 @@ export default function CaptureScreen() {
         try {
             const timestamp = Date.now()
             const photoNum = selfboothLibrary.length + 1
-            const fileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
-
-            const canonSelfPath = `F:\\Fotolism_image\\${fileName}`
+            const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
+            const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+            const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
+            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
             const selfApi = isBrowser ? mockApi : fotolismApi
 
             // ── BỎ HOÀN TOÀN COUNTDOWN: BẮT ẢNH TỨC THÌ (< 50ms) ──────────────
@@ -903,10 +943,48 @@ export default function CaptureScreen() {
 
             setSelfboothLibrary((prev) => [...prev, newPhoto])
 
-            // Lưu ảnh vào máy trong nền bất đồng bộ
+            // Lưu ảnh preview/fallback vào raw và kích hoạt AI enhance vào final
             if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
                 selfApi.storage
-                    .savePhoto(photoDataUrl, fileName)
+                    .savePhoto(photoDataUrl, rawSavePath)
+                    .then(() => {
+                        selfApi.ai
+                            .enhance(
+                                rawSavePath,
+                                50,
+                                undefined,
+                                undefined,
+                                enhancedSavePath
+                            )
+                            .then((enhRes) => {
+                                if (
+                                    enhRes &&
+                                    enhRes.success &&
+                                    enhRes.data &&
+                                    enhRes.data.enhancedPath
+                                ) {
+                                    const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                    setSelfboothLibrary((prev) =>
+                                        prev.map((p) =>
+                                            p.id === newPhoto.id
+                                                ? {
+                                                      ...p,
+                                                      rawPath: rawSavePath,
+                                                      enhancedPath: enhUrl,
+                                                      compositedPath: enhUrl,
+                                                  }
+                                                : p
+                                        )
+                                    )
+                                }
+                            })
+                            .catch((err) =>
+                                console.warn(
+                                    'AI enhance selfbooth webcam shot error:',
+                                    err
+                                )
+                            )
+                    })
                     .catch((err) =>
                         console.warn('Save selfbooth photo error:', err)
                     )
@@ -922,7 +1000,7 @@ export default function CaptureScreen() {
                         captureId,
                         sessionId,
                         slotIndex: photoNum,
-                        savePath: canonSelfPath,
+                        savePath: rawSavePath,
                         shotIndex: photoNum,
                     })
                     .then(async (res) => {
@@ -939,11 +1017,14 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP ──
+                            // ── Chạy Python AI Service (Korean Soft Beauty) trên ảnh 24MP lưu vào final ──
                             try {
                                 const enhanceRes = await selfApi.ai.enhance(
                                     canonData.savedPath,
-                                    50
+                                    50,
+                                    undefined,
+                                    undefined,
+                                    enhancedSavePath
                                 )
                                 if (
                                     enhanceRes &&
