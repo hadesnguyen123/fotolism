@@ -97,12 +97,12 @@ export const createBeautyCameraSlice: StateCreator<
               slimFace: naturalPreset?.slimFace ?? 18,
               vLine: naturalPreset?.vLine ?? 16,
               bigEyes: naturalPreset?.bigEyes ?? 12,
-              skinSmoothing: naturalPreset?.skinSmoothing ?? 80,
-              whiteningTone: naturalPreset?.whiteningTone ?? 45,
-              rosyTone: naturalPreset?.rosyTone ?? 35,
-              glowClarity: naturalPreset?.glowClarity ?? 38,
-              brightnessAdjust: naturalPreset?.brightness ?? 104,
-              contrastAdjust: naturalPreset?.contrast ?? 94,
+              skinSmoothing: naturalPreset?.skinSmoothing ?? 45,
+              whiteningTone: 0,
+              rosyTone: 0,
+              glowClarity: 0,
+              brightnessAdjust: 100,
+              contrastAdjust: 100,
               saturationAdjust: 100,
           }
 
