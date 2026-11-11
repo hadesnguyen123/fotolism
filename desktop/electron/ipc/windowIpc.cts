@@ -291,7 +291,7 @@ export function registerWindowAndConfigIpc(): void {
                         presetId: payload.presetId || 'korean_soft_beauty',
                         styleId: payload.styleId || 'natural',
                     }),
-                    signal: AbortSignal.timeout(6000),
+                    signal: AbortSignal.timeout(30000),
                 })
                 if (!res.ok) {
                     return {
