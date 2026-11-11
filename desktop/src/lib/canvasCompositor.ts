@@ -483,7 +483,17 @@ export function sampleImageEdgeColor(img: CanvasImageSource): string {
         sampleCanvas.height = 16
         const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true })
         if (!ctx) return '#FFFFFF'
-        ctx.drawImage(img, 0, 0, 16, 16)
+        const w = (img as any).naturalWidth || (img as any).width || 0
+        const h = (img as any).naturalHeight || (img as any).height || 0
+        if (w >= 32 && h >= 32) {
+            // Lấy đúng điểm ảnh ở sát 4 góc viền khung (cách mép 4px), tránh bị nội suy lẫn màu ảnh chân dung bên trong ô
+            ctx.drawImage(img, 4, 4, 1, 1, 0, 0, 1, 1)
+            ctx.drawImage(img, w - 5, 4, 1, 1, 15, 0, 1, 1)
+            ctx.drawImage(img, 4, h - 5, 1, 1, 0, 15, 1, 1)
+            ctx.drawImage(img, w - 5, h - 5, 1, 1, 15, 15, 1, 1)
+        } else {
+            ctx.drawImage(img, 0, 0, 16, 16)
+        }
 
         // 4 góc
         const corners = [
@@ -556,29 +566,41 @@ export async function preparePrintImageForDNP(
         ctx.fillStyle = bgColor
         ctx.fillRect(0, 0, 1200, 1800)
 
-        // Tính kích thước và vị trí căn giữa cho từng dải trong khổ 600x1800
+        // Ghép 2 dải 2x6 sát cạnh nhau tại trục cắt giữa x = 600 TRƯỚC thành khối 4x6 (1200x1800),
+        // RỒI mới scale đồng đều cả khối 1200x1800 theo scaleFactor (căn giữa tại tâm 600, 900).
+        // Cách này đảm bảo 2 mép ngoài cùng (trái/phải) có đủ lề bù ~27px (ở 95.5%) giống hệt khổ 4x6 để tránh dao xén ngoài của DNP cắt lẹm,
+        // đồng thời đường cắt 2-inch ở giữa (x = 600) không bị chừa rãnh viền thừa làm lệch tâm 2 dải.
         const targetStripW = Math.round(600 * scaleFactor)
         const targetStripH = Math.round(1800 * scaleFactor)
-        const leftColX = Math.round((600 - targetStripW) / 2)
-        const rightColX = 600 + Math.round((600 - targetStripW) / 2)
+        const offsetX = Math.round((1200 - targetStripW * 2) / 2)
         const offsetY = Math.round((1800 - targetStripH) / 2)
 
-        // Dải 1: Bên trái (căn giữa trong ô 0 -> 600 px)
-        ctx.drawImage(img, leftColX, offsetY, targetStripW, targetStripH)
+        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 600)
+        ctx.drawImage(img, offsetX, offsetY, targetStripW, targetStripH)
 
-        // Dải 2: Bên phải (căn giữa trong ô 600 -> 1200 px)
-        ctx.drawImage(img, rightColX, offsetY, targetStripW, targetStripH)
+        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 600)
+        ctx.drawImage(
+            img,
+            offsetX + targetStripW,
+            offsetY,
+            targetStripW,
+            targetStripH
+        )
 
-        // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
-        ctx.save()
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
-        ctx.lineWidth = 1
-        ctx.setLineDash([8, 8])
-        ctx.beginPath()
-        ctx.moveTo(600, 0)
-        ctx.lineTo(600, 1800)
-        ctx.stroke()
-        ctx.restore()
+        // Đường chỉ dẫn cắt nhẹ ở vùng lề trên & dưới (không vẽ đè lên thân khung ảnh tránh vết chấm mực dọc cạnh cắt)
+        if (offsetY > 2) {
+            ctx.save()
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)'
+            ctx.lineWidth = 1
+            ctx.setLineDash([4, 4])
+            ctx.beginPath()
+            ctx.moveTo(600, 0)
+            ctx.lineTo(600, offsetY)
+            ctx.moveTo(600, offsetY + targetStripH)
+            ctx.lineTo(600, 1800)
+            ctx.stroke()
+            ctx.restore()
+        }
 
         return canvas.toDataURL('image/jpeg', 0.98)
     }
