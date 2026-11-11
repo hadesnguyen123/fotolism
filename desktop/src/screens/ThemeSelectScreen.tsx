@@ -145,15 +145,21 @@ export default function ThemeSelectScreen() {
         })
     }, [selectedTheme, selectedLayout, is2x6, totalW, totalH])
 
-    // Cử chỉ chạm & kéo để căn chỉnh ảnh trong ô slot
+    // Cử chỉ chạm & kéo (pan) và mở rộng 2 ngón tay (pinch-to-zoom) trong từng ô slot
     const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null)
-    const dragStartRef = useRef<{
+    const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map())
+    const gestureStateRef = useRef<{
         index: number
-        startX: number
-        startY: number
         initOffset: SlotOffset
         slotPixelWidth: number
         slotPixelHeight: number
+        // 1 finger pan
+        startX: number
+        startY: number
+        // 2 finger pinch & pan
+        initialPinchDist: number
+        initialScale: number
+        initialMidpoint: { x: number; y: number }
     } | null>(null)
 
     const handleSlotPointerDown = (
@@ -164,61 +170,193 @@ export default function ThemeSelectScreen() {
         try {
             target.setPointerCapture(e.pointerId)
         } catch {}
+
+        activePointersRef.current.set(e.pointerId, {
+            clientX: e.clientX,
+            clientY: e.clientY,
+        })
+
         const rect = target.getBoundingClientRect()
-        dragStartRef.current = {
-            index,
-            startX: e.clientX,
-            startY: e.clientY,
-            initOffset: slotOffsetsRef.current[index] || { x: 0, y: 0 },
-            slotPixelWidth: rect.width,
-            slotPixelHeight: rect.height,
+        const currentOffset = slotOffsetsRef.current[index] || { x: 0, y: 0, scale: 1.0 }
+        const pointers = Array.from(activePointersRef.current.values())
+
+        if (pointers.length === 1) {
+            gestureStateRef.current = {
+                index,
+                initOffset: { ...currentOffset },
+                slotPixelWidth: rect.width,
+                slotPixelHeight: rect.height,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialPinchDist: 0,
+                initialScale: currentOffset.scale || 1.0,
+                initialMidpoint: { x: e.clientX, y: e.clientY },
+            }
+        } else if (pointers.length >= 2) {
+            const p1 = pointers[0]
+            const p2 = pointers[1]
+            const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY)
+            const midX = (p1.clientX + p2.clientX) / 2
+            const midY = (p1.clientY + p2.clientY) / 2
+
+            gestureStateRef.current = {
+                index,
+                initOffset: { ...currentOffset },
+                slotPixelWidth: rect.width,
+                slotPixelHeight: rect.height,
+                startX: midX,
+                startY: midY,
+                initialPinchDist: Math.max(dist, 10),
+                initialScale: currentOffset.scale || 1.0,
+                initialMidpoint: { x: midX, y: midY },
+            }
         }
+
         setActiveDragIndex(index)
     }
 
     const handleSlotPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragStartRef.current || activeDragIndex === null) return
+        if (!gestureStateRef.current || activeDragIndex === null) return
+        if (!activePointersRef.current.has(e.pointerId)) return
+
+        activePointersRef.current.set(e.pointerId, {
+            clientX: e.clientX,
+            clientY: e.clientY,
+        })
+
         const {
             index,
-            startX,
-            startY,
             initOffset,
             slotPixelWidth,
             slotPixelHeight,
-        } = dragStartRef.current
-        const dx = e.clientX - startX
-        const dy = e.clientY - startY
+            startX,
+            startY,
+            initialPinchDist,
+            initialScale,
+            initialMidpoint,
+        } = gestureStateRef.current
 
         const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
         const sensitivityY = Math.max(slotPixelHeight * 0.45, 40)
+        const pointers = Array.from(activePointersRef.current.values())
 
-        const nextX = Math.max(
-            -1,
-            Math.min(1, initOffset.x + dx / sensitivityX)
-        )
-        const nextY = Math.max(
-            -1,
-            Math.min(1, initOffset.y + dy / sensitivityY)
-        )
+        if (pointers.length === 1) {
+            // Kéo 1 ngón: Di chuyển vị trí (Pan)
+            const p = pointers[0]
+            const dx = p.clientX - startX
+            const dy = p.clientY - startY
 
-        setSlotOffsetsState((prev) => {
-            const next = [...prev]
-            next[index] = { x: nextX, y: nextY }
-            return next
-        })
+            const nextX = Math.max(
+                -1,
+                Math.min(1, initOffset.x + dx / sensitivityX)
+            )
+            const nextY = Math.max(
+                -1,
+                Math.min(1, initOffset.y + dy / sensitivityY)
+            )
+
+            setSlotOffsetsState((prev) => {
+                const next = [...prev]
+                next[index] = {
+                    ...(next[index] || {}),
+                    x: nextX,
+                    y: nextY,
+                    scale: initOffset.scale || 1.0,
+                }
+                return next
+            })
+        } else if (pointers.length >= 2) {
+            // Cử chỉ 2 ngón tay: Mở rộng 2 ngón phóng to (Pinch to zoom) & di chuyển
+            const p1 = pointers[0]
+            const p2 = pointers[1]
+            const currentDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY)
+            const scaleFactor = currentDist / Math.max(initialPinchDist, 10)
+            const nextScale = Math.max(
+                1.0,
+                Math.min(3.0, Number((initialScale * scaleFactor).toFixed(2)))
+            )
+
+            const currentMidX = (p1.clientX + p2.clientX) / 2
+            const currentMidY = (p1.clientY + p2.clientY) / 2
+            const midDx = currentMidX - initialMidpoint.x
+            const midDy = currentMidY - initialMidpoint.y
+
+            const nextX = Math.max(
+                -1,
+                Math.min(1, initOffset.x + midDx / sensitivityX)
+            )
+            const nextY = Math.max(
+                -1,
+                Math.min(1, initOffset.y + midDy / sensitivityY)
+            )
+
+            setSlotOffsetsState((prev) => {
+                const next = [...prev]
+                next[index] = {
+                    x: nextX,
+                    y: nextY,
+                    scale: nextScale,
+                }
+                return next
+            })
+        }
     }
 
     const handleSlotPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (activeDragIndex !== null) {
-            try {
-                e.currentTarget.releasePointerCapture(e.pointerId)
-            } catch {}
-            const finalOffsets = [...slotOffsetsRef.current]
-            dragStartRef.current = null
-            setActiveDragIndex(null)
-            setStoreSlotOffsets(finalOffsets)
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+        } catch {}
+
+        activePointersRef.current.delete(e.pointerId)
+
+        if (activePointersRef.current.size === 0) {
+            // Khi nhấc tất cả ngón tay ra -> Lưu cấu hình căn chỉnh & zoom
+            if (activeDragIndex !== null) {
+                const finalOffsets = [...slotOffsetsRef.current]
+                gestureStateRef.current = null
+                setActiveDragIndex(null)
+                setStoreSlotOffsets(finalOffsets)
+            }
+        } else if (activePointersRef.current.size === 1 && gestureStateRef.current) {
+            // Khi nhấc 1 ngón ra nhưng vẫn còn 1 ngón chạm -> Chuyển tiếp mượt sang chế độ kéo 1 ngón không bị giật
+            const remaining = Array.from(activePointersRef.current.values())[0]
+            const currentIndex = gestureStateRef.current.index
+            const currentOffset = slotOffsetsRef.current[currentIndex] || { x: 0, y: 0, scale: 1.0 }
+
+            gestureStateRef.current = {
+                ...gestureStateRef.current,
+                startX: remaining.clientX,
+                startY: remaining.clientY,
+                initOffset: { ...currentOffset },
+                initialPinchDist: 0,
+                initialScale: currentOffset.scale || 1.0,
+                initialMidpoint: { x: remaining.clientX, y: remaining.clientY },
+            }
         }
     }
+
+    // Hỗ trợ cuộn chuột lăn (Wheel) để phóng to / thu nhỏ khi dùng chuột
+    const handleSlotWheel = useCallback(
+        (index: number, e: React.WheelEvent<HTMLDivElement>) => {
+            const currentOffset =
+                slotOffsetsRef.current[index] || { x: 0, y: 0, scale: 1.0 }
+            const currentScale = currentOffset.scale || 1.0
+            const step = e.deltaY < 0 ? 0.08 : -0.08
+            const nextScale = Math.max(
+                1.0,
+                Math.min(3.0, Number((currentScale + step).toFixed(2)))
+            )
+
+            const nextOffsets = [...slotOffsetsRef.current]
+            nextOffsets[index] = {
+                ...currentOffset,
+                scale: nextScale,
+            }
+            setSlotOffsetsState(nextOffsets)
+            setStoreSlotOffsets(nextOffsets)
+        },
+        [setStoreSlotOffsets]
+    )
 
     // Xử lý bắt đầu chạm màn hình cảm ứng hoặc nhấn chuột
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -397,6 +535,7 @@ export default function ThemeSelectScreen() {
                         onPointerDown={handleSlotPointerDown}
                         onPointerMove={handleSlotPointerMove}
                         onPointerUp={handleSlotPointerUp}
+                        onWheel={handleSlotWheel}
                     />
                 </section>
 

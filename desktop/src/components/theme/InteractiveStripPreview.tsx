@@ -25,6 +25,10 @@ export interface InteractiveStripPreviewProps {
     ) => void
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void
+    onWheel?: (
+        index: number,
+        e: React.WheelEvent<HTMLDivElement>
+    ) => void
 }
 
 export const InteractiveStripPreview: React.FC<
@@ -42,12 +46,13 @@ export const InteractiveStripPreview: React.FC<
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onWheel,
 }) => {
     return (
         <div className="interactive-strip-preview-wrapper animate-pop">
             <div className="strip-reposition-banner">
                 <Move size={15} />
-                <span>Chạm &amp; kéo ảnh trong từng ô để cân chỉnh vị trí</span>
+                <span>Chạm kéo để căn chỉnh • Mở rộng 2 ngón để phóng to (Zoom)</span>
             </div>
 
             <div
@@ -83,10 +88,12 @@ export const InteractiveStripPreview: React.FC<
                         photo?.enhancedPath ||
                         photo?.rawPath ||
                         ''
-                    const offset = slotOffsets[idx] || { x: 0, y: 0 }
+                    const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
+                    const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
                     const hasOffset =
                         Math.abs(offset.x || 0) > 0.01 ||
-                        Math.abs(offset.y || 0) > 0.01
+                        Math.abs(offset.y || 0) > 0.01 ||
+                        scaleVal > 1.01
 
                     return (
                         <div
@@ -108,6 +115,7 @@ export const InteractiveStripPreview: React.FC<
                             onPointerMove={onPointerMove}
                             onPointerUp={onPointerUp}
                             onPointerCancel={onPointerUp}
+                            onWheel={(e) => onWheel && onWheel(idx, e)}
                         >
                             {photoSrc ? (
                                 <>
@@ -128,7 +136,7 @@ export const InteractiveStripPreview: React.FC<
                                                     ? selectedFilter.cssFilter
                                                     : undefined,
                                             transform: hasOffset
-                                                ? `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(1.08)`
+                                                ? `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(${scaleVal * 1.08})`
                                                 : 'none',
                                             transformOrigin: 'center center',
                                             transition:
@@ -137,6 +145,27 @@ export const InteractiveStripPreview: React.FC<
                                                     : 'transform 0.12s ease-out',
                                         }}
                                     />
+                                    {scaleVal > 1.02 && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: 6,
+                                                left: 6,
+                                                backgroundColor:
+                                                    'rgba(0, 0, 0, 0.65)',
+                                                color: '#fff',
+                                                fontSize: '11px',
+                                                fontWeight: 700,
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                pointerEvents: 'none',
+                                                zIndex: 6,
+                                                backdropFilter: 'blur(2px)',
+                                            }}
+                                        >
+                                            {scaleVal.toFixed(1)}x
+                                        </div>
+                                    )}
                                     {(selectedFilter?.id === 'retro_90s' ||
                                         selectedFilter?.hasGrain) && (
                                         <div className="retro-film-grain-overlay" />

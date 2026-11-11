@@ -10,6 +10,7 @@ import { DEFAULT_EVENT_NAME, resolveAssetUrl } from './constants'
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
     y: number // -1.0 (lên) đến +1.0 (xuống)
+    scale?: number // Tỉ lệ phóng to (zoom): 1.0 (mặc định) đến 3.0x
 }
 
 export interface RenderOptions {
@@ -281,9 +282,17 @@ export async function generateStripComposite(
                 const offset =
                     opts.slotOffsets && opts.slotOffsets[i]
                         ? opts.slotOffsets[i]
-                        : { x: 0, y: 0 }
+                        : { x: 0, y: 0, scale: 1.0 }
                 const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
                 const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
+                const userScale = Math.max(
+                    1.0,
+                    Math.min(3.0, offset.scale || 1.0)
+                )
+                const hasTransform =
+                    Math.abs(clampedX) > 0.01 ||
+                    Math.abs(clampedY) > 0.01 ||
+                    userScale > 1.01
 
                 let finalSrcX = 0
                 let finalSrcY = 0
@@ -293,15 +302,23 @@ export async function generateStripComposite(
                 // Trường hợp 1: Ảnh đã có cùng tỉ lệ với ô slot (sai số < 0.03)
                 // (Ví dụ ảnh đã qua cropImageToAspect theo khung vàng, hoặc ảnh gốc 3:2 Canon vào ô 2x6 3:2)
                 if (Math.abs(imgAspect - slotAspect) < 0.03) {
-                    if (Math.abs(clampedX) > 0.01 || Math.abs(clampedY) > 0.01) {
-                        // Khách có kéo tay căn chỉnh vị trí ở màn hình review: zoom nhẹ 1.08x để có margin trượt mà không hở viền
-                        const zoom = 1.08
+                    if (hasTransform) {
+                        // Khách có kéo tay căn chỉnh hoặc zoom: áp dụng zoom * userScale
+                        const zoom = 1.08 * userScale
                         finalSrcW = Math.round(img.width / zoom)
                         finalSrcH = Math.round(img.height / zoom)
                         const slackX = (img.width - finalSrcW) / 2
                         const slackY = (img.height - finalSrcH) / 2
                         finalSrcX = Math.round(slackX - clampedX * slackX)
                         finalSrcY = Math.round(slackY - clampedY * slackY)
+                        finalSrcX = Math.max(
+                            0,
+                            Math.min(img.width - finalSrcW, finalSrcX)
+                        )
+                        finalSrcY = Math.max(
+                            0,
+                            Math.min(img.height - finalSrcH, finalSrcY)
+                        )
                     } else {
                         // Vị trí mặc định: Giữ nguyên 100% hình ảnh không cắt bất kỳ pixel nào
                         finalSrcW = img.width
@@ -331,19 +348,29 @@ export async function generateStripComposite(
                     const effectiveAspect = viewW / viewH
                     if (effectiveAspect > slotAspect) {
                         // Slot hẹp hơn Live View 16:9: Giữ chiều cao, co chiều rộng từ 2 bên vào giữa
-                        finalSrcH = viewH
-                        finalSrcW = Math.round(viewH * slotAspect)
+                        finalSrcH = Math.round(viewH / userScale)
+                        finalSrcW = Math.round((viewH * slotAspect) / userScale)
                         const slackX = (viewW - finalSrcW) / 2
+                        const slackY = (viewH - finalSrcH) / 2
                         finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
-                        finalSrcY = viewY
+                        finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     } else {
                         // Slot rộng hơn Live View 16:9: Giữ chiều rộng, co chiều cao
-                        finalSrcW = viewW
-                        finalSrcH = Math.round(viewW / slotAspect)
+                        finalSrcW = Math.round(viewW / userScale)
+                        finalSrcH = Math.round((viewW / slotAspect) / userScale)
+                        const slackX = (viewW - finalSrcW) / 2
                         const slackY = (viewH - finalSrcH) / 2
-                        finalSrcX = viewX
+                        finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
                         finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     }
+                    finalSrcX = Math.max(
+                        0,
+                        Math.min(img.width - finalSrcW, finalSrcX)
+                    )
+                    finalSrcY = Math.max(
+                        0,
+                        Math.min(img.height - finalSrcH, finalSrcY)
+                    )
                 }
 
                 ctx.drawImage(
