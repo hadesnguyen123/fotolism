@@ -84,8 +84,8 @@ export default function ThemeSelectScreen() {
         (selectedLayout.cols !== undefined && selectedLayout.cols > 1)
 
     const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
-    const totalW = is2x6 ? 600 : 1200
-    const totalH = 1800
+    const totalW = selectedTheme?.canvasWidth || (is2x6 ? 600 : 1200)
+    const totalH = selectedTheme?.canvasHeight || 1800
 
     const initialOffsets =
         session?.slotOffsets ||

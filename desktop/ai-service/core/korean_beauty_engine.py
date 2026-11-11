@@ -29,19 +29,19 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "data" / "face_detection_y
 class KoreanBeautyConfig(BaseModel):
     presetId: str = Field("korean_soft_beauty", description="ID của preset")
     enabled: bool = Field(True, description="Bật/tắt preset Korean Soft Beauty")
-    skinSmoothing: float = Field(0.80, ge=0.0, le=1.0, description="Mức làm mịn bề mặt da")
-    blemishRemoval: float = Field(0.85, ge=0.0, le=1.0, description="Mức khử khuyết điểm và đốm thâm")
-    skinEvening: float = Field(0.75, ge=0.0, le=1.0, description="Mức làm đều màu da")
-    skinTextureRetention: float = Field(0.55, ge=0.0, le=1.0, description="Tỷ lệ giữ lại vân da vi mô tự nhiên")
-    skinBrightening: float = Field(0.15, ge=0.0, le=1.0, description="Nâng sáng trắng hồng trong trẻo (Porcelain Tone)")
-    softGlow: float = Field(0.20, ge=0.0, le=1.0, description="Độ mềm và ánh sáng studio dịu dàng")
-    rosyBlush: float = Field(0.30, ge=0.0, le=1.0, description="Má hồng dâu tây / đào tự nhiên trên gò má")
-    lipEnhancement: float = Field(0.18, ge=0.0, le=1.0, description="Tăng sắc hồng san hô cho môi có kiểm soát")
-    eyeSharpening: float = Field(0.12, ge=0.0, le=1.0, description="Độ sắc nét chọn lọc cho mắt, mi và lông mày")
+    skinSmoothing: float = Field(0.65, ge=0.0, le=1.0, description="Mức làm mịn bề mặt da")
+    blemishRemoval: float = Field(0.75, ge=0.0, le=1.0, description="Mức khử khuyết điểm và đốm thâm")
+    skinEvening: float = Field(0.60, ge=0.0, le=1.0, description="Mức làm đều màu da")
+    skinTextureRetention: float = Field(0.65, ge=0.0, le=1.0, description="Tỷ lệ giữ lại vân da vi mô tự nhiên")
+    skinBrightening: float = Field(0.00, ge=0.0, le=1.0, description="Nâng sáng trắng hồng trong trẻo (0.00 bảo toàn ánh sáng đèn studio thật)")
+    softGlow: float = Field(0.03, ge=0.0, le=1.0, description="Độ mềm và ánh sáng studio dịu dàng")
+    rosyBlush: float = Field(0.15, ge=0.0, le=1.0, description="Má hồng tự nhiên (15%, thích ứng giảm còn 5% nếu đã có má hồng sẵn)")
+    lipEnhancement: float = Field(0.10, ge=0.0, le=1.0, description="Tăng sắc hồng tự nhiên cho môi")
+    eyeSharpening: float = Field(0.15, ge=0.0, le=1.0, description="Độ sắc nét chọn lọc cho mắt, mi và lông mày")
     globalSharpening: float = Field(0.00, ge=0.0, le=1.0, description="Sharpening toàn cảnh (mặc định 0.0)")
-    slimFace: float = Field(0.045, ge=0.0, le=0.20, description="Mức thon mặt V-line nhẹ nhàng (4-5%)")
-    bigEyes: float = Field(0.045, ge=0.0, le=0.20, description="Mức phóng to tròng mắt tự nhiên (4-5%)")
-    slimNose: float = Field(0.045, ge=0.0, le=0.20, description="Mức thu gọn cánh mũi thanh thoát (4-5%)")
+    slimFace: float = Field(0.04, ge=0.0, le=0.20, description="Cằm V-line 4% (3-5%)")
+    bigEyes: float = Field(0.05, ge=0.0, le=0.20, description="Mắt to tự nhiên 5%")
+    slimNose: float = Field(0.04, ge=0.0, le=0.20, description="Mũi nhỏ thanh thoát 4%")
 
 
 class KoreanBeautyEngine:
@@ -470,7 +470,7 @@ class KoreanBeautyEngine:
                 cres = cv2.GaussianBlur(cres, (7, 7), 2.0)
 
                 defic = np.maximum(0.0, target_local - gray_ue[y1_u:y2_u, x1_u:x2_u])
-                lift_ue = defic * cres * 0.70
+                lift_ue = defic * cres * 0.40
                 out_ue[y1_u:y2_u, x1_u:x2_u] += lift_ue[..., np.newaxis]
 
         blended = np.clip(out_ue, 0, 255).astype(np.uint8)
@@ -492,9 +492,18 @@ class KoreanBeautyEngine:
         A -= red_excess * (0.65 * cfg.blemishRemoval * skin_mask)
 
         # D. Virtual Makeup: Rosy Blush (gò má quả táo Zygomaticus)
-        A += (12.0 * cfg.rosyBlush) * blush_mask
-        B -= (2.0 * cfg.rosyBlush) * blush_mask
-        L += (2.5 * cfg.rosyBlush) * blush_mask
+        # Thích ứng thông minh: má hồng 15%, nếu gò má đã có sẵn sắc hồng thì chỉ thêm 5% để không bị lố
+        if cfg.rosyBlush > 0.001 and np.sum(blush_mask) > 0:
+            cheek_core = blush_mask > 0.40
+            cur_a = float(np.mean(A[cheek_core])) if np.any(cheek_core) else 128.0
+            if cur_a >= 138.0:
+                eff_blush = min(cfg.rosyBlush, 0.05)
+            else:
+                eff_blush = cfg.rosyBlush
+
+            A += (16.0 * eff_blush) * blush_mask
+            B -= (2.5 * eff_blush) * blush_mask
+            L += (2.0 * eff_blush) * blush_mask
 
         # E. Virtual Makeup: Lip Tint (son môi ombre san hô)
         A += (20.0 * cfg.lipEnhancement) * lip_mask

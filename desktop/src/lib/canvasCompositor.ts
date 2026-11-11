@@ -179,8 +179,8 @@ export async function generateStripComposite(
     opts: RenderOptions
 ): Promise<string> {
     const is2x6 = (opts.theme?.frameSize || opts.frameSize) === '2x6'
-    const width = is2x6 ? 600 : 1200
-    const height = 1800
+    const width = opts.theme?.canvasWidth || (is2x6 ? 600 : 1200)
+    const height = opts.theme?.canvasHeight || 1800
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -440,31 +440,9 @@ export async function generateStripComposite(
 }
 
 /**
- * Lấy mẫu màu nền từ góc ảnh dải in để tạo nền tràn viền (Full Bleed) cho bản in máy in nhiệt DNP
- */
-function sampleImageCornerColor(img: HTMLImageElement): string {
-    try {
-        if (typeof document === 'undefined') return '#FFFFFF'
-        const tempCanvas = document.createElement('canvas')
-        tempCanvas.width = 16
-        tempCanvas.height = 16
-        const tCtx = tempCanvas.getContext('2d')
-        if (!tCtx) return '#FFFFFF'
-        tCtx.drawImage(img, 0, 0, 16, 16)
-        const pixel = tCtx.getImageData(4, 4, 1, 1).data
-        if (pixel[3] > 100) {
-            return `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`
-        }
-    } catch {}
-    return '#FFFFFF'
-}
-
-/**
  * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6:
- * - Áp dụng Vùng An Toàn (Safe Margin 0.92) và Bù Trừ Dao Cắt Cơ Học (Cutter Bleed Offset).
- * - Chống triệt để lỗi máy in xén mép cắt mất các chấm tròn trang trí và chi tiết viền ở 2 mép ngoài cùng.
- * - Tràn viền nền (Full Bleed) bằng màu nền frame để không bao giờ bị lộ viền trắng khi cắt.
- * - Cân đối tuyệt đối 1:1 giữa hai dải 2x6 sau khi cắt đôi.
+ * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau đúng chuẩn Photobooth Template.
+ * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200): Giữ nguyên.
  */
 export async function preparePrintImageForDNP(
     sourceDataUrl: string
@@ -482,31 +460,19 @@ export async function preparePrintImageForDNP(
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
 
-        // 1. Tràn nền 100% bằng màu nền của frame (chống lộ viền trắng khi máy in xén mép)
-        const bgColor = sampleImageCornerColor(img)
-        ctx.fillStyle = bgColor
+        // Nền trắng
+        ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, 1200, 1800)
 
-        // 2. Tính toán Vùng An Toàn (Safe Margin & Mechanical Cutter Offset)
-        // Máy in DNP DS-RX1 xén mất ~25-30px ở 2 mép ngoài cùng (X=0 và X=1200) do cơ chế overscan.
-        // Scale 0.92 (W: 552px, H: 1656px) tạo khoảng đệm hoàn hảo:
-        // - Mép ngoài cách 36px (sau khi xén còn ~11px lề an toàn cho chấm tròn).
-        // - Mép trong cách trục giữa 12px (cắt đôi tại 600px đối xứng hoàn hảo 1:1).
-        const scale = 0.92
-        const scaledW = Math.round(600 * scale)   // 552 px
-        const scaledH = Math.round(1800 * scale)  // 1656 px
-        const posY = Math.round((1800 - scaledH) / 2) // 72 px
+        // Dải 1: Bên trái (x: 0 -> 600 px)
+        ctx.drawImage(img, 0, 0, 600, 1800)
 
-        const posX1 = 36   // Dải 1 (Trái): X: 36 -> 588 px
-        const posX2 = 612  // Dải 2 (Phải): X: 612 -> 1164 px
+        // Dải 2: Bên phải (x: 600 -> 1200 px)
+        ctx.drawImage(img, 600, 0, 600, 1800)
 
-        // Vẽ 2 dải vào vùng an toàn
-        ctx.drawImage(img, posX1, posY, scaledW, scaledH)
-        ctx.drawImage(img, posX2, posY, scaledW, scaledH)
-
-        // 3. Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
+        // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
         ctx.save()
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
         ctx.lineWidth = 1
         ctx.setLineDash([8, 8])
         ctx.beginPath()
@@ -518,24 +484,6 @@ export async function preparePrintImageForDNP(
         return canvas.toDataURL('image/jpeg', 0.98)
     }
 
-    // Trường hợp 2: Khổ 4x6 đơn (1200x1800 hoặc 1800x1200)
-    // Áp dụng safe margin 0.94 để các chi tiết viền 4 phía không bị máy in xén mất
-    const canvas = document.createElement('canvas')
-    canvas.width = srcW
-    canvas.height = srcH
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return sourceDataUrl
-
-    const bgColor = sampleImageCornerColor(img)
-    ctx.fillStyle = bgColor
-    ctx.fillRect(0, 0, srcW, srcH)
-
-    const scale = 0.94
-    const scaledW = Math.round(srcW * scale)
-    const scaledH = Math.round(srcH * scale)
-    const posX = Math.round((srcW - scaledW) / 2)
-    const posY = Math.round((srcH - scaledH) / 2)
-
-    ctx.drawImage(img, posX, posY, scaledW, scaledH)
-    return canvas.toDataURL('image/jpeg', 0.98)
+    // Trường hợp 2: Ảnh đã là khổ 4x6 (1200x1800 hoặc 1800x1200)
+    return sourceDataUrl
 }
