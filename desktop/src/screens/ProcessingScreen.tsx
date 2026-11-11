@@ -103,7 +103,8 @@ export default function ProcessingScreen() {
 
             // ── BƯỚC 2: TỔ CHỨC LƯU ẢNH SESSION (RAW & FINAL) VÀ KÍCH HOẠT ĐẨY LÊN CLOUDFLARE R2 ──
             const api = isBrowser ? mockApi : fotolismApi
-            const sessionId = session?.sessionId || `ses_${Date.now()}`
+            const sessionId =
+                session?.pinCode || session?.sessionId || `ses_${Date.now()}`
             const cmsUrl = cloudSyncService.getCmsUrl()
             const finalCompositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
             const galleryTargetUrl = `${cmsUrl}/gallery/${sessionId}`
@@ -116,6 +117,8 @@ export default function ProcessingScreen() {
 
             const mediaShots = sourcePhotos.map((p, idx) => ({
                 slotIndex: idx,
+                id: p.id || `shot_${idx + 1}`,
+                fileName: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
                 rawPath: p.rawPath,
                 enhancedPath: p.enhancedPath,
                 rawPhotoUrl: p.rawPath,

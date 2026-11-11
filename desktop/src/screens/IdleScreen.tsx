@@ -61,7 +61,7 @@ export default function IdleScreen() {
             setTimeout(() => {
                 setShowPinModal(false)
                 setCaptureMode(pendingMode)
-                startNewSession()
+                startNewSession('1234')
                 setCustomerInfo({
                     customerName: 'Khách Test 1234',
                     customerPhone: null,
@@ -87,7 +87,7 @@ export default function IdleScreen() {
             setTimeout(() => {
                 setShowPinModal(false)
                 setCaptureMode(pendingMode)
-                startNewSession()
+                startNewSession(rawCode)
                 setCustomerInfo({
                     customerName: 'Khách mở khóa (PIN máy)',
                     customerPhone: null,
@@ -167,7 +167,7 @@ export default function IdleScreen() {
                 setTimeout(() => {
                     setShowPinModal(false)
                     setCaptureMode(effectiveMode)
-                    startNewSession()
+                    startNewSession(rawCode)
                     setCustomerInfo({
                         customerName: ticket.customer_name || 'Khách Hàng CMS',
                         customerPhone: ticket.customer_phone || null,

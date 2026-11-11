@@ -52,7 +52,7 @@ export function generateSessionId(): string {
 
 export interface SessionSlice {
     session: SessionState | null
-    startNewSession: () => void
+    startNewSession: (customSessionId?: string) => void
     addPhoto: (photo: CapturedPhoto) => void
     setSessionPhotos: (photos: CapturedPhoto[]) => void
     setSelfboothLibrary: (photos: CapturedPhoto[]) => void
@@ -134,8 +134,8 @@ export const createSessionSlice: StateCreator<
         set({ photoboothSessionEndTime: Date.now() + seconds * 1000 }),
     clearPhotoboothSessionTimer: () => set({ photoboothSessionEndTime: null }),
 
-    startNewSession: () => {
-        const sId = generateSessionId()
+    startNewSession: (customSessionId?: string) => {
+        const sId = customSessionId || generateSessionId()
         const defaultLayout = ALL_LAYOUTS[4][0]
         set({
             session: {
@@ -152,7 +152,7 @@ export const createSessionSlice: StateCreator<
                 storageUrl: null,
                 customerName: null,
                 customerPhone: null,
-                pinCode: null,
+                pinCode: customSessionId || null,
                 paidAmount: 0,
                 paidCopies: 2,
                 paymentMethod: null,
@@ -357,6 +357,10 @@ export const createSessionSlice: StateCreator<
             session: state.session
                 ? {
                       ...state.session,
+                      sessionId:
+                          info.pinCode && info.pinCode.trim().length > 0
+                              ? info.pinCode.trim()
+                              : state.session.sessionId,
                       customerName:
                           info.customerName !== undefined
                               ? info.customerName

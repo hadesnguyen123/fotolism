@@ -78,7 +78,9 @@ export default function ReviewScreen() {
 
     // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
     const cmsBaseUrl = cloudSyncService.getCmsUrl()
-    const webGalleryUrl = `${cmsBaseUrl}/gallery/${session?.sessionId || subfolderName}`
+    const galleryIdentifier =
+        session?.pinCode || session?.sessionId || subfolderName
+    const webGalleryUrl = `${cmsBaseUrl}/gallery/${galleryIdentifier}`
     const targetCloudUrl = webGalleryUrl
 
     // Tạo mã QR Code cho Cloud Gallery

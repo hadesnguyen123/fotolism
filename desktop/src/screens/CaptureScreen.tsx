@@ -52,6 +52,7 @@ function playCameraShutterSound() {
 
 export default function CaptureScreen() {
     const {
+        session,
         setScreen,
         setSessionPhotos,
         countdownSeconds,
@@ -159,7 +160,10 @@ export default function CaptureScreen() {
 
     // ── Session ID cho Fotolism 2.2 SQLite & Idempotency ──
     const [sessionId] = useState<string>(
-        () => `session_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        () =>
+            session?.pinCode ||
+            session?.sessionId ||
+            `session_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     )
 
     // ── Chế độ PHOTOBOOTH CỔ ĐIỂN (Có Retake / Xóa ô xấu) ──

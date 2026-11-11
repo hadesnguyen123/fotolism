@@ -60,6 +60,20 @@ export function cleanupDiskStorage(retentionDays = 15): void {
     }
 }
 
+export function cleanFilePath(p?: string): string {
+    if (!p) return ''
+    let cleaned = p.trim()
+    if (cleaned.startsWith('file:///')) {
+        cleaned = cleaned.slice(8)
+    } else if (cleaned.startsWith('file://')) {
+        cleaned = cleaned.slice(7)
+    }
+    if (/^\/[a-zA-Z]:/.test(cleaned)) {
+        cleaned = cleaned.slice(1)
+    }
+    return path.normalize(decodeURIComponent(cleaned))
+}
+
 export function registerStorageIpc(): void {
     ipcMain.handle('storage:get-downloads-path', async () => {
         try {
@@ -436,7 +450,10 @@ export function registerStorageIpc(): void {
             sizeBytes: number
         }> = []
 
-        const validFiles = files.filter((f) => fs.existsSync(f.filePath))
+        const validFiles = files
+            .map((f) => ({ ...f, filePath: cleanFilePath(f.filePath) }))
+            .filter((f) => f.filePath && fs.existsSync(f.filePath))
+
         for (const file of validFiles) {
             const stat = fs.statSync(file.filePath)
             const fileName = path.basename(file.filePath)
@@ -637,13 +654,16 @@ export function registerStorageIpc(): void {
                             : `enhanced_${shotBaseName}`
                         const finalTarget = path.join(finalDir, enhancedBaseName)
 
+                        const cleanRaw = cleanFilePath(s.rawPath)
+                        const cleanEnh = cleanFilePath(s.enhancedPath)
+
                         // Lưu raw file
-                        if (s.rawPath && fs.existsSync(s.rawPath)) {
+                        if (cleanRaw && fs.existsSync(cleanRaw)) {
                             if (
-                                path.resolve(s.rawPath) !==
+                                path.resolve(cleanRaw) !==
                                 path.resolve(rawTarget)
                             ) {
-                                fs.copyFileSync(s.rawPath, rawTarget)
+                                fs.copyFileSync(cleanRaw, rawTarget)
                             }
                         } else if (s.dataUrl && s.dataUrl.startsWith('data:')) {
                             const rawBuf = Buffer.from(
@@ -654,12 +674,12 @@ export function registerStorageIpc(): void {
                         }
 
                         // Lưu final file (ảnh enhance bắt buộc)
-                        if (s.enhancedPath && fs.existsSync(s.enhancedPath)) {
+                        if (cleanEnh && fs.existsSync(cleanEnh)) {
                             if (
-                                path.resolve(s.enhancedPath) !==
+                                path.resolve(cleanEnh) !==
                                 path.resolve(finalTarget)
                             ) {
-                                fs.copyFileSync(s.enhancedPath, finalTarget)
+                                fs.copyFileSync(cleanEnh, finalTarget)
                             }
                         } else if (fs.existsSync(rawTarget)) {
                             // Nếu chưa có file enhance riêng thì copy raw sang final đảm bảo luôn có đủ ảnh
