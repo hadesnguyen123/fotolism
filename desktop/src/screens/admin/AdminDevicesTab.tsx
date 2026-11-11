@@ -880,16 +880,17 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 />
                                 <div className="print-scale-ticks">
                                     <span>90.00%</span>
-                                    <span>95.00%</span>
+                                    <span>92.50%</span>
                                     <span
                                         className={
-                                            printScale === 98.75
+                                            printScale === 95.5
                                                 ? 'tick-highlight'
                                                 : ''
                                         }
                                     >
-                                        98.75% (Chuẩn DNP)
+                                        95.50% (Chuẩn DNP)
                                     </span>
+                                    <span>98.00%</span>
                                     <span
                                         className={
                                             printScale === 100
