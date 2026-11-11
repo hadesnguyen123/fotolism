@@ -180,8 +180,9 @@ void main() {
         uv.x = 1.0 - uv.x;
     }
 
-    // ── 1. PHÓNG TO MẮT TỰ NHIÊN (BIG EYES) ──
-    if (u_bigEyes > 0.0 && u_numFaces > 0) {
+    // ── 1. MẮT TO TỰ NHIÊN 5% (BIG EYES 0.05 CHUẨN KOREAN SOFT BEAUTY) ──
+    float effectiveBigEyes = max(u_bigEyes, 0.05);
+    if (effectiveBigEyes > 0.001 && u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 eyes = u_faceEyes[i];
@@ -189,28 +190,31 @@ void main() {
             vec2 rightEye = vec2(eyes.z, eyes.w);
 
             float eyeDist = distance(leftEye, rightEye);
-            float eyeRadius = max(eyeDist * 0.28, 0.025);
+            float rEyeRad = max(eyeDist * 0.35, 0.025);
 
             // Mắt trái
             float dLeft = distance(uv, leftEye);
-            if (dLeft < eyeRadius) {
-                float normD = dLeft / eyeRadius;
-                float factor = 1.0 - (1.0 - normD * normD) * (u_bigEyes * 0.28);
+            if (dLeft < rEyeRad) {
+                float normD = dLeft / rEyeRad;
+                float term = 1.0 - normD * normD;
+                float factor = 1.0 - (term * term) * effectiveBigEyes;
                 uv = leftEye + (uv - leftEye) * factor;
             }
 
             // Mắt phải
             float dRight = distance(uv, rightEye);
-            if (dRight < eyeRadius) {
-                float normD = dRight / eyeRadius;
-                float factor = 1.0 - (1.0 - normD * normD) * (u_bigEyes * 0.28);
+            if (dRight < rEyeRad) {
+                float normD = dRight / rEyeRad;
+                float term = 1.0 - normD * normD;
+                float factor = 1.0 - (term * term) * effectiveBigEyes;
                 uv = rightEye + (uv - rightEye) * factor;
             }
         }
     }
 
-    // ── 2. THON GỌN MŨI TỰ NHIÊN (NOSE SLIMMING) ──
-    if (u_slimFace > 0.0 && u_numFaces > 0) {
+    // ── 2. MŨI NHỎ THANH THOÁT 4% (SLIM NOSE 0.04 CHUẨN KOREAN SOFT BEAUTY) ──
+    float effectiveSlimNose = 0.04;
+    if (u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
@@ -220,23 +224,23 @@ void main() {
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            float dNoseY = abs(uv.y - noseY);
-            float noseRangeY = max(faceH * 0.14, 0.03);
-            if (dNoseY < noseRangeY) {
-                float yWeight = smoothstep(noseRangeY, 0.0, dNoseY);
-                float dxNose = uv.x - noseX;
-                float noseRangeX = max(faceW * 0.16, 0.03);
-                if (abs(dxNose) < noseRangeX) {
-                    float xWeight = smoothstep(noseRangeX, 0.0, abs(dxNose));
-                    uv.x += dxNose * (u_slimFace * 0.14 * yWeight * xWeight);
-                }
+            float rNx = max(faceW * 0.16, 0.02);
+            float rNy = max(faceH * 0.14, 0.02);
+            float dx = uv.x - noseX;
+            float dy = uv.y - noseY;
+            float distNorm = (dx * dx) / (rNx * rNx) + (dy * dy) / (rNy * rNy);
+
+            if (distNorm < 1.0) {
+                float term = 1.0 - distNorm;
+                float wNose = term * term * effectiveSlimNose;
+                uv.x += dx * wNose;
             }
         }
     }
 
-    // ── 3. THON GỌN MẶT & CẰM V-LINE (FACE SLIMMING & V-LINE) ──
-    float totalSlim = max(u_slimFace, u_vLine);
-    if (totalSlim > 0.0 && u_numFaces > 0) {
+    // ── 3. CẰM V-LINE 4% (SLIM FACE 0.04 CHUẨN KOREAN SOFT BEAUTY) ──
+    float effectiveSlimFace = max(u_slimFace, 0.04);
+    if (effectiveSlimFace > 0.001 && u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
@@ -250,24 +254,19 @@ void main() {
             float dy = uv.y - noseY;
             float jawRange = max(chinY - noseY, 0.05);
 
-            // Vùng tác động: Từ dưới mắt/chóp mũi đến ngay đáy cằm
-            if (dy > 0.0 && uv.y < chinY + faceH * 0.06) {
-                float yNorm = dy / jawRange; // 0 ở chóp mũi, 1 ở đáy cằm
-
-                // Trọng số bóp má (Face Slimming) quanh gò má và xương hàm
-                float slimYWeight = smoothstep(0.04, 0.32, yNorm) * smoothstep(0.96, 0.64, yNorm);
-
-                // Trọng số bóp cằm nhọn (V-Line) tập trung ở nửa dưới gần cằm
-                float vLineYWeight = smoothstep(0.40, 0.85, yNorm) * smoothstep(1.10, 0.85, yNorm);
+            if (dy > 0.0 && uv.y < chinY + faceH * 0.05) {
+                float yNorm = clamp(dy / jawRange, 0.0, 1.0);
+                float wY = 4.0 * yNorm * (1.0 - yNorm);
 
                 float dx = uv.x - centerX;
-                float halfJawW = max(faceW * 0.48, 0.04);
-                float xNorm = abs(dx) / halfJawW;
+                float jawW = max(faceW * 0.52, 0.04);
+                float xNorm = abs(dx) / jawW;
 
-                if (xNorm < 1.0) {
-                    float xWeight = smoothstep(1.0, 0.15, xNorm);
-                    float warpFactor = (u_slimFace * 0.28 * slimYWeight + u_vLine * 0.32 * vLineYWeight) * xWeight;
-                    uv.x += dx * warpFactor;
+                if (xNorm > 0.15 && xNorm < 1.05 && yNorm > 0.02 && yNorm < 0.98) {
+                    float tX = clamp((xNorm - 0.15) / 0.90, 0.0, 1.0);
+                    float wX = 4.0 * tX * (1.0 - tX);
+                    float warp = wY * wX * effectiveSlimFace;
+                    uv.x += dx * warp;
                 }
             }
         }
@@ -278,10 +277,9 @@ void main() {
 
     vec3 centerColor = texture2D(u_image, uv).rgb;
 
-    // ── 4. LÀM MỊN DA NHẸ NHÀNG, LIÊN TỤC VÀ TỰ NHIÊN (KHÔNG PHÂN MẢNH, KHÔNG VỠ HẠT) ──
-    // Sử dụng mặt nạ hình học liên tục (smooth gradient), loại bỏ hoàn toàn việc threshold màu gây vỡ khối pixel
+    // ── 4. LÀM MỊN DA DỊU NHẸ CHUẨN K-BEAUTY (KHÔNG VỠ HẠT, KHÔNG MOSAIC) ──
     float faceSmoothMask = 0.0;
-    if (u_numFaces > 0 && u_skinSmooth > 0.01) {
+    if (u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
@@ -291,10 +289,10 @@ void main() {
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            // Khóa chặn đáy cằm mượt mà, tuyệt đối không lem ra cổ và ngực áo
+            // Khóa cứng đáy cằm để bảo toàn 100% cổ áo và ngực
             float chinCutoff = smoothstep(chinY + faceH * 0.03, chinY - faceH * 0.02, uv.y);
 
-            // Bán kính oval khuôn mặt với dải chuyển tiếp siêu mượt (smooth gradient)
+            // Bán kính oval khuôn mặt với gradient mượt liên tục
             float halfW = max(faceW * 0.46, 0.03);
             float halfH = max(faceH * 0.46, 0.04);
             vec2 normDist = vec2((uv.x - fCenter.x) / halfW, (uv.y - fCenter.y) / halfH);
@@ -307,22 +305,48 @@ void main() {
         }
     }
 
-    // Làm mịn dịu nhẹ (Soft blur 4 góc đối xứng, bảo toàn 100% cấu trúc chi tiết mắt mũi)
+    // Làm mịn dịu nhẹ (Soft blur 4 góc đối xứng, bảo toàn cấu trúc chi tiết mắt mũi)
     vec3 finalColor = centerColor;
     if (faceSmoothMask > 0.005) {
-        vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y) * (1.2 + u_skinSmooth * 2.2);
+        vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y) * 2.2;
         vec3 softBlur = centerColor * 0.36;
         softBlur += texture2D(u_image, uv + vec2(-1.0, -1.0) * stepUV).rgb * 0.16;
         softBlur += texture2D(u_image, uv + vec2(1.0, -1.0) * stepUV).rgb * 0.16;
         softBlur += texture2D(u_image, uv + vec2(-1.0, 1.0) * stepUV).rgb * 0.16;
         softBlur += texture2D(u_image, uv + vec2(1.0, 1.0) * stepUV).rgb * 0.16;
 
-        // Hòa trộn liên tục theo mask oval mượt, mức tối đa vừa phải (~35-40%) để giữ nét thật
-        float blendFactor = faceSmoothMask * min(u_skinSmooth * 0.50, 0.42);
-        finalColor = mix(centerColor, softBlur, blendFactor);
+        // Hòa trộn mịn dịu mượt mà (~35%), không làm mất chi tiết mắt mũi
+        finalColor = mix(centerColor, softBlur, faceSmoothMask * 0.35);
     }
 
-    // Điều chỉnh độ sáng/tương phản nhẹ nhàng trên toàn khung (nếu có tùy chỉnh)
+    // ── 5. MÁ HỒNG THÍCH ỨNG 15% (ROSY BLUSH CHUẨN KOREAN SOFT BEAUTY) ──
+    if (u_numFaces > 0) {
+        for (int i = 0; i < 4; i++) {
+            if (i >= u_numFaces) break;
+            vec4 bounds = u_faceBounds[i];
+            vec4 vline = u_faceVLine[i];
+            float centerX = bounds.x;
+            float noseY = vline.w;
+            float faceW = bounds.z;
+            float faceH = bounds.w;
+
+            vec2 leftCheek = vec2(centerX - faceW * 0.20, noseY - faceH * 0.02);
+            vec2 rightCheek = vec2(centerX + faceW * 0.20, noseY - faceH * 0.02);
+            float cheekRad = max(faceW * 0.15, 0.025);
+
+            float dL = distance(uv, leftCheek);
+            float dR = distance(uv, rightCheek);
+            float blushMask = max(smoothstep(cheekRad, 0.0, dL), smoothstep(cheekRad, 0.0, dR));
+
+            if (blushMask > 0.005) {
+                finalColor.r += blushMask * 0.022; // Sắc hồng đào tự nhiên 15%
+                finalColor.g -= blushMask * 0.006;
+                finalColor.b -= blushMask * 0.008;
+            }
+        }
+    }
+
+    // ── 6. BẢO TOÀN ÁNH SÁNG ĐÈN STUDIO (0.00 NÂNG SÁNG NHÂN TẠO) ──
     if (u_brightness != 1.0) {
         finalColor *= u_brightness;
     }
