@@ -44,11 +44,11 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
     })
 
     describe('1. Cấu hình & Lưu trữ bền vững (Persistence)', () => {
-        it('mặc định trả về 100.00% khi chưa có cấu hình lưu', () => {
-            expect(DEFAULT_PRINT_SCALE).toBe(100.0)
+        it('mặc định trả về 98.75% (Chuẩn DNP) khi chưa có cấu hình lưu', () => {
+            expect(DEFAULT_PRINT_SCALE).toBe(98.75)
             mockStorage.clear()
-            expect(loadSavedPrintScale()).toBe(100.0)
-            expect(useAppStore.getState().printScale).toBe(100.0)
+            expect(loadSavedPrintScale()).toBe(98.75)
+            expect(useAppStore.getState().printScale).toBe(98.75)
         })
 
         it('tự động lưu khi thay đổi và định dạng chính xác 2 chữ số thập phân (e.g. 99.75%)', () => {
@@ -83,10 +83,10 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             expect(useAppStore.getState().printScale).toBe(90)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, '120')
-            expect(loadSavedPrintScale()).toBe(100)
+            expect(loadSavedPrintScale()).toBe(98.75)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, 'invalid')
-            expect(loadSavedPrintScale()).toBe(100)
+            expect(loadSavedPrintScale()).toBe(98.75)
         })
     })
 

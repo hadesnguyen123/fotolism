@@ -58,8 +58,8 @@ export const LS_EVENT_CONFIG_KEY = 'fotolism_event_config'
 /** LocalStorage key cho cấu hình Print Scale (bù trừ xén lẹm mép in) */
 export const LS_PRINT_SCALE_KEY = 'fotolism_print_scale'
 
-/** Tỉ lệ co dãn in ấn mặc định (100.00%) */
-export const DEFAULT_PRINT_SCALE = 100.0
+/** Tỉ lệ co dãn in ấn mặc định (98.75% - Chuẩn tối ưu bù trừ dao xén máy in DNP DS-RX1: lề trên dưới 11-12px, lề trái phải 8px) */
+export const DEFAULT_PRINT_SCALE = 98.75
 
 // ── 4. VietQR & Banking Defaults ──
 /** Mã BIN ngân hàng mặc định (970422 = MB Bank) */

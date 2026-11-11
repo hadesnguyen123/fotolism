@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { BeautyCameraView } from '../../components/BeautyCameraView'
+import { DEFAULT_PRINT_SCALE } from '../../lib/constants'
 
 export type HardwareSubTab = 'camera' | 'printer' | 'remote'
 
@@ -848,15 +849,17 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         100.00%, bước 0.25%)
                                     </span>
                                 </div>
-                                {printScale !== 100 && (
+                                {printScale !== DEFAULT_PRINT_SCALE && (
                                     <button
                                         type="button"
                                         className="btn-print-scale-reset"
-                                        onClick={() => setPrintScale(100)}
-                                        title="Khôi phục mặc định 100.00%"
+                                        onClick={() =>
+                                            setPrintScale(DEFAULT_PRINT_SCALE)
+                                        }
+                                        title={`Khôi phục chuẩn DNP ${DEFAULT_PRINT_SCALE.toFixed(2)}%`}
                                     >
                                         <RotateCcw size={14} />
-                                        <span>Đặt lại 100%</span>
+                                        <span>Đặt lại {DEFAULT_PRINT_SCALE.toFixed(2)}%</span>
                                     </button>
                                 )}
                             </div>
@@ -876,17 +879,16 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                     className="touch-range-slider print-scale-slider"
                                 />
                                 <div className="print-scale-ticks">
-                                    <span>90.00% (Thu nhỏ tối đa)</span>
+                                    <span>90.00%</span>
                                     <span>95.00%</span>
-                                    <span>98.00%</span>
                                     <span
                                         className={
-                                            printScale === 99.75
+                                            printScale === 98.75
                                                 ? 'tick-highlight'
                                                 : ''
                                         }
                                     >
-                                        99.75%
+                                        98.75% (Chuẩn DNP)
                                     </span>
                                     <span
                                         className={
