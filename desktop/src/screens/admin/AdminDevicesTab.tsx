@@ -9,6 +9,7 @@ import {
     SunMedium,
     Sparkles,
     Settings,
+    Ban,
 } from 'lucide-react'
 import { useAppStore, BEAUTY_PRESETS } from '../../store/appStore'
 
@@ -84,6 +85,8 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         blush,
         setBlush,
         resetAdjustments,
+        disableBeautyRollback,
+        enableNaturalBeauty,
         getBeautyFilterCss,
         printScale,
         setPrintScale,
@@ -398,9 +401,66 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         style={{
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '16px',
+                                            gap: '12px',
                                         }}
                                     >
+                                        {/* Nút Disable / Rollback về máy ảnh gốc */}
+                                        {beautyEnabled ? (
+                                            <button
+                                                className="btn-disable-beauty-touch"
+                                                onClick={disableBeautyRollback}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(239, 68, 68, 0.6)',
+                                                    backgroundColor:
+                                                        'rgba(239, 68, 68, 0.15)',
+                                                    color: '#f87171',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="Tắt toàn bộ Beauty và Rollback về hình ảnh camera gốc"
+                                            >
+                                                <Ban
+                                                    size={15}
+                                                    strokeWidth={2.4}
+                                                />
+                                                <span>Disable (Rollback Gốc)</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="btn-enable-beauty-touch"
+                                                onClick={enableNaturalBeauty}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(56, 189, 248, 0.6)',
+                                                    backgroundColor:
+                                                        'rgba(56, 189, 248, 0.15)',
+                                                    color: '#38bdf8',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="Bật lại AI Beauty tự nhiên"
+                                            >
+                                                <Sparkles
+                                                    size={15}
+                                                    strokeWidth={2.4}
+                                                />
+                                                <span>Bật Lại Beauty</span>
+                                            </button>
+                                        )}
+
                                         <div
                                             style={{
                                                 display: 'flex',
@@ -448,6 +508,59 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Banner thông báo trạng thái khi đang Disable / Rollback */}
+                                {!beautyEnabled && (
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '10px 14px',
+                                            backgroundColor:
+                                                'rgba(239, 68, 68, 0.12)',
+                                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                                            borderRadius: '8px',
+                                            marginTop: '12px',
+                                            marginBottom: '8px',
+                                            color: '#fca5a5',
+                                            fontSize: '13px',
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}
+                                        >
+                                            <Ban
+                                                size={16}
+                                                strokeWidth={2.2}
+                                            />
+                                            <span>
+                                                <strong>Đã Tắt Beauty (Rollback):</strong> Live View đang hiển thị 100% hình ảnh nguyên bản từ cảm biến máy ảnh, không can thiệp làm đẹp.
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={enableNaturalBeauty}
+                                            style={{
+                                                padding: '4px 12px',
+                                                borderRadius: '6px',
+                                                backgroundColor: '#3b82f6',
+                                                color: '#fff',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap',
+                                                marginLeft: '12px',
+                                            }}
+                                        >
+                                            Bật Lại Natural
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* Presets Nhanh */}
                                 <div className="beauty-presets-touch-row">

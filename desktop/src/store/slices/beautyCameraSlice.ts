@@ -61,6 +61,8 @@ export interface BeautyCameraSlice {
     setSaturationAdjust: (val: number) => void
     saveBeautyConfig: (config?: Partial<BeautyConfig>) => void
     resetAdjustments: () => void
+    disableBeautyRollback: () => void
+    enableNaturalBeauty: () => void
     getBeautyFilterCss: () => string
     getCameraTransformCss: (mirror: boolean) => string
     getEffectiveFilterCss: () => string
@@ -117,7 +119,21 @@ export const createBeautyCameraSlice: StateCreator<
 
     return {
         beautyEnabled: active.beautyEnabled !== false,
-        setBeautyEnabled: (beautyEnabled) => set({ beautyEnabled }),
+        setBeautyEnabled: (beautyEnabled) => {
+            set({ beautyEnabled })
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({ ...parsed, beautyEnabled })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to persist beautyEnabled:', e)
+            }
+        },
         selectedBeautyPreset: 'natural',
         slimFace: active.slimFace ?? 4,
         vLine: active.vLine ?? 4,
@@ -224,6 +240,72 @@ export const createBeautyCameraSlice: StateCreator<
                 rosyTone: 10,
                 slimFace: 4,
             })
+        },
+
+        disableBeautyRollback: () => {
+            get().applyBeautyPreset('none')
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({
+                            ...parsed,
+                            beautyEnabled: false,
+                            selectedBeautyPreset: 'none',
+                            skinSmoothing: 0,
+                            skinToneEvenness: 0,
+                            vLine: 0,
+                            bigEyes: 0,
+                            blush: 0,
+                            rosyTone: 0,
+                            slimFace: 0,
+                            whiteningTone: 0,
+                            glowClarity: 0,
+                            brightnessAdjust: 100,
+                            contrastAdjust: 100,
+                            saturationAdjust: 100,
+                            mirror: true,
+                        })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to save disabled beauty config:', e)
+            }
+        },
+
+        enableNaturalBeauty: () => {
+            get().applyBeautyPreset('natural')
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({
+                            ...parsed,
+                            beautyEnabled: true,
+                            selectedBeautyPreset: 'natural',
+                            skinSmoothing: 45,
+                            skinToneEvenness: 30,
+                            vLine: 4,
+                            bigEyes: 5,
+                            blush: 10,
+                            rosyTone: 10,
+                            slimFace: 4,
+                            whiteningTone: 0,
+                            glowClarity: 0,
+                            brightnessAdjust: 100,
+                            contrastAdjust: 100,
+                            saturationAdjust: 100,
+                            mirror: true,
+                        })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to save natural beauty config:', e)
+            }
         },
 
         getBeautyFilterCss: () => {
