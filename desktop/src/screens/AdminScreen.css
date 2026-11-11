@@ -1304,6 +1304,99 @@
     margin-bottom: 24px;
 }
 
+.print-scale-card {
+    background: #faf7f2;
+    border: 1.8px solid #eae0d7;
+    border-radius: 18px;
+    padding: 20px 22px;
+    margin-bottom: 24px;
+}
+
+.print-scale-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    gap: 16px;
+}
+
+.print-scale-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.print-scale-label-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.print-scale-value-badge {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #e0533c;
+    background: #ffffff;
+    border: 1.5px solid #eae0d7;
+    padding: 2px 12px;
+    border-radius: 10px;
+    letter-spacing: -0.02em;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.print-scale-subtitle {
+    font-size: 0.88rem;
+    color: #7a5849;
+    font-weight: 500;
+}
+
+.btn-print-scale-reset {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1.5px solid #eae0d7;
+    background: #ffffff;
+    color: #502a1d;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-print-scale-reset:hover {
+    background: #502a1d;
+    color: #ffffff;
+    border-color: #502a1d;
+}
+
+.print-scale-slider-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.print-scale-slider {
+    height: 10px;
+}
+
+.print-scale-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8c6e61;
+    padding: 0 2px;
+}
+
+.tick-highlight {
+    color: #e0533c;
+    font-weight: 800;
+}
+
 .paper-supply-card {
     background: #faf7f2;
     border: 1.8px solid #eae0d7;

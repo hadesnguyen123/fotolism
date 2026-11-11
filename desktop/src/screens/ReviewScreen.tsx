@@ -42,6 +42,7 @@ export default function ReviewScreen() {
         setDriveSyncError: setSyncError,
         cloudFolderUrl,
         setCloudFolderUrl,
+        printScale,
     } = useAppStore()
 
     const defaultCopies =
@@ -611,7 +612,10 @@ export default function ReviewScreen() {
                 compositeStripUrl || photos[0]?.compositedPath || ''
 
             if (pathToPrint) {
-                pathToPrint = await preparePrintImageForDNP(pathToPrint)
+                pathToPrint = await preparePrintImageForDNP(
+                    pathToPrint,
+                    printScale
+                )
             }
 
             // Số tờ vật lý cần in: Khổ 2x6 kép 1 tờ chứa 2 dải, khổ 4x6 1 tờ chứa 1 ảnh

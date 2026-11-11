@@ -440,16 +440,73 @@ export async function generateStripComposite(
 }
 
 /**
+ * Lấy mẫu màu viền/góc của ảnh để làm màu nền khi scale thu nhỏ,
+ * giúp mép ảnh hòa quyện liền mạch với khung (tránh viền trắng khi khung màu tối/kem).
+ */
+export function sampleImageEdgeColor(img: CanvasImageSource): string {
+    try {
+        if (typeof document === 'undefined') return '#FFFFFF'
+        const sampleCanvas = document.createElement('canvas')
+        sampleCanvas.width = 16
+        sampleCanvas.height = 16
+        const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return '#FFFFFF'
+        ctx.drawImage(img, 0, 0, 16, 16)
+
+        // 4 góc
+        const corners = [
+            ctx.getImageData(0, 0, 1, 1).data,
+            ctx.getImageData(15, 0, 1, 1).data,
+            ctx.getImageData(0, 15, 1, 1).data,
+            ctx.getImageData(15, 15, 1, 1).data,
+        ]
+
+        const avgR = Math.round(corners.reduce((s, c) => s + c[0], 0) / 4)
+        const avgG = Math.round(corners.reduce((s, c) => s + c[1], 0) / 4)
+        const avgB = Math.round(corners.reduce((s, c) => s + c[2], 0) / 4)
+
+        return `rgb(${avgR}, ${avgG}, ${avgB})`
+    } catch {
+        return '#FFFFFF'
+    }
+}
+
+/**
  * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6:
- * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau đúng chuẩn Photobooth Template.
- * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200): Giữ nguyên.
+ * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau.
+ * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200 hoặc 1240x1844): Giữ nguyên kích thước canvas.
+ * - Áp dụng Print Scale (90% - 100%, bước 0.25%):
+ *   Thu nhỏ nội dung đồng đều theo tỉ lệ (preserving aspect ratio), căn giữa 2 chiều,
+ *   lấp viền bằng màu mẫu góc/viền của ảnh để hạn chế viền trắng.
+ *   Không thay đổi kích thước canvas đầu ra.
  */
 export async function preparePrintImageForDNP(
-    sourceDataUrl: string
+    sourceDataUrl: string,
+    printScalePercent?: number
 ): Promise<string> {
     const img = await loadImage(sourceDataUrl)
     const srcW = img.naturalWidth || img.width
     const srcH = img.naturalHeight || img.height
+
+    // Xác định tỉ lệ scale (mặc định 100% nếu không truyền hoặc đọc từ localStorage)
+    let effectiveScale =
+        typeof printScalePercent === 'number' ? printScalePercent : 100.0
+    if (
+        typeof printScalePercent !== 'number' &&
+        typeof window !== 'undefined'
+    ) {
+        try {
+            const raw = localStorage.getItem('fotolism_print_scale')
+            if (raw !== null) {
+                const parsed = parseFloat(raw)
+                if (!isNaN(parsed) && parsed >= 90 && parsed <= 100) {
+                    effectiveScale = parsed
+                }
+            }
+        } catch {}
+    }
+    effectiveScale = Math.min(100, Math.max(90, effectiveScale))
+    const scaleFactor = effectiveScale / 100.0
 
     // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, ví dụ 600x1800)
     // Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 bản in khổ 4x6 (1200 x 1800 px)
@@ -460,15 +517,23 @@ export async function preparePrintImageForDNP(
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
 
-        // Nền trắng
-        ctx.fillStyle = '#FFFFFF'
+        // Màu nền lấp viền lấy từ 4 góc ảnh
+        const bgColor = sampleImageEdgeColor(img)
+        ctx.fillStyle = bgColor
         ctx.fillRect(0, 0, 1200, 1800)
 
-        // Dải 1: Bên trái (x: 0 -> 600 px)
-        ctx.drawImage(img, 0, 0, 600, 1800)
+        // Tính kích thước và vị trí căn giữa cho từng dải trong khổ 600x1800
+        const targetStripW = Math.round(600 * scaleFactor)
+        const targetStripH = Math.round(1800 * scaleFactor)
+        const leftColX = Math.round((600 - targetStripW) / 2)
+        const rightColX = 600 + Math.round((600 - targetStripW) / 2)
+        const offsetY = Math.round((1800 - targetStripH) / 2)
 
-        // Dải 2: Bên phải (x: 600 -> 1200 px)
-        ctx.drawImage(img, 600, 0, 600, 1800)
+        // Dải 1: Bên trái (căn giữa trong ô 0 -> 600 px)
+        ctx.drawImage(img, leftColX, offsetY, targetStripW, targetStripH)
+
+        // Dải 2: Bên phải (căn giữa trong ô 600 -> 1200 px)
+        ctx.drawImage(img, rightColX, offsetY, targetStripW, targetStripH)
 
         // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
         ctx.save()
@@ -484,6 +549,28 @@ export async function preparePrintImageForDNP(
         return canvas.toDataURL('image/jpeg', 0.98)
     }
 
-    // Trường hợp 2: Ảnh đã là khổ 4x6 (1200x1800 hoặc 1800x1200)
-    return sourceDataUrl
+    // Trường hợp 2: Khổ 4x6 hoặc tự do (1200x1800, 1800x1200, 1240x1844...)
+    // 100% giữ nguyên hành vi in hiện tại
+    if (scaleFactor >= 0.9999) {
+        return sourceDataUrl
+    }
+
+    // Scale < 100%: Căn giữa, không biến dạng, giữ nguyên kích thước canvas
+    const canvas = document.createElement('canvas')
+    canvas.width = srcW
+    canvas.height = srcH
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return sourceDataUrl
+
+    const bgColor = sampleImageEdgeColor(img)
+    ctx.fillStyle = bgColor
+    ctx.fillRect(0, 0, srcW, srcH)
+
+    const targetW = Math.round(srcW * scaleFactor)
+    const targetH = Math.round(srcH * scaleFactor)
+    const offsetX = Math.round((srcW - targetW) / 2)
+    const offsetY = Math.round((srcH - targetH) / 2)
+
+    ctx.drawImage(img, offsetX, offsetY, targetW, targetH)
+    return canvas.toDataURL('image/jpeg', 0.98)
 }
