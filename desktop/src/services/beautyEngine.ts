@@ -66,17 +66,17 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
         name: 'Tự Nhiên (Studio C1 Style)',
         icon: '✨',
         description:
-            'Chất ảnh Studio Capture One: Mịn màng 100%, xóa mụn 80%, sáng bọng mắt 80% và tone trắng hồng',
+            'Chất ảnh Studio tự nhiên: Mịn nhẹ êm ái, mắt to vừa vặn, cằm thon gọn',
         slimFace: 18,
         vLine: 16,
         bigEyes: 12,
-        skinSmoothing: 80,
-        smoothing: 80,
-        whiteningTone: 45,
-        rosyTone: 35,
-        glowClarity: 38,
-        brightness: 104,
-        contrast: 94,
+        skinSmoothing: 45,
+        smoothing: 45,
+        whiteningTone: 0,
+        rosyTone: 0,
+        glowClarity: 0,
+        brightness: 100,
+        contrast: 100,
     },
     {
         id: 'radiant',
@@ -209,7 +209,32 @@ void main() {
         }
     }
 
-    // ── 2. THON GỌN MẶT & CẰM V-LINE (FACE SLIMMING & V-LINE) ──
+    // ── 2. THON GỌN MŨI TỰ NHIÊN (NOSE SLIMMING) ──
+    if (u_slimFace > 0.0 && u_numFaces > 0) {
+        for (int i = 0; i < 4; i++) {
+            if (i >= u_numFaces) break;
+            vec4 bounds = u_faceBounds[i];
+            vec4 vline = u_faceVLine[i];
+            float noseX = vline.z;
+            float noseY = vline.w;
+            float faceW = bounds.z;
+            float faceH = bounds.w;
+
+            float dNoseY = abs(uv.y - noseY);
+            float noseRangeY = max(faceH * 0.14, 0.03);
+            if (dNoseY < noseRangeY) {
+                float yWeight = smoothstep(noseRangeY, 0.0, dNoseY);
+                float dxNose = uv.x - noseX;
+                float noseRangeX = max(faceW * 0.16, 0.03);
+                if (abs(dxNose) < noseRangeX) {
+                    float xWeight = smoothstep(noseRangeX, 0.0, abs(dxNose));
+                    uv.x += dxNose * (u_slimFace * 0.14 * yWeight * xWeight);
+                }
+            }
+        }
+    }
+
+    // ── 3. THON GỌN MẶT & CẰM V-LINE (FACE SLIMMING & V-LINE) ──
     float totalSlim = max(u_slimFace, u_vLine);
     if (totalSlim > 0.0 && u_numFaces > 0) {
         for (int i = 0; i < 4; i++) {
@@ -226,23 +251,22 @@ void main() {
             float jawRange = max(chinY - noseY, 0.05);
 
             // Vùng tác động: Từ dưới mắt/chóp mũi đến ngay đáy cằm
-            if (dy > 0.0 && uv.y < chinY + faceH * 0.08) {
+            if (dy > 0.0 && uv.y < chinY + faceH * 0.06) {
                 float yNorm = dy / jawRange; // 0 ở chóp mũi, 1 ở đáy cằm
 
-                // Trọng số bóp má (Face Slimming) quanh gò má và xương hàm (0.10 - 0.70)
+                // Trọng số bóp má (Face Slimming) quanh gò má và xương hàm
                 float slimYWeight = smoothstep(0.04, 0.32, yNorm) * smoothstep(0.96, 0.64, yNorm);
 
-                // Trọng số bóp cằm nhọn (V-Line) tập trung ở nửa dưới gần cằm (0.45 - 1.05)
+                // Trọng số bóp cằm nhọn (V-Line) tập trung ở nửa dưới gần cằm
                 float vLineYWeight = smoothstep(0.40, 0.85, yNorm) * smoothstep(1.10, 0.85, yNorm);
 
                 float dx = uv.x - centerX;
                 float halfJawW = max(faceW * 0.48, 0.04);
                 float xNorm = abs(dx) / halfJawW;
 
-                // CHỈ TÁC ĐỘNG BÊN TRONG BÁN KÍNH MẶT, HOÀN TOÀN KHÔNG BỊ KÉO KHUNG HÌNH HAY NỀN
                 if (xNorm < 1.0) {
                     float xWeight = smoothstep(1.0, 0.15, xNorm);
-                    float warpFactor = (u_slimFace * 0.30 * slimYWeight + u_vLine * 0.35 * vLineYWeight) * xWeight;
+                    float warpFactor = (u_slimFace * 0.28 * slimYWeight + u_vLine * 0.32 * vLineYWeight) * xWeight;
                     uv.x += dx * warpFactor;
                 }
             }
@@ -254,27 +278,10 @@ void main() {
 
     vec3 centerColor = texture2D(u_image, uv).rgb;
 
-    // ── 3. NHẬN DIỆN MẶT NẠ DA NGƯỜI (CHUẨN XÁC, LOẠI TRỪ ÁO TỐI MÀU, TÓC VÀ RÈM ĐỎ) ──
-    float luma = 0.299 * centerColor.r + 0.587 * centerColor.g + 0.114 * centerColor.b;
-    // Bắt buộc pixel phải có độ sáng tối thiểu để loại bỏ hoàn toàn áo đen, tóc, bóng tối (luma < 0.16)
-    bool isNotTooDarkOrBright = (luma >= 0.16 && luma <= 0.96);
-
-    float Cb = -0.168736 * centerColor.r - 0.331264 * centerColor.g + 0.5 * centerColor.b + 0.5;
-    float Cr = 0.5 * centerColor.r - 0.418688 * centerColor.g - 0.081312 * centerColor.b + 0.5;
-    // Da người thực tế luôn có Cr >= 0.525 (loại bỏ màu xám/đen trung tính Cr = 0.50)
-    bool colorIsSkinYCbCr = (Cb >= 0.28 && Cb <= 0.52 && Cr >= 0.525 && Cr <= 0.72);
-    // Điều kiện RGB: Sắc tố đỏ trội hơn xanh lá và xanh dương, mức đỏ tối thiểu > 0.18
-    bool colorIsSkinRGB = (centerColor.r > centerColor.g * 1.02) && 
-                          (centerColor.g > centerColor.b * 1.01) && 
-                          ((centerColor.r - centerColor.b) > 0.04) && 
-                          (centerColor.r > 0.18);
-    // Loại trừ vải rèm nhung đỏ có sắc đỏ và độ bão hòa quá lớn
-    bool isRedFabric = (centerColor.r > centerColor.g * 1.65) && (centerColor.r > centerColor.b * 2.0);
-    bool isLikelySkin = isNotTooDarkOrBright && (colorIsSkinYCbCr || colorIsSkinRGB) && !isRedFabric;
-
-    float isSkin = 0.0;
-    if (u_numFaces > 0) {
-        float faceProx = 0.0;
+    // ── 4. LÀM MỊN DA NHẸ NHÀNG, LIÊN TỤC VÀ TỰ NHIÊN (KHÔNG PHÂN MẢNH, KHÔNG VỠ HẠT) ──
+    // Sử dụng mặt nạ hình học liên tục (smooth gradient), loại bỏ hoàn toàn việc threshold màu gây vỡ khối pixel
+    float faceSmoothMask = 0.0;
+    if (u_numFaces > 0 && u_skinSmooth > 0.01) {
         for (int i = 0; i < 4; i++) {
             if (i >= u_numFaces) break;
             vec4 bounds = u_faceBounds[i];
@@ -284,93 +291,49 @@ void main() {
             float faceW = bounds.z;
             float faceH = bounds.w;
 
-            // Khóa cứng đáy cằm: Tuyệt đối không cho filter lem xuống cổ và ngực áo
-            float chinCutoff = smoothstep(chinY + faceH * 0.04, chinY - faceH * 0.02, uv.y);
+            // Khóa chặn đáy cằm mượt mà, tuyệt đối không lem ra cổ và ngực áo
+            float chinCutoff = smoothstep(chinY + faceH * 0.03, chinY - faceH * 0.02, uv.y);
 
-            // Mặt nạ hình elip khớp tỷ lệ khuôn mặt (thay vì hình tròn làm lem sang hai bên và ngực)
-            float halfW = max(faceW * 0.52, 0.03);
-            float halfH = max(faceH * 0.52, 0.04);
+            // Bán kính oval khuôn mặt với dải chuyển tiếp siêu mượt (smooth gradient)
+            float halfW = max(faceW * 0.46, 0.03);
+            float halfH = max(faceH * 0.46, 0.04);
             vec2 normDist = vec2((uv.x - fCenter.x) / halfW, (uv.y - fCenter.y) / halfH);
             float ellipDist = length(normDist);
 
-            if (ellipDist < 1.0 && chinCutoff > 0.001) {
-                float p = smoothstep(1.0, 0.45, ellipDist) * chinCutoff;
-                faceProx = max(faceProx, p);
+            if (ellipDist < 1.0) {
+                float m = smoothstep(1.0, 0.25, ellipDist) * chinCutoff;
+                faceSmoothMask = max(faceSmoothMask, m);
             }
         }
-        // CHỈ ÁP DỤNG TRÊN ĐÚNG VÙNG DA THẬT SỰ BÊN TRONG KHUÔN MẶT, KHÔNG ÁP DỤNG LÊN ÁO HAY TÓC
-        isSkin = faceProx * (isLikelySkin ? 1.0 : 0.0);
-    } else {
-        // Mất khuôn mặt: TUYỆT ĐỐI KHÔNG ÁP DỤNG FILTER ĐỂ KHÔNG CHỚP NHÁY
-        isSkin = 0.0;
     }
 
-    // ── 4. LÀM MỊN DA BILATERAL FILTER GIỮ NGUYÊN CHI TIẾT (SKIN SMOOTHING) ──
-    vec3 smoothedColor = centerColor;
-    if (u_skinSmooth > 0.01 && isSkin > 0.05) {
-        vec3 sumColor = vec3(0.0);
-        float sumWeight = 0.0;
-        vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y);
-        float radius = 1.5 + u_skinSmooth * 6.5;
+    // Làm mịn dịu nhẹ (Soft blur 4 góc đối xứng, bảo toàn 100% cấu trúc chi tiết mắt mũi)
+    vec3 finalColor = centerColor;
+    if (faceSmoothMask > 0.005) {
+        vec2 stepUV = vec2(1.0 / u_resolution.x, 1.0 / u_resolution.y) * (1.2 + u_skinSmooth * 2.2);
+        vec3 softBlur = centerColor * 0.36;
+        softBlur += texture2D(u_image, uv + vec2(-1.0, -1.0) * stepUV).rgb * 0.16;
+        softBlur += texture2D(u_image, uv + vec2(1.0, -1.0) * stepUV).rgb * 0.16;
+        softBlur += texture2D(u_image, uv + vec2(-1.0, 1.0) * stepUV).rgb * 0.16;
+        softBlur += texture2D(u_image, uv + vec2(1.0, 1.0) * stepUV).rgb * 0.16;
 
-        for (float x = -3.0; x <= 3.0; x += 1.0) {
-            for (float y = -3.0; y <= 3.0; y += 1.0) {
-                vec2 offset = vec2(x, y) * stepUV * (radius / 3.0);
-                vec3 sampleColor = texture2D(u_image, uv + offset).rgb;
-
-                float distSpatial = dot(vec2(x, y), vec2(x, y));
-                float wSpatial = exp(-distSpatial / 8.0);
-
-                float diff = distance(centerColor, sampleColor);
-                float wRange = exp(-diff * diff / (0.015 + (1.0 - u_skinSmooth) * 0.035));
-
-                float w = wSpatial * wRange;
-                sumColor += sampleColor * w;
-                sumWeight += w;
-            }
-        }
-        vec3 skinFiltered = sumColor / max(sumWeight, 0.0001);
-        smoothedColor = mix(centerColor, skinFiltered, isSkin * min(u_skinSmooth * 1.25, 1.0));
+        // Hòa trộn liên tục theo mask oval mượt, mức tối đa vừa phải (~35-40%) để giữ nét thật
+        float blendFactor = faceSmoothMask * min(u_skinSmooth * 0.50, 0.42);
+        finalColor = mix(centerColor, softBlur, blendFactor);
     }
 
-    // ── 5. NÂNG TONE TRẮNG SÁNG TỰ NHIÊN (SKIN WHITENING) ──
-    vec3 result = smoothedColor;
-    if (u_whitening > 0.0 && isSkin > 0.01) {
-        float whiteEff = u_whitening * isSkin;
-        result = mix(result, 1.0 - (1.0 - result) * (1.0 - result), whiteEff * 0.30);
-        result += vec3(whiteEff * 0.07);
-    }
-
-    // ── 6. TRẮNG HỒNG MÁ ĐÀO (ROSY TONE) ──
-    if (u_rosyTone > 0.0 && isSkin > 0.01) {
-        float rosyEff = u_rosyTone * isSkin;
-        result.r += rosyEff * 0.045;
-        result.b += rosyEff * 0.022;
-        result.g -= rosyEff * 0.016;
-    }
-
-    // ── 7. SÁNG NÉT CHI TIẾT (CLARITY - BẢO VỆ MẮT, LÔNG MI, TÓC) ──
-    if (u_clarity > 0.0 && isSkin > 0.01 && luma > 0.20) {
-        vec3 detail = centerColor - smoothedColor;
-        result += detail * (u_clarity * 0.50 * isSkin);
-    }
-
-    // ── 8. ĐỘ SÁNG, TƯƠNG PHẢN & ĐỘ BÃO HÒA (CHỈ TÁC ĐỘNG TRONG VÙNG DA MẶT, BẢO TOÀN PHÔNG NỀN) ──
-    vec3 adjusted = result;
+    // Điều chỉnh độ sáng/tương phản nhẹ nhàng trên toàn khung (nếu có tùy chỉnh)
     if (u_brightness != 1.0) {
-        adjusted *= u_brightness;
+        finalColor *= u_brightness;
     }
     if (u_contrast != 1.0) {
-        adjusted = (adjusted - 0.5) * u_contrast + 0.5;
+        finalColor = (finalColor - 0.5) * u_contrast + 0.5;
     }
     if (u_saturation != 1.0) {
-        float gray = dot(adjusted, vec3(0.299, 0.587, 0.114));
-        adjusted = mix(vec3(gray), adjusted, u_saturation);
+        float gray = dot(finalColor, vec3(0.299, 0.587, 0.114));
+        finalColor = mix(vec3(gray), finalColor, u_saturation);
     }
-    result = mix(result, adjusted, isSkin);
 
-    // KẾT HỢP ALPHA BLEND: NGOÀI VÙNG MẶT (isSkin == 0.0) BẢO TOÀN 100% centerColor CỦA MÁY ẢNH
-    vec3 finalColor = mix(centerColor, result, smoothstep(0.0, 0.15, isSkin));
     gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
 }
 `
