@@ -85,6 +85,8 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         setRosyTone,
         resetAdjustments,
         getBeautyFilterCss,
+        printScale,
+        setPrintScale,
     } = useAppStore()
 
     const isCameraOnline = Boolean(daemonStatus?.running)
@@ -677,6 +679,80 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         600 DPI (Siêu chi tiết)
                                     </option>
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* Cấu hình Tỉ lệ in (Print Scale) - Bù trừ xén lẹm máy in */}
+                        <div className="print-scale-card">
+                            <div className="print-scale-header">
+                                <div className="print-scale-title-group">
+                                    <div className="print-scale-label-row">
+                                        <label
+                                            className="form-label-touch"
+                                            style={{ margin: 0 }}
+                                        >
+                                            Tỉ lệ in (Print Scale)
+                                        </label>
+                                        <span className="print-scale-value-badge font-mono">
+                                            {printScale.toFixed(2)}%
+                                        </span>
+                                    </div>
+                                    <span className="print-scale-subtitle">
+                                        Thu nhỏ ảnh để bù hiện tượng máy in phóng
+                                        ảnh và xén lẹm 4 cạnh giấy (90.00% –
+                                        100.00%, bước 0.25%)
+                                    </span>
+                                </div>
+                                {printScale !== 100 && (
+                                    <button
+                                        type="button"
+                                        className="btn-print-scale-reset"
+                                        onClick={() => setPrintScale(100)}
+                                        title="Khôi phục mặc định 100.00%"
+                                    >
+                                        <RotateCcw size={14} />
+                                        <span>Đặt lại 100%</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="print-scale-slider-container">
+                                <input
+                                    type="range"
+                                    min={90}
+                                    max={100}
+                                    step={0.25}
+                                    value={printScale}
+                                    onChange={(e) =>
+                                        setPrintScale(
+                                            parseFloat(e.target.value)
+                                        )
+                                    }
+                                    className="touch-range-slider print-scale-slider"
+                                />
+                                <div className="print-scale-ticks">
+                                    <span>90.00% (Thu nhỏ tối đa)</span>
+                                    <span>95.00%</span>
+                                    <span>98.00%</span>
+                                    <span
+                                        className={
+                                            printScale === 99.75
+                                                ? 'tick-highlight'
+                                                : ''
+                                        }
+                                    >
+                                        99.75%
+                                    </span>
+                                    <span
+                                        className={
+                                            printScale === 100
+                                                ? 'tick-highlight'
+                                                : ''
+                                        }
+                                    >
+                                        100.00% (Gốc)
+                                    </span>
+                                </div>
                             </div>
                         </div>
 

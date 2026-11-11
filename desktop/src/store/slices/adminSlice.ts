@@ -18,6 +18,8 @@ import {
     DEFAULT_GDRIVE_WEBHOOK_URL,
     SAVE_ROOT_DIR,
     LS_EVENT_CONFIG_KEY,
+    LS_PRINT_SCALE_KEY,
+    DEFAULT_PRINT_SCALE,
 } from '../../lib/constants'
 import type { DeviceConfig } from '../../services/cloudSyncService'
 import type { DiscountCoupon } from '../../config/coupons'
@@ -169,6 +171,21 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
     return {}
 }
 
+export function loadSavedPrintScale(): number {
+    try {
+        if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem(LS_PRINT_SCALE_KEY)
+            if (raw !== null) {
+                const parsed = parseFloat(raw)
+                if (!isNaN(parsed) && parsed >= 90 && parsed <= 100) {
+                    return Math.round(parsed * 100) / 100
+                }
+            }
+        }
+    } catch {}
+    return DEFAULT_PRINT_SCALE
+}
+
 export interface AdminSlice {
     boothMode: BoothMode
     setBoothMode: (mode: BoothMode) => void
@@ -176,6 +193,8 @@ export interface AdminSlice {
     setEventConfig: (config: Partial<EventConfig>) => void
     setCaptureMode: (mode: CaptureMode) => void
     setSelfboothDurationSeconds: (seconds: number) => void
+    printScale: number
+    setPrintScale: (scale: number) => void
     deviceConfig: DeviceConfig | null
     isDeviceActivated: boolean
     loadDeviceConfig: () => Promise<DeviceConfig | null>
@@ -221,6 +240,22 @@ export const createAdminSlice: StateCreator<
         set((state) => ({
             eventConfig: { ...state.eventConfig, selfboothDurationSeconds },
         })),
+
+    printScale: loadSavedPrintScale(),
+    setPrintScale: (val: number) => {
+        const clamped = Math.min(
+            100,
+            Math.max(90, Math.round(val * 100) / 100)
+        )
+        try {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(LS_PRINT_SCALE_KEY, clamped.toString())
+            }
+        } catch (err) {
+            console.warn('Failed to persist printScale to localStorage:', err)
+        }
+        set({ printScale: clamped })
+    },
 
     deviceConfig: null,
     isDeviceActivated: false,

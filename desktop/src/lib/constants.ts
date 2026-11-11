@@ -55,6 +55,12 @@ export const LS_BEAUTY_CONFIG_KEY = 'fotolism_beauty_config'
 /** LocalStorage key cho event & settings config */
 export const LS_EVENT_CONFIG_KEY = 'fotolism_event_config'
 
+/** LocalStorage key cho cấu hình Print Scale (bù trừ xén lẹm mép in) */
+export const LS_PRINT_SCALE_KEY = 'fotolism_print_scale'
+
+/** Tỉ lệ co dãn in ấn mặc định (100.00%) */
+export const DEFAULT_PRINT_SCALE = 100.0
+
 // ── 4. VietQR & Banking Defaults ──
 /** Mã BIN ngân hàng mặc định (970422 = MB Bank) */
 export const DEFAULT_BANK_BIN = '970422'

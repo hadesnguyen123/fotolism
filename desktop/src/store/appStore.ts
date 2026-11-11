@@ -46,6 +46,7 @@ import {
     createAdminSlice,
     DEFAULT_EVENT_CONFIG,
     loadSavedEventConfig,
+    loadSavedPrintScale,
 } from './slices/adminSlice'
 
 export type {
@@ -72,6 +73,7 @@ export {
     DEFAULT_BEAUTY_CONFIG,
     DEFAULT_EVENT_CONFIG,
     loadSavedEventConfig,
+    loadSavedPrintScale,
 }
 
 // ─── 3. Global AppStore Interface (Full Backward Compatibility) ──
