@@ -20,13 +20,16 @@ interface BeautyCameraViewProps {
     stream?: MediaStream | null
     mjpegUrl?: string
     mirrorCamera: boolean
-    slimFace: number // 0 - 100 (Thon gọn má)
-    vLine?: number // 0 - 100 (Cằm V-Line)
-    bigEyes?: number // 0 - 100 (Phóng to mắt)
-    skinSmoothing: number // 0 - 100 (Làm mịn da Bilateral)
-    whiteningTone: number // 0 - 100 (Nâng tone trắng sáng)
-    rosyTone: number // 0 - 100 (Trắng hồng tự nhiên)
-    glowClarity: number // 0 - 100 (Sáng nét chi tiết)
+    beautyEnabled?: boolean
+    skinSmoothing: number // 0 - 100 (Target: 45%)
+    skinToneEvenness?: number // 0 - 100 (Target: 30%)
+    vLine?: number // 0 - 100 (Target: 4%)
+    bigEyes?: number // 0 - 100 (Target: 5%)
+    blush?: number // 0 - 100 (Target: 10%)
+    slimFace?: number // 0 - 100 (Tương thích)
+    whiteningTone?: number // 0 - 100 (Tương thích)
+    rosyTone?: number // 0 - 100 (Tương thích)
+    glowClarity?: number // 0 - 100 (Tương thích)
     brightnessAdjust?: number // 80 - 130
     contrastAdjust?: number // 80 - 130
     saturationAdjust?: number // 70 - 150
@@ -86,12 +89,15 @@ export const BeautyCameraView = forwardRef<
             stream,
             mjpegUrl,
             mirrorCamera,
-            slimFace,
-            vLine = 0,
-            bigEyes = 0,
+            beautyEnabled = true,
             skinSmoothing,
+            skinToneEvenness = 30,
+            vLine = 4,
+            bigEyes = 5,
+            blush = 10,
+            slimFace = 4,
             whiteningTone,
-            rosyTone,
+            rosyTone = 10,
             glowClarity,
             brightnessAdjust = 100,
             contrastAdjust = 100,
@@ -403,10 +409,15 @@ export const BeautyCameraView = forwardRef<
             if (!gl || !program || !canvas) return
 
             const uResolution = gl.getUniformLocation(program, 'u_resolution')
+            const uBeautyEnabled = gl.getUniformLocation(
+                program,
+                'u_beautyEnabled'
+            )
             const uSlimFace = gl.getUniformLocation(program, 'u_slimFace')
             const uVLine = gl.getUniformLocation(program, 'u_vLine')
             const uBigEyes = gl.getUniformLocation(program, 'u_bigEyes')
             const uSkinSmooth = gl.getUniformLocation(program, 'u_skinSmooth')
+            const uSkinTone = gl.getUniformLocation(program, 'u_skinTone')
             const uWhitening = gl.getUniformLocation(program, 'u_whitening')
             const uRosyTone = gl.getUniformLocation(program, 'u_rosyTone')
             const uClarity = gl.getUniformLocation(program, 'u_clarity')
@@ -462,13 +473,22 @@ export const BeautyCameraView = forwardRef<
                 gl.useProgram(program)
 
                 // Cập nhật Uniforms tham số làm đẹp
+                gl.uniform1i(uBeautyEnabled, beautyEnabled ? 1 : 0)
                 gl.uniform2f(uResolution, canvas.width, canvas.height)
-                gl.uniform1f(uSlimFace, (slimFace || 0) / 100.0)
+                gl.uniform1f(uSkinSmooth, (skinSmoothing || 0) / 100.0)
+                gl.uniform1f(
+                    uSkinTone,
+                    (skinToneEvenness !== undefined ? skinToneEvenness : 30) /
+                        100.0
+                )
                 gl.uniform1f(uVLine, (vLine || 0) / 100.0)
                 gl.uniform1f(uBigEyes, (bigEyes || 0) / 100.0)
-                gl.uniform1f(uSkinSmooth, (skinSmoothing || 0) / 100.0)
+                gl.uniform1f(
+                    uRosyTone,
+                    (blush !== undefined ? blush : rosyTone || 0) / 100.0
+                )
+                gl.uniform1f(uSlimFace, (slimFace || 0) / 100.0)
                 gl.uniform1f(uWhitening, (whiteningTone || 0) / 100.0)
-                gl.uniform1f(uRosyTone, (rosyTone || 0) / 100.0)
                 gl.uniform1f(uClarity, (glowClarity || 0) / 100.0)
                 gl.uniform1f(uBrightness, (brightnessAdjust || 100) / 100.0)
                 gl.uniform1f(uContrast, (contrastAdjust || 100) / 100.0)
@@ -536,11 +556,13 @@ export const BeautyCameraView = forwardRef<
             function renderLoop() {
                 if (!isRunning) return
 
-                // Nhận diện khuôn mặt với MediaPipe ở ~25-30 FPS để tối ưu CPU/GPU
+                // Nhận diện khuôn mặt với MediaPipe ở ~8 FPS (120ms) để tối ưu CPU/GPU
+                // Hoàn toàn bỏ qua detection nếu tắt beauty (tiết kiệm 100% CPU phát hiện)
                 const now = performance.now()
                 if (
+                    beautyEnabled &&
                     !isDetectingRef.current &&
-                    now - lastDetectTimeRef.current >= 33
+                    now - lastDetectTimeRef.current >= 120
                 ) {
                     lastDetectTimeRef.current = now
                     isDetectingRef.current = true
@@ -582,10 +604,10 @@ export const BeautyCameraView = forwardRef<
                                                     rawFaces
                                                 )
                                         } else {
-                                            // Giữ vị trí khuôn mặt trong 6 frames (~200ms) để triệt tiêu chớp nháy khi khách giơ tay tạo dáng hoặc chớp mắt
+                                            // Giữ vị trí khuôn mặt trong 10 frames (~300ms) để triệt tiêu chớp nháy
                                             missingFaceFramesRef.current++
                                             if (
-                                                missingFaceFramesRef.current > 6
+                                                missingFaceFramesRef.current > 10
                                             ) {
                                                 detectedFacesRef.current = []
                                             }
@@ -624,10 +646,13 @@ export const BeautyCameraView = forwardRef<
             stream,
             mjpegUrl,
             mirrorCamera,
-            slimFace,
+            beautyEnabled,
+            skinSmoothing,
+            skinToneEvenness,
             vLine,
             bigEyes,
-            skinSmoothing,
+            blush,
+            slimFace,
             whiteningTone,
             rosyTone,
             glowClarity,

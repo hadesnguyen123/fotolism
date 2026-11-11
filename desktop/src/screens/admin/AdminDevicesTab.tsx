@@ -69,20 +69,20 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         setRingLightEnabled,
         brightnessAdjust,
         setBrightnessAdjust,
+        beautyEnabled,
+        setBeautyEnabled,
         selectedBeautyPreset,
         applyBeautyPreset,
-        slimFace,
-        setSlimFace,
         vLine,
         setVLine,
         bigEyes,
         setBigEyes,
         skinSmoothing,
         setSkinSmoothing,
-        whiteningTone,
-        setWhiteningTone,
-        rosyTone,
-        setRosyTone,
+        skinToneEvenness,
+        setSkinToneEvenness,
+        blush,
+        setBlush,
         resetAdjustments,
         getBeautyFilterCss,
         printScale,
@@ -384,27 +384,69 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Thẻ AI Làm Đẹp */}
+                            {/* Thẻ AI Làm Đẹp (Live View) */}
                             <div className="panel-card-touch">
                                 <div className="panel-card-header">
                                     <div className="panel-title-group">
                                         <Sparkles size={20} strokeWidth={2.2} />
                                         <span className="panel-title-text">
-                                            AI Làm Đẹp
+                                            AI Làm Đẹp (Live View)
                                         </span>
                                     </div>
 
-                                    <button
-                                        className="btn-restore-touch"
-                                        onClick={resetAdjustments}
-                                        title="Khôi phục mặc định"
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '16px',
+                                        }}
                                     >
-                                        <RotateCcw
-                                            size={16}
-                                            strokeWidth={2.4}
-                                        />
-                                        <span>Khôi Phục</span>
-                                    </button>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    fontSize: '13px',
+                                                    color: beautyEnabled
+                                                        ? '#38bdf8'
+                                                        : '#94a3b8',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                {beautyEnabled
+                                                    ? 'Đang Bật'
+                                                    : 'Đã Tắt'}
+                                            </span>
+                                            <label className="switch-toggle-touch">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={beautyEnabled}
+                                                    onChange={(e) =>
+                                                        setBeautyEnabled(
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                />
+                                                <span className="switch-slider-touch" />
+                                            </label>
+                                        </div>
+
+                                        <button
+                                            className="btn-restore-touch"
+                                            onClick={resetAdjustments}
+                                            title="Khôi phục mặc định"
+                                        >
+                                            <RotateCcw
+                                                size={16}
+                                                strokeWidth={2.4}
+                                            />
+                                            <span>Khôi Phục</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Presets Nhanh */}
@@ -422,77 +464,18 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                     ))}
                                 </div>
 
-                                {/* 6 Thanh Kéo Thông Số AI Touch-First */}
-                                <div className="beauty-sliders-grid">
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Thon Gọn Má
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {slimFace}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={slimFace}
-                                            onChange={(e) =>
-                                                setSlimFace(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
-                                    </div>
-
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Cằm V-Line
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {vLine}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={vLine}
-                                            onChange={(e) =>
-                                                setVLine(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
-                                    </div>
-
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Mắt To
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {bigEyes}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={bigEyes}
-                                            onChange={(e) =>
-                                                setBigEyes(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
-                                    </div>
-
+                                {/* 5 Thanh Kéo Hiệu Ứng Live View Chuẩn Hóa */}
+                                <div
+                                    className="beauty-sliders-grid"
+                                    style={{
+                                        opacity: beautyEnabled ? 1 : 0.45,
+                                        pointerEvents: beautyEnabled
+                                            ? 'auto'
+                                            : 'none',
+                                        transition: 'opacity 0.2s',
+                                    }}
+                                >
+                                    {/* 1. Mịn Da (Target: 45%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
@@ -516,22 +499,23 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         />
                                     </div>
 
+                                    {/* 2. Đều Màu Da (Target: 30%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
-                                                Trắng Sáng
+                                                Đều Màu Da
                                             </span>
                                             <span className="slider-value-badge">
-                                                {whiteningTone}%
+                                                {skinToneEvenness ?? 30}%
                                             </span>
                                         </div>
                                         <input
                                             type="range"
                                             min={0}
                                             max={100}
-                                            value={whiteningTone}
+                                            value={skinToneEvenness ?? 30}
                                             onChange={(e) =>
-                                                setWhiteningTone(
+                                                setSkinToneEvenness(
                                                     parseInt(e.target.value, 10)
                                                 )
                                             }
@@ -539,22 +523,71 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         />
                                     </div>
 
+                                    {/* 3. Cằm V-Line (Target: 4%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
-                                                Má Hồng
+                                                Cằm V-Line
                                             </span>
                                             <span className="slider-value-badge">
-                                                {rosyTone}%
+                                                {vLine}%
                                             </span>
                                         </div>
                                         <input
                                             type="range"
                                             min={0}
                                             max={100}
-                                            value={rosyTone}
+                                            value={vLine}
                                             onChange={(e) =>
-                                                setRosyTone(
+                                                setVLine(
+                                                    parseInt(e.target.value, 10)
+                                                )
+                                            }
+                                            className="touch-range-slider"
+                                        />
+                                    </div>
+
+                                    {/* 4. Mắt To (Target: 5%) */}
+                                    <div className="slider-group-touch">
+                                        <div className="slider-label-row">
+                                            <span className="slider-title">
+                                                Mắt To
+                                            </span>
+                                            <span className="slider-value-badge">
+                                                {bigEyes}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={bigEyes}
+                                            onChange={(e) =>
+                                                setBigEyes(
+                                                    parseInt(e.target.value, 10)
+                                                )
+                                            }
+                                            className="touch-range-slider"
+                                        />
+                                    </div>
+
+                                    {/* 5. Má Hồng (Target: 10%) */}
+                                    <div className="slider-group-touch">
+                                        <div className="slider-label-row">
+                                            <span className="slider-title">
+                                                Má Hồng
+                                            </span>
+                                            <span className="slider-value-badge">
+                                                {blush ?? 10}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={blush ?? 10}
+                                            onChange={(e) =>
+                                                setBlush(
                                                     parseInt(e.target.value, 10)
                                                 )
                                             }

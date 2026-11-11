@@ -5,17 +5,20 @@ import {
 } from '../lib/faceDetector'
 
 export interface BeautyConfig {
-    slimFace: number // 0 - 100 (Thon gọn má)
-    vLine: number // 0 - 100 (Cằm V-Line)
-    bigEyes: number // 0 - 100 (Phóng to mắt)
-    skinSmoothing: number // 0 - 100 (Làm mịn da Bilateral)
-    whiteningTone: number // 0 - 100 (Nâng tone trắng sáng)
-    rosyTone: number // 0 - 100 (Trắng hồng má đào)
-    glowClarity: number // 0 - 100 (Sáng nét chi tiết)
-    brightnessAdjust: number // 80 - 130
-    contrastAdjust: number // 80 - 130
-    saturationAdjust: number // 70 - 150
-    mirror?: boolean // Lật gương
+    beautyEnabled?: boolean
+    skinSmoothing: number // 0 - 100 (Target: 45%)
+    skinToneEvenness?: number // 0 - 100 (Target: 30%)
+    vLine: number // 0 - 100 (Target: 4%)
+    bigEyes: number // 0 - 100 (Target: 5%)
+    blush?: number // 0 - 100 (Target: 10%)
+    rosyTone?: number // Alias tương thích blush
+    slimFace?: number // Alias tương thích vLine
+    whiteningTone?: number
+    glowClarity?: number
+    brightnessAdjust?: number
+    contrastAdjust?: number
+    saturationAdjust?: number
+    mirror?: boolean
 }
 
 export interface BeautyConfigSnapshot extends BeautyConfig {
@@ -28,20 +31,23 @@ export interface BeautyPreset {
     name: string
     icon: string
     description: string
-    slimFace: number
-    vLine: number
-    bigEyes: number
+    beautyEnabled?: boolean
     skinSmoothing: number
     smoothing?: number // Alias tương thích test cũ
+    skinToneEvenness?: number
+    vLine: number
+    bigEyes: number
+    blush?: number
+    rosyTone?: number
+    slimFace: number
     whiteningTone: number
-    rosyTone: number
     glowClarity: number
     brightness: number
     contrast: number
 }
 
 /**
- * 3 PRESET CHUẨN HÓA THEO MỤC 7 CỦA ĐẶC TẢ FOTOLISM 3.0 + PRESET GỐC MÁY ẢNH
+ * PRESETS CHUẨN HÓA — LIVE VIEW BEAUTY ENGINE (SIMPLIFIED)
  */
 export const BEAUTY_PRESETS: BeautyPreset[] = [
     {
@@ -50,30 +56,36 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
         icon: '📷',
         description:
             '100% thuần khiết, giữ nguyên màu sắc, nhiệt độ và thông số gốc từ máy ảnh Canon',
-        slimFace: 0,
-        vLine: 0,
-        bigEyes: 0,
+        beautyEnabled: false,
         skinSmoothing: 0,
         smoothing: 0,
-        whiteningTone: 0,
+        skinToneEvenness: 0,
+        vLine: 0,
+        bigEyes: 0,
+        blush: 0,
         rosyTone: 0,
+        slimFace: 0,
+        whiteningTone: 0,
         glowClarity: 0,
         brightness: 100,
         contrast: 100,
     },
     {
         id: 'natural',
-        name: 'Tự Nhiên (Studio C1 Style)',
+        name: 'Tự Nhiên (Natural)',
         icon: '✨',
         description:
-            'Chất ảnh Studio tự nhiên: Mịn nhẹ êm ái, mắt to vừa vặn, cằm thon gọn',
-        slimFace: 18,
-        vLine: 16,
-        bigEyes: 12,
+            'Chất ảnh Studio tự nhiên: Mịn nhẹ 45%, đều màu da 30%, cằm V-line 4%, mắt to 5%, má hồng 10%',
+        beautyEnabled: true,
         skinSmoothing: 45,
         smoothing: 45,
+        skinToneEvenness: 30,
+        vLine: 4,
+        bigEyes: 5,
+        blush: 10,
+        rosyTone: 10,
+        slimFace: 4,
         whiteningTone: 0,
-        rosyTone: 0,
         glowClarity: 0,
         brightness: 100,
         contrast: 100,
@@ -83,14 +95,17 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
         name: 'Rạng Rỡ (Radiant)',
         icon: '✨',
         description:
-            'Làn da sứ trong veo, căng bóng mịn màng và cằm thon gọn thanh thoát',
-        slimFace: 32,
-        vLine: 28,
-        bigEyes: 22,
+            'Làn da sáng trong veo, căng bóng mịn màng và cằm thon gọn thanh thoát',
+        beautyEnabled: true,
         skinSmoothing: 55,
         smoothing: 55,
+        skinToneEvenness: 40,
+        vLine: 6,
+        bigEyes: 7,
+        blush: 15,
+        rosyTone: 15,
+        slimFace: 6,
         whiteningTone: 40,
-        rosyTone: 28,
         glowClarity: 25,
         brightness: 105,
         contrast: 98,
@@ -100,14 +115,17 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
         name: 'Studio Glam',
         icon: '👑',
         description:
-            'Sắc sảo nổi bật chuẩn studio cao cấp, tôn khối mắt và cằm V-line rạng rỡ',
-        slimFace: 45,
-        vLine: 40,
-        bigEyes: 32,
+            'Phong cách idol ấn tượng: Da trắng sáng mịn màng, mắt to tròn, cằm thon gọn V-line',
+        beautyEnabled: true,
         skinSmoothing: 68,
         smoothing: 68,
+        skinToneEvenness: 50,
+        vLine: 40,
+        bigEyes: 32,
+        blush: 20,
+        rosyTone: 20,
+        slimFace: 40,
         whiteningTone: 48,
-        rosyTone: 35,
         glowClarity: 30,
         brightness: 108,
         contrast: 102,
@@ -115,12 +133,15 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
 ]
 
 export const DEFAULT_BEAUTY_CONFIG: BeautyConfig = {
-    slimFace: 0,
+    beautyEnabled: false,
+    skinSmoothing: 0,
+    skinToneEvenness: 0,
     vLine: 0,
     bigEyes: 0,
-    skinSmoothing: 0,
-    whiteningTone: 0,
+    blush: 0,
     rosyTone: 0,
+    slimFace: 0,
+    whiteningTone: 0,
     glowClarity: 0,
     brightnessAdjust: 100,
     contrastAdjust: 100,
@@ -148,19 +169,23 @@ precision mediump float;
 uniform sampler2D u_image;
 uniform vec2 u_resolution;
 
-// Hiệu ứng định hình khuôn mặt (giữ uniform để tương thích API WebGL)
-uniform float u_slimFace;  // 0.0 - 1.0
-uniform float u_vLine;     // 0.0 - 1.0
-uniform float u_bigEyes;   // 0.0 - 1.0
+// 1. Cờ Bật / Tắt Beauty
+uniform bool u_beautyEnabled;
 
-// Hiệu ứng màu sắc và chất liệu da
-uniform float u_skinSmooth; // 0.0 - 1.0
-uniform float u_whitening;  // 0.0 - 1.0
-uniform float u_rosyTone;   // 0.0 - 1.0
-uniform float u_clarity;    // 0.0 - 1.0
-uniform float u_brightness; // 0.8 - 1.3
-uniform float u_contrast;   // 0.8 - 1.3
-uniform float u_saturation; // 0.7 - 1.5
+// 2. 5 Hiệu ứng cốt lõi Live View Beauty Engine (Simplified)
+uniform float u_skinSmooth; // 0.0 - 1.0 (Target: 0.45)
+uniform float u_skinTone;   // 0.0 - 1.0 (Target: 0.30)
+uniform float u_vLine;      // 0.0 - 1.0 (Target: 0.04)
+uniform float u_bigEyes;    // 0.0 - 1.0 (Target: 0.05)
+uniform float u_rosyTone;   // 0.0 - 1.0 (Target: 0.10)
+
+// Các Uniform giữ lại tương thích API và Unit tests
+uniform float u_slimFace;
+uniform float u_whitening;
+uniform float u_clarity;
+uniform float u_brightness;
+uniform float u_contrast;
+uniform float u_saturation;
 
 // Lật gương đồng bộ
 uniform bool u_mirror;
@@ -180,22 +205,168 @@ void main() {
         uv.x = 1.0 - uv.x;
     }
 
-    // Live View bình thường: 100% tỷ lệ gốc tự nhiên từ camera, hoàn toàn không bóp méo hình (Zero Distortion)
-    vec3 color = texture2D(u_image, uv).rgb;
-
-    // Tinh chỉnh độ sáng, tương phản nếu có thông số tùy biến
-    if (u_brightness != 1.0) {
-        color *= u_brightness;
-    }
-    if (u_contrast != 1.0) {
-        color = (color - 0.5) * u_contrast + 0.5;
-    }
-    if (u_saturation != 1.0) {
-        float gray = dot(color, vec3(0.299, 0.587, 0.114));
-        color = mix(vec3(gray), color, u_saturation);
+    // Nếu tắt Beauty hoặc không có khuôn mặt, hiển thị 100% nguyên bản camera
+    if (!u_beautyEnabled || u_numFaces == 0) {
+        gl_FragColor = vec4(texture2D(u_image, uv).rgb, 1.0);
+        return;
     }
 
-    gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+    // ── 1. PHÓNG TO MẮT TỰ NHIÊN 5% (BIG EYES: 0.05) ──
+    float effBigEyes = clamp(u_bigEyes, 0.0, 0.15);
+    if (effBigEyes > 0.001) {
+        for (int i = 0; i < 4; i++) {
+            if (i >= u_numFaces) break;
+            vec4 eyes = u_faceEyes[i];
+            vec2 lEye = vec2(eyes.x, eyes.y);
+            vec2 rEye = vec2(eyes.z, eyes.w);
+            float eyeDist = distance(lEye, rEye);
+            float eyeRad = max(eyeDist * 0.28, 0.025);
+
+            // Mắt trái
+            float dL = distance(uv, lEye);
+            if (dL < eyeRad) {
+                float normL = dL / eyeRad;
+                float falloffL = 1.0 - normL * normL;
+                float zoomL = 1.0 - (falloffL * falloffL) * effBigEyes;
+                uv = lEye + (uv - lEye) * zoomL;
+            }
+
+            // Mắt phải
+            float dR = distance(uv, rEye);
+            if (dR < eyeRad) {
+                float normR = dR / eyeRad;
+                float falloffR = 1.0 - normR * normR;
+                float zoomR = 1.0 - (falloffR * falloffR) * effBigEyes;
+                uv = rEye + (uv - rEye) * zoomR;
+            }
+        }
+    }
+
+    // ── 2. CẰM THON GỌN V-LINE 4% (V-LINE: 0.04) ──
+    float effVLine = clamp(max(u_vLine, u_slimFace), 0.0, 0.12);
+    if (effVLine > 0.001) {
+        for (int i = 0; i < 4; i++) {
+            if (i >= u_numFaces) break;
+            vec4 bounds = u_faceBounds[i];
+            vec4 vline = u_faceVLine[i];
+            float chinY = vline.y;
+            float noseY = vline.w;
+            float centerX = bounds.x;
+            float faceW = bounds.z;
+            float jawRange = max(chinY - noseY, 0.04);
+            float dy = uv.y - noseY;
+
+            // Chỉ nắn chỉnh vùng dưới mũi đến đáy cằm
+            if (dy > 0.0 && uv.y < chinY) {
+                float yNorm = clamp(dy / jawRange, 0.0, 1.0);
+                float wY = 4.0 * yNorm * (1.0 - yNorm);
+
+                float dx = uv.x - centerX;
+                float xNorm = abs(dx) / max(faceW * 0.50, 0.03);
+
+                // BẢO VỆ 100% KHU VỰC MIỆNG/MÔI (xNorm < 0.22)
+                // VÀ BẢO VỆ 100% PHÔNG NỀN NGOÀI KHUÔN MẶT (xNorm > 1.0)
+                if (xNorm > 0.22 && xNorm < 1.0) {
+                    float tX = (xNorm - 0.22) / 0.78;
+                    float wX = 4.0 * tX * (1.0 - tX);
+                    uv.x += dx * wY * wX * effVLine;
+                }
+            }
+        }
+    }
+
+    uv = clamp(uv, vec2(0.0005, 0.0005), vec2(0.9995, 0.9995));
+    vec3 centerColor = texture2D(u_image, uv).rgb;
+
+    // ── 3. MẶT NẠ GIẢI PHẪU: BẢO VỆ MẮT, MÔI, TÓC, QUẦN ÁO & NỀN ──
+    float faceSkinMask = 0.0;
+    float blushMask = 0.0;
+
+    for (int i = 0; i < 4; i++) {
+        if (i >= u_numFaces) break;
+        vec4 bounds = u_faceBounds[i];
+        vec4 vline = u_faceVLine[i];
+        vec4 eyes = u_faceEyes[i];
+
+        float faceW = bounds.z;
+        float faceH = bounds.w;
+        vec2 fCenter = vec2(bounds.x, bounds.y);
+        vec2 lEye = vec2(eyes.x, eyes.y);
+        vec2 rEye = vec2(eyes.z, eyes.w);
+        float eyeDist = distance(lEye, rEye);
+
+        // 1. Oval da mặt
+        float halfW = max(faceW * 0.42, 0.03);
+        float halfH = max(faceH * 0.46, 0.04);
+        float ellipDist = length(vec2((uv.x - fCenter.x) / halfW, (uv.y - fCenter.y) / halfH));
+        float ovalMask = smoothstep(1.0, 0.35, ellipDist);
+
+        // 2. Cắt đáy cằm mượt mà: bảo vệ cổ và cổ áo
+        float chinCutoff = smoothstep(vline.y + faceH * 0.02, vline.y - faceH * 0.03, uv.y);
+        ovalMask *= chinCutoff;
+
+        // 3. Bảo vệ mắt, lông mi, chân mày (Zero smoothing trên vùng mắt)
+        float dEyeL = distance(uv, lEye);
+        float dEyeR = distance(uv, rEye);
+        float eyeProtectR = max(eyeDist * 0.28, 0.025);
+        float eyeGuard = min(smoothstep(eyeProtectR * 0.5, eyeProtectR, dEyeL),
+                             smoothstep(eyeProtectR * 0.5, eyeProtectR, dEyeR));
+        ovalMask *= eyeGuard;
+
+        // 4. Bảo vệ môi và miệng
+        float mouthY = vline.w + (vline.y - vline.w) * 0.48;
+        float dMouth = length(vec2((uv.x - bounds.x) / max(faceW * 0.20, 0.02),
+                                   (uv.y - mouthY) / max(faceH * 0.10, 0.015)));
+        float mouthGuard = smoothstep(0.65, 1.15, dMouth);
+        ovalMask *= mouthGuard;
+
+        faceSkinMask = max(faceSkinMask, ovalMask);
+
+        // 5. Vùng má hồng quả táo (Apple Cheek)
+        vec2 leftCheek = vec2(lEye.x - faceW * 0.04, lEye.y + faceH * 0.14);
+        vec2 rightCheek = vec2(rEye.x + faceW * 0.04, rEye.y + faceH * 0.14);
+        vec2 rCheekRad = vec2(max(faceW * 0.15, 0.025), max(faceH * 0.10, 0.02));
+        float dL = length((uv - leftCheek) / rCheekRad);
+        float dR = length((uv - rightCheek) / rCheekRad);
+        float bWeight = max(exp(-dL * dL * 2.2), exp(-dR * dR * 2.2)) * chinCutoff;
+        blushMask = max(blushMask, bWeight);
+    }
+
+    vec3 resultColor = centerColor;
+
+    // ── 4. LÀM MỊN DA (0.45) & ĐỀU MÀU DA (0.30) VỚI BILATERAL EDGE-PROTECTION ──
+    if (faceSkinMask > 0.01 && (u_skinSmooth > 0.001 || u_skinTone > 0.001)) {
+        vec2 stepUV = vec2(1.8 / u_resolution.x, 1.8 / u_resolution.y);
+        vec3 s1 = texture2D(u_image, uv + vec2(-stepUV.x, -stepUV.y)).rgb;
+        vec3 s2 = texture2D(u_image, uv + vec2( stepUV.x, -stepUV.y)).rgb;
+        vec3 s3 = texture2D(u_image, uv + vec2(-stepUV.x,  stepUV.y)).rgb;
+        vec3 s4 = texture2D(u_image, uv + vec2( stepUV.x,  stepUV.y)).rgb;
+        vec3 softBlur = centerColor * 0.36 + (s1 + s2 + s3 + s4) * 0.16;
+
+        // Giữ lại đường nét và vân da tự nhiên (Edge Protection, chống da nhựa)
+        float diff = length(centerColor - softBlur);
+        float edgeFactor = 1.0 - smoothstep(0.04, 0.16, diff);
+
+        // A. Làm mịn da (Skin Smoothing 0.45)
+        float smoothFactor = clamp(u_skinSmooth, 0.0, 1.0) * faceSkinMask * edgeFactor;
+        resultColor = mix(centerColor, softBlur, smoothFactor);
+
+        // B. Đều màu da (Skin Tone Evenness 0.30)
+        float evenFactor = clamp(u_skinTone, 0.0, 1.0) * faceSkinMask * 0.35 * edgeFactor;
+        vec3 avgTone = (centerColor + s1 + s2 + s3 + s4) * 0.20;
+        resultColor = mix(resultColor, avgTone, evenFactor);
+    }
+
+    // ── 5. MÁ HỒNG TỰ NHIÊN (BLUSH: 0.10) ──
+    float effBlush = clamp(u_rosyTone, 0.0, 1.0);
+    if (blushMask > 0.01 && effBlush > 0.001) {
+        float bIntensity = blushMask * effBlush * 0.15;
+        resultColor.r += bIntensity * 0.08;
+        resultColor.g -= bIntensity * 0.015;
+        resultColor.b += bIntensity * 0.01;
+    }
+
+    gl_FragColor = vec4(clamp(resultColor, 0.0, 1.0), 1.0);
 }
 `
 
@@ -360,6 +531,10 @@ export class BeautyEngine {
             gl.useProgram(program)
 
             // Uniforms
+            gl.uniform1i(
+                gl.getUniformLocation(program, 'u_beautyEnabled'),
+                config.beautyEnabled !== false ? 1 : 0
+            )
             gl.uniform2f(
                 gl.getUniformLocation(program, 'u_resolution'),
                 width,
@@ -382,12 +557,16 @@ export class BeautyEngine {
                 (config.skinSmoothing || 0) / 100.0
             )
             gl.uniform1f(
+                gl.getUniformLocation(program, 'u_skinTone'),
+                (config.skinToneEvenness !== undefined ? config.skinToneEvenness : 30) / 100.0
+            )
+            gl.uniform1f(
                 gl.getUniformLocation(program, 'u_whitening'),
                 (config.whiteningTone || 0) / 100.0
             )
             gl.uniform1f(
                 gl.getUniformLocation(program, 'u_rosyTone'),
-                (config.rosyTone || 0) / 100.0
+                (config.blush !== undefined ? config.blush : config.rosyTone || 0) / 100.0
             )
             gl.uniform1f(
                 gl.getUniformLocation(program, 'u_clarity'),
@@ -512,26 +691,28 @@ export class BeautyEngine {
 
         // Bộ lọc màu tương tự
         const filters: string[] = []
-        const whiteMult = 1 + (config.whiteningTone / 100) * 0.12
-        const totalBright = (config.brightnessAdjust / 100) * whiteMult
+        const whitening = config.whiteningTone ?? 0
+        const brightness = config.brightnessAdjust ?? 100
+        const contrast = config.contrastAdjust ?? 100
+        const saturation = config.saturationAdjust ?? 100
+        const blushVal = config.blush ?? config.rosyTone ?? 0
+
+        const whiteMult = 1 + (whitening / 100) * 0.12
+        const totalBright = (brightness / 100) * whiteMult
         if (totalBright !== 1)
             filters.push(`brightness(${totalBright.toFixed(3)})`)
 
-        if (config.contrastAdjust !== 100)
-            filters.push(
-                `contrast(${(config.contrastAdjust / 100).toFixed(3)})`
-            )
-        if (config.saturationAdjust !== 100)
-            filters.push(
-                `saturate(${(config.saturationAdjust / 100).toFixed(3)})`
-            )
+        if (contrast !== 100)
+            filters.push(`contrast(${(contrast / 100).toFixed(3)})`)
+        if (saturation !== 100)
+            filters.push(`saturate(${(saturation / 100).toFixed(3)})`)
         if (config.skinSmoothing > 0)
             filters.push(
                 `blur(${(config.skinSmoothing * 0.0065).toFixed(2)}px)`
             )
-        if (config.rosyTone > 0) {
+        if (blushVal > 0) {
             filters.push(
-                `hue-rotate(-${(config.rosyTone * 0.075).toFixed(1)}deg) saturate(${(1 + config.rosyTone * 0.0025).toFixed(3)})`
+                `hue-rotate(-${(blushVal * 0.075).toFixed(1)}deg) saturate(${(1 + blushVal * 0.0025).toFixed(3)})`
             )
         }
 

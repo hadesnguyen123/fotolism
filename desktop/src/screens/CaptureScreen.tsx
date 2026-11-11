@@ -72,14 +72,17 @@ export default function CaptureScreen() {
         setDriveSyncDone,
         setDriveSyncError,
         setCloudFolderUrl,
+        beautyEnabled,
         slimFace,
         vLine,
         bigEyes,
+        skinSmoothing,
+        skinToneEvenness,
+        blush,
         whiteningTone,
         brightnessAdjust,
         contrastAdjust,
         saturationAdjust,
-        skinSmoothing,
         rosyTone,
         glowClarity,
         getBeautyFilterCss,
@@ -1616,10 +1619,13 @@ export default function CaptureScreen() {
                                             : undefined
                                     }
                                     mirrorCamera={mirrorCamera}
-                                    slimFace={slimFace}
+                                    beautyEnabled={beautyEnabled}
+                                    skinSmoothing={skinSmoothing}
+                                    skinToneEvenness={skinToneEvenness}
                                     vLine={vLine}
                                     bigEyes={bigEyes}
-                                    skinSmoothing={skinSmoothing}
+                                    blush={blush}
+                                    slimFace={slimFace}
                                     whiteningTone={whiteningTone}
                                     rosyTone={rosyTone}
                                     glowClarity={glowClarity}

@@ -31,14 +31,18 @@ export function loadSavedBeautyConfig(): BeautyConfig {
 
 export interface BeautyCameraSlice {
     // Beauty adjustments
+    beautyEnabled: boolean
+    setBeautyEnabled: (enabled: boolean) => void
     selectedBeautyPreset: string | null
     applyBeautyPreset: (presetId: string) => void
     slimFace: number
     vLine: number
     bigEyes: number
     skinSmoothing: number
+    skinToneEvenness: number
     whiteningTone: number
     rosyTone: number
+    blush: number
     glowClarity: number
     brightnessAdjust: number
     contrastAdjust: number
@@ -47,8 +51,10 @@ export interface BeautyCameraSlice {
     setVLine: (val: number) => void
     setBigEyes: (val: number) => void
     setSkinSmoothing: (val: number) => void
-    setWhiteningTone: (val: number) => void
+    setSkinToneEvenness: (val: number) => void
     setRosyTone: (val: number) => void
+    setBlush: (val: number) => void
+    setWhiteningTone: (val: number) => void
     setGlowClarity: (val: number) => void
     setBrightnessAdjust: (val: number) => void
     setContrastAdjust: (val: number) => void
@@ -94,12 +100,15 @@ export const createBeautyCameraSlice: StateCreator<
     const active = hasCustom
         ? saved
         : {
-              slimFace: naturalPreset?.slimFace ?? 18,
-              vLine: naturalPreset?.vLine ?? 16,
-              bigEyes: naturalPreset?.bigEyes ?? 12,
+              beautyEnabled: naturalPreset?.beautyEnabled ?? true,
+              slimFace: naturalPreset?.slimFace ?? 4,
+              vLine: naturalPreset?.vLine ?? 4,
+              bigEyes: naturalPreset?.bigEyes ?? 5,
               skinSmoothing: naturalPreset?.skinSmoothing ?? 45,
+              skinToneEvenness: naturalPreset?.skinToneEvenness ?? 30,
+              rosyTone: naturalPreset?.rosyTone ?? 10,
+              blush: naturalPreset?.blush ?? 10,
               whiteningTone: 0,
-              rosyTone: 0,
               glowClarity: 0,
               brightnessAdjust: 100,
               contrastAdjust: 100,
@@ -107,29 +116,36 @@ export const createBeautyCameraSlice: StateCreator<
           }
 
     return {
+        beautyEnabled: active.beautyEnabled !== false,
+        setBeautyEnabled: (beautyEnabled) => set({ beautyEnabled }),
         selectedBeautyPreset: 'natural',
-        slimFace: active.slimFace,
-        vLine: active.vLine ?? 16,
-        bigEyes: active.bigEyes ?? 12,
-        skinSmoothing: active.skinSmoothing,
-        whiteningTone: active.whiteningTone,
-        rosyTone: active.rosyTone,
-        glowClarity: active.glowClarity,
-        brightnessAdjust: active.brightnessAdjust,
-        contrastAdjust: active.contrastAdjust,
-        saturationAdjust: active.saturationAdjust,
+        slimFace: active.slimFace ?? 4,
+        vLine: active.vLine ?? 4,
+        bigEyes: active.bigEyes ?? 5,
+        skinSmoothing: active.skinSmoothing ?? 45,
+        skinToneEvenness: active.skinToneEvenness ?? 30,
+        whiteningTone: active.whiteningTone ?? 0,
+        rosyTone: active.rosyTone ?? 10,
+        blush: active.blush ?? active.rosyTone ?? 10,
+        glowClarity: active.glowClarity ?? 0,
+        brightnessAdjust: active.brightnessAdjust ?? 100,
+        contrastAdjust: active.contrastAdjust ?? 100,
+        saturationAdjust: active.saturationAdjust ?? 100,
 
         applyBeautyPreset: (presetId) => {
             const preset = BEAUTY_PRESETS.find((p) => p.id === presetId)
             if (!preset) return
             set({
                 selectedBeautyPreset: presetId,
+                beautyEnabled: preset.beautyEnabled !== false,
                 slimFace: preset.slimFace,
                 vLine: preset.vLine,
                 bigEyes: preset.bigEyes,
                 skinSmoothing: preset.skinSmoothing,
+                skinToneEvenness: preset.skinToneEvenness ?? 30,
                 whiteningTone: preset.whiteningTone,
-                rosyTone: preset.rosyTone,
+                rosyTone: preset.rosyTone ?? 10,
+                blush: preset.blush ?? preset.rosyTone ?? 10,
                 glowClarity: preset.glowClarity,
                 brightnessAdjust: preset.brightness,
                 contrastAdjust: preset.contrast,
@@ -142,10 +158,14 @@ export const createBeautyCameraSlice: StateCreator<
         setBigEyes: (bigEyes) => set({ bigEyes, selectedBeautyPreset: null }),
         setSkinSmoothing: (skinSmoothing) =>
             set({ skinSmoothing, selectedBeautyPreset: null }),
+        setSkinToneEvenness: (skinToneEvenness) =>
+            set({ skinToneEvenness, selectedBeautyPreset: null }),
         setWhiteningTone: (whiteningTone) =>
             set({ whiteningTone, selectedBeautyPreset: null }),
         setRosyTone: (rosyTone) =>
-            set({ rosyTone, selectedBeautyPreset: null }),
+            set({ rosyTone, blush: rosyTone, selectedBeautyPreset: null }),
+        setBlush: (blush) =>
+            set({ blush, rosyTone: blush, selectedBeautyPreset: null }),
         setGlowClarity: (glowClarity) =>
             set({ glowClarity, selectedBeautyPreset: null }),
         setBrightnessAdjust: (brightnessAdjust) =>
@@ -158,12 +178,16 @@ export const createBeautyCameraSlice: StateCreator<
         saveBeautyConfig: (config) => {
             const current = get()
             const updated: BeautyConfig = {
+                beautyEnabled: config?.beautyEnabled ?? current.beautyEnabled,
                 slimFace: config?.slimFace ?? current.slimFace,
                 vLine: config?.vLine ?? current.vLine,
                 bigEyes: config?.bigEyes ?? current.bigEyes,
                 skinSmoothing: config?.skinSmoothing ?? current.skinSmoothing,
+                skinToneEvenness:
+                    config?.skinToneEvenness ?? current.skinToneEvenness,
                 whiteningTone: config?.whiteningTone ?? current.whiteningTone,
                 rosyTone: config?.rosyTone ?? current.rosyTone,
+                blush: config?.blush ?? current.blush,
                 glowClarity: config?.glowClarity ?? current.glowClarity,
                 brightnessAdjust:
                     config?.brightnessAdjust ?? current.brightnessAdjust,
@@ -188,9 +212,17 @@ export const createBeautyCameraSlice: StateCreator<
         resetAdjustments: () => {
             const def = DEFAULT_BEAUTY_CONFIG
             set({
-                selectedBeautyPreset: 'none',
+                selectedBeautyPreset: 'natural',
                 mirrorCamera: true,
                 ...def,
+                beautyEnabled: true,
+                skinSmoothing: 45,
+                skinToneEvenness: 30,
+                vLine: 4,
+                bigEyes: 5,
+                blush: 10,
+                rosyTone: 10,
+                slimFace: 4,
             })
         },
 
