@@ -503,12 +503,7 @@ export default function ReviewScreen() {
                   ? '4x6'
                   : '2x6'
             const kioskId = isSelfboothMode ? 'kiosk_02' : 'kiosk_01'
-            const storageUrl =
-                session.storageUrl ||
-                cloudFolderUrl ||
-                (isSelfboothMode
-                    ? `https://pub-r2.fotolism.vn/sessions/${subfolderName}/`
-                    : `https://pub-r2.fotolism.vn/sessions/${subfolderName}/${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`)
+            const storageUrl = webGalleryUrl
 
             cloudSyncService.queueSession({
                 id: session.sessionId || `ses_${Date.now()}`,

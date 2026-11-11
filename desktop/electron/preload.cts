@@ -24,13 +24,15 @@ const api = {
             imagePath: string,
             beautyLevel?: number,
             presetId?: string,
-            styleId?: string
+            styleId?: string,
+            outputPath?: string
         ): IpcResponse =>
             ipcRenderer.invoke('ai:enhance', {
                 imagePath,
                 beautyLevel,
                 presetId,
                 styleId,
+                outputPath,
             }),
 
         composite: (imagePath: string, framePath: string): IpcResponse =>
@@ -235,6 +237,37 @@ const api = {
             folderKey: string
             enqueuedCount: number
         }> => ipcRenderer.invoke('storage:enqueue-r2-session', payload),
+
+        finalizeSessionMedia: (payload: {
+            sessionId: string
+            customerName?: string
+            sessionType?: string
+            cmsUrl?: string
+            compositeDataUrl: string
+            compositeFileName?: string
+            shots: Array<{
+                slotIndex: number
+                rawPath?: string
+                enhancedPath?: string
+                rawPhotoUrl?: string
+                enhancedPhotoUrl?: string
+            }>
+        }): IpcResponse<{
+            sessionId: string
+            folderKey: string
+            sessionDir: string
+            rawDir: string
+            finalDir: string
+            compositePath: string
+            enqueuedCount: number
+            files: Array<{
+                imageId: string
+                filePath: string
+                fileName: string
+                isFinal: boolean
+                sizeBytes: number
+            }>
+        }> => ipcRenderer.invoke('storage:finalize-session-media', payload),
 
         onUploadProgress: (callback: (event: any) => void): (() => void) => {
             const handler = (_e: any, data: any) => callback(data)

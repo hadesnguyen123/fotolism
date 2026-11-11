@@ -113,6 +113,7 @@ export const BeautyCameraView = forwardRef<
         const detectedFacesRef = useRef<FaceDetectionData[]>([])
         const lastDetectTimeRef = useRef<number>(0)
         const isDetectingRef = useRef<boolean>(false)
+        const missingFaceFramesRef = useRef<number>(0)
 
         // Khởi tạo MediaPipe Face Landmarker ngầm từ file offline
         useEffect(() => {
@@ -574,13 +575,20 @@ export const BeautyCameraView = forwardRef<
                                             false
                                         )
                                         if (rawFaces.length > 0) {
+                                            missingFaceFramesRef.current = 0
                                             detectedFacesRef.current =
                                                 smoothFaces(
                                                     detectedFacesRef.current,
                                                     rawFaces
                                                 )
                                         } else {
-                                            detectedFacesRef.current = []
+                                            // Giữ vị trí khuôn mặt trong 6 frames (~200ms) để triệt tiêu chớp nháy khi khách giơ tay tạo dáng hoặc chớp mắt
+                                            missingFaceFramesRef.current++
+                                            if (
+                                                missingFaceFramesRef.current > 6
+                                            ) {
+                                                detectedFacesRef.current = []
+                                            }
                                         }
                                     } catch {
                                         // Bỏ qua lỗi tạm thời khi frame đổi

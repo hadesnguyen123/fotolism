@@ -436,7 +436,8 @@ export async function generateStripComposite(
         ctx.restore()
     }
 
-    return canvas.toDataURL('image/jpeg', 0.96)
+    // Xuất ảnh chất lượng cao 100% (Quality 1.0 không nén) theo tiêu chuẩn Fotolism Kiosk
+    return canvas.toDataURL('image/jpeg', 1.0)
 }
 
 /**

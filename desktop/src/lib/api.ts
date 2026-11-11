@@ -45,7 +45,8 @@ export interface FotolismAPI {
             imagePath: string,
             beautyLevel?: number,
             presetId?: string,
-            styleId?: string
+            styleId?: string,
+            outputPath?: string
         ) => IpcResponse<{ enhancedPath: string }>
         composite: (
             imagePath: string,
@@ -184,6 +185,36 @@ export interface FotolismAPI {
             folderKey: string
             enqueuedCount: number
         }>
+        finalizeSessionMedia: (payload: {
+            sessionId: string
+            customerName?: string
+            sessionType?: string
+            cmsUrl?: string
+            compositeDataUrl: string
+            compositeFileName?: string
+            shots: Array<{
+                slotIndex: number
+                rawPath?: string
+                enhancedPath?: string
+                rawPhotoUrl?: string
+                enhancedPhotoUrl?: string
+            }>
+        }) => IpcResponse<{
+            sessionId: string
+            folderKey: string
+            sessionDir: string
+            rawDir: string
+            finalDir: string
+            compositePath: string
+            enqueuedCount: number
+            files: Array<{
+                imageId: string
+                filePath: string
+                fileName: string
+                isFinal: boolean
+                sizeBytes: number
+            }>
+        }>
         onUploadProgress: (callback: (event: any) => void) => () => void
     }
 }
@@ -207,10 +238,18 @@ const mockCaptures = new Map<string, any[]>()
 // Fallback implementation khi chạy trong browser dev mode (không có Electron)
 const defaultMockApi: FotolismAPI = {
     ai: {
-        enhance: async (_imagePath: string, level?: number) => ({
+        enhance: async (
+            _imagePath: string,
+            level?: number,
+            _presetId?: string,
+            _styleId?: string,
+            outputPath?: string
+        ) => ({
             success: true,
             data: {
-                enhancedPath: `${MOCK_SAVE_BASE}/mock_enhanced_lvl${level ?? 50}.jpg`,
+                enhancedPath:
+                    outputPath ||
+                    `${MOCK_SAVE_BASE}/mock_enhanced_lvl${level ?? 50}.jpg`,
             },
         }),
         composite: async () => ({
@@ -587,6 +626,19 @@ const defaultMockApi: FotolismAPI = {
                 sessionId: payload.sessionId,
                 folderKey: `fotolism-photos/mock_${payload.sessionId}`,
                 enqueuedCount: payload.files.length,
+            },
+        }),
+        finalizeSessionMedia: async (payload) => ({
+            success: true,
+            data: {
+                sessionId: payload.sessionId,
+                folderKey: `fotolism-photos/mock_${payload.sessionId}`,
+                sessionDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}`,
+                rawDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\raw`,
+                finalDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final`,
+                compositePath: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final\\${payload.compositeFileName || 'fotolism_final.jpg'}`,
+                enqueuedCount: payload.shots.length + 1,
+                files: [],
             },
         }),
         onUploadProgress: () => () => {},

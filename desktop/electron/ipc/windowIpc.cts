@@ -273,6 +273,7 @@ export function registerWindowAndConfigIpc(): void {
             _event,
             payload: {
                 imagePath: string
+                outputPath?: string
                 beautyLevel?: number
                 presetId?: string
                 styleId?: string
@@ -285,6 +286,7 @@ export function registerWindowAndConfigIpc(): void {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         imagePath: payload.imagePath,
+                        outputPath: payload.outputPath,
                         beautyLevel: payload.beautyLevel ?? 50,
                         presetId: payload.presetId || 'korean_soft_beauty',
                         styleId: payload.styleId || 'natural',

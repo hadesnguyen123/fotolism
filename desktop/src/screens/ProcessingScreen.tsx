@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { generateStripComposite } from '../lib/canvasCompositor'
 import { fotolismApi, mockApi } from '../lib/api'
+import { cloudSyncService } from '../services/cloudSyncService'
 import {
     DEFAULT_GDRIVE_FOLDER_ID,
     DEFAULT_GDRIVE_WEBHOOK_URL,
@@ -100,12 +101,105 @@ export default function ProcessingScreen() {
                 }
             }
 
-            // ── BƯỚC 2: Upload Lên Cloud / Google Drive ──
+            // ── BƯỚC 2: TỔ CHỨC LƯU ẢNH SESSION (RAW & FINAL) VÀ KÍCH HOẠT ĐẨY LÊN CLOUDFLARE R2 ──
+            const api = isBrowser ? mockApi : fotolismApi
+            const sessionId = session?.sessionId || `ses_${Date.now()}`
+            const cmsUrl = cloudSyncService.getCmsUrl()
+            const finalCompositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
+            const galleryTargetUrl = `${cmsUrl}/gallery/${sessionId}`
+
+            const sourcePhotos =
+                session?.selfboothLibrary &&
+                session.selfboothLibrary.length > 0
+                    ? session.selfboothLibrary
+                    : photos
+
+            const mediaShots = sourcePhotos.map((p, idx) => ({
+                slotIndex: idx,
+                rawPath: p.rawPath,
+                enhancedPath: p.enhancedPath,
+                rawPhotoUrl: p.rawPath,
+                enhancedPhotoUrl: p.enhancedPath,
+            }))
+
+            try {
+                console.log(
+                    '[ProcessingScreen] Finalizing session media into sessions/{sessionId}/raw & final...'
+                )
+                await api.storage.finalizeSessionMedia({
+                    sessionId,
+                    customerName: session?.customerName || undefined,
+                    sessionType: isSelfbooth ? 'selfbooth' : 'photobooth',
+                    cmsUrl,
+                    compositeDataUrl: stripUrl || '',
+                    compositeFileName: finalCompositeFileName,
+                    shots: mediaShots,
+                })
+            } catch (finalizeErr) {
+                console.warn(
+                    '[ProcessingScreen] finalizeSessionMedia warning:',
+                    finalizeErr
+                )
+            }
+
+            // ── BƯỚC 3: ĐỒNG BỘ SESSION METADATA LÊN CLOUD CMS & SUPABASE NGAY LẬP TỨC ──
+            const layoutType = isSelfbooth
+                ? 'selfbooth'
+                : selectedFrameSize === '4x6'
+                  ? '4x6'
+                  : '2x6'
+            const kioskId =
+                cloudSyncService.getKioskId() ||
+                (isSelfbooth ? 'kiosk_02' : 'kiosk_01')
+
+            cloudSyncService.queueSession({
+                id: sessionId,
+                session_code: `JB${Date.now().toString().slice(-6)}`,
+                pin_code: session?.pinCode || null,
+                customer_name: session?.customerName || null,
+                customer_phone: session?.customerPhone || null,
+                kiosk_id: kioskId,
+                branch_id: 'branch_01',
+                layout_type: layoutType,
+                copies: isSelfbooth ? 0 : 2,
+                total_amount:
+                    session?.paidAmount ||
+                    (isSelfbooth
+                        ? 50000
+                        : selectedFrameSize === '4x6'
+                          ? 70000
+                          : 50000),
+                payment_method: (session?.paymentMethod?.toLowerCase() ===
+                'cash'
+                    ? 'cash'
+                    : 'vietqr') as 'vietqr' | 'cash',
+                coupon_code: null,
+                paper_consumed: isSelfbooth ? 0 : 2,
+                storage_url: galleryTargetUrl,
+                drive_url: galleryTargetUrl,
+                status: 'completed',
+                created_at: new Date().toISOString(),
+                photos: sourcePhotos.map(
+                    (p) =>
+                        p.enhancedPath ||
+                        p.compositedPath ||
+                        p.rawPath ||
+                        ''
+                ),
+            })
+
+            // Cập nhật URL thư mục Cloud đồng nhất với QR Code
+            setCloudFolderUrl(galleryTargetUrl)
+            setGdriveUrl(galleryTargetUrl)
+            useAppStore.getState().setDriveSyncDone(true)
+            useAppStore.getState().setIsSyncingDrive(false)
+            setUploadDone(true)
+
+            // ── BƯỚC 4: Upload Phụ Lên Google Drive (nếu người dùng bật cấu hình Drive) ──
             const effectiveWebhookUrl =
                 eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
             const parentFolderId =
                 eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID
-            const api = isBrowser ? mockApi : fotolismApi
 
             let cloudFolder = useAppStore.getState().cloudFolderUrl || null
 
@@ -205,10 +299,8 @@ export default function ProcessingScreen() {
             }
             setUploadDone(true)
 
-            // ── BƯỚC 3: Tạo Mã QR Tải Ảnh ──
-            const qrTarget =
-                cloudFolder ||
-                `https://fotolism.vn/q/${session?.sessionId || Date.now()}`
+            // ── BƯỚC 5: Tạo Mã QR Tải Ảnh đồng nhất với link Storage ──
+            const qrTarget = galleryTargetUrl
             try {
                 await QRCode.toDataURL(qrTarget, {
                     margin: 1,
