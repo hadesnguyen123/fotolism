@@ -27,6 +27,7 @@ import numpy as np
 
 from core.config import STORAGE
 from core.lut_manager import lut_manager
+from core.white_balance import balance_from_reference
 from core.korean_beauty_engine import korean_beauty_engine, KoreanBeautyConfig
 
 logger = logging.getLogger("ai_service.enhance")
@@ -37,6 +38,8 @@ MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "face_dete
 class EnhanceRequest(BaseModel):
     imagePath: str
     outputPath: Optional[str] = Field(None, description="Đường dẫn file đầu ra tùy chọn (VD: F:/Fotolism_image/sessions/.../final/...)")
+    whiteBalanceStrength: float = Field(0.0, ge=0.0, le=1.0)
+    neutralReferenceRgb: Optional[List[float]] = Field(None, min_length=3, max_length=3)
     beautyLevel: int = Field(50, ge=0, le=100, description="Cường độ Beauty tổng thể (0 = tắt beauty, chỉ áp dụng style)")
     skinEvening: float = Field(0.55, ge=0.0, le=1.0, description="Mức làm đều màu da (0.0 đến 1.0)")
     blemishRemoval: float = Field(0.55, ge=0.0, le=1.0, description="Mức giảm khuyết điểm (0.0 đến 1.0)")
@@ -44,8 +47,8 @@ class EnhanceRequest(BaseModel):
     clarityGlow: float = Field(-10.0, ge=-100.0, le=100.0, description="Độ mềm / độ trong bề mặt")
     rosyGlow: float = Field(0.00, ge=0.0, le=1.0, description="Sắc hồng tự nhiên trên midtone (0.0 đến 1.0)")
     sharpen: bool = Field(False, description="Bật/tắt sharpening bổ sung (mặc định False theo C1)")
-    styleId: str = Field("c1_test_style", description="Mã Style LUT")
-    presetId: Optional[str] = Field("c1_test_style", description="Preset làm đẹp: 'c1_test_style' hoặc 'korean_soft_beauty'")
+    styleId: str = Field("natural", description="Mã Style LUT")
+    presetId: Optional[str] = Field("white_pink_v2", description="Preset làm đẹp: 'white_pink_v2', 'white_pink' hoặc 'korean_soft_beauty'")
     koreanConfig: Optional[KoreanBeautyConfig] = Field(None, description="Cấu hình tùy biến chuyên sâu cho Korean Soft Beauty")
 
 class EnhanceResponseData(BaseModel):
@@ -407,9 +410,14 @@ def enhance_image(req: EnhanceRequest):
         if img is None:
             raise ValueError(f"Không thể đọc file ảnh qua OpenCV: {input_path}")
 
-        # Xác định Preset làm đẹp
-        active_preset = req.presetId or "c1_test_style"
-        if req.styleId == "korean_soft_beauty":
+        # Calibrated correction precedes LUT/beauty; never estimate neutrality from a coloured background.
+        if req.whiteBalanceStrength > 0 and req.neutralReferenceRgb is None:
+            raise ValueError('White balance requires a measured neutral reference')
+        img = balance_from_reference(img, req.neutralReferenceRgb, req.whiteBalanceStrength)
+
+        # V2 YuNet is the active production preset; callers can still opt into V1.
+        active_preset = req.presetId or "white_pink_v2"
+        if req.styleId == "korean_soft_beauty" and active_preset != "white_pink_v2":
             active_preset = "korean_soft_beauty"
 
         # BƯỚC 1: Style Engine — Áp dụng Color Grading từ LUT
@@ -417,8 +425,12 @@ def enhance_image(req: EnhanceRequest):
 
         # BƯỚC 2: Beauty Engine — Làm đẹp chuyên biệt theo từng preset
         if req.beautyLevel > 0:
-            if active_preset == "korean_soft_beauty":
-                k_cfg = req.koreanConfig.copy() if req.koreanConfig else KoreanBeautyConfig()
+            if active_preset in ("korean_soft_beauty", "white_pink", "white_pink_v2"):
+                k_cfg = req.koreanConfig.copy() if req.koreanConfig else (
+                    KoreanBeautyConfig.white_pink_v2() if active_preset == "white_pink_v2"
+                    else KoreanBeautyConfig.white_pink() if active_preset == "white_pink"
+                    else KoreanBeautyConfig()
+                )
                 if req.beautyLevel != 50:
                     scale = req.beautyLevel / 50.0
                     k_cfg.skinSmoothing = float(np.clip(k_cfg.skinSmoothing * scale, 0.0, 1.0))

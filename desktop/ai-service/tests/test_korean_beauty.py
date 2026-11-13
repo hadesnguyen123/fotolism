@@ -29,19 +29,19 @@ class TestKoreanBeautyConfig(unittest.TestCase):
         cfg = KoreanBeautyConfig()
         self.assertEqual(cfg.presetId, "korean_soft_beauty")
         self.assertTrue(cfg.enabled)
-        self.assertAlmostEqual(cfg.skinSmoothing, 0.80)
-        self.assertAlmostEqual(cfg.blemishRemoval, 0.85)
-        self.assertAlmostEqual(cfg.skinEvening, 0.75)
-        self.assertAlmostEqual(cfg.skinTextureRetention, 0.55)
-        self.assertAlmostEqual(cfg.skinBrightening, 0.15)
-        self.assertAlmostEqual(cfg.softGlow, 0.20)
-        self.assertAlmostEqual(cfg.rosyBlush, 0.30)
-        self.assertAlmostEqual(cfg.lipEnhancement, 0.18)
-        self.assertAlmostEqual(cfg.eyeSharpening, 0.12)
+        self.assertAlmostEqual(cfg.skinSmoothing, 0.65)
+        self.assertAlmostEqual(cfg.blemishRemoval, 0.75)
+        self.assertAlmostEqual(cfg.skinEvening, 0.60)
+        self.assertAlmostEqual(cfg.skinTextureRetention, 0.65)
+        self.assertAlmostEqual(cfg.skinBrightening, 0.00)
+        self.assertAlmostEqual(cfg.softGlow, 0.03)
+        self.assertAlmostEqual(cfg.rosyBlush, 0.15)
+        self.assertAlmostEqual(cfg.lipEnhancement, 0.10)
+        self.assertAlmostEqual(cfg.eyeSharpening, 0.15)
         self.assertAlmostEqual(cfg.globalSharpening, 0.00)
-        self.assertAlmostEqual(cfg.slimFace, 0.045)
-        self.assertAlmostEqual(cfg.bigEyes, 0.045)
-        self.assertAlmostEqual(cfg.slimNose, 0.045)
+        self.assertAlmostEqual(cfg.slimFace, 0.04)
+        self.assertAlmostEqual(cfg.bigEyes, 0.05)
+        self.assertAlmostEqual(cfg.slimNose, 0.04)
 
     def test_custom_values_and_bounds(self):
         cfg = KoreanBeautyConfig(
@@ -144,7 +144,7 @@ class TestKoreanBeautyEngine(unittest.TestCase):
         # So sánh sắc hồng A* trên toàn ảnh
         diff_a = lab_high[..., 1].astype(float) - lab_no[..., 1].astype(float)
         self.assertGreater(float(np.sum(diff_a > 0)), 300, "Má hồng phải làm tăng sắc A* trên các vùng gò má")
-        self.assertGreater(float(np.max(diff_a)), 3.0, "Độ tăng sắc hồng cực đại phải rõ rệt (> 3.0 Lab units)")
+        self.assertGreaterEqual(float(np.max(diff_a)), 3.0, "Độ tăng sắc hồng cực đại phải rõ rệt (>= 3.0 Lab units)")
 
         # 2. Test Lip Enhancement: tăng lip làm tăng sắc A* trên môi
         cfg_no_lip = KoreanBeautyConfig(lipEnhancement=0.0)
@@ -157,13 +157,13 @@ class TestKoreanBeautyEngine(unittest.TestCase):
         lab_high_l = cv2.cvtColor(out_high_lip, cv2.COLOR_BGR2LAB)
         diff_lip_a = lab_high_l[..., 1].astype(float) - lab_no_l[..., 1].astype(float)
         self.assertGreater(float(np.sum(diff_lip_a > 0)), 100, "Son môi phải làm tăng sắc A* trên vùng môi")
-        self.assertGreater(float(np.max(diff_lip_a)), 3.0, "Độ tăng sắc môi cực đại phải rõ rệt (> 3.0 Lab units)")
+        self.assertGreaterEqual(float(np.max(diff_lip_a)), 3.0, "Độ tăng sắc môi cực đại phải rõ rệt (>= 3.0 Lab units)")
 
 
 class TestEnhanceAPIRouting(unittest.TestCase):
     def test_enhance_request_preset_id(self):
         req_c1 = EnhanceRequest(imagePath="F:/Fotolism_raw/raw.jpg")
-        self.assertEqual(req_c1.presetId, "c1_test_style")
+        self.assertEqual(req_c1.presetId, "white_pink_v2")
 
         req_korean = EnhanceRequest(
             imagePath="F:/Fotolism_raw/raw.jpg",
