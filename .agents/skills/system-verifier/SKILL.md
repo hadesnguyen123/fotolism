@@ -57,18 +57,23 @@ npm --prefix cms test
 ### ② Xác minh Cơ sở dữ liệu SQLite SessionDB
 - **Vị trí**: `desktop/electron/sessionDatabase.cts`
 - **Tiêu chuẩn đạt**:
-  - Tự động tạo và bảo vệ 4 bảng: `Sessions`, `Captures`, `MediaFiles`, `PrintJobs`.
-  - Hỗ trợ lưu trữ trạng thái chụp có Idempotency (`COMPLETED`, `FAILED`, `PENDING`).
+  - Tự động tạo và bảo vệ 5 bảng: `Sessions`, `Captures`, `MediaFiles`, `PrintJobs`, `UploadTasks`.
+  - Hỗ trợ lưu trữ trạng thái chụp có Idempotency (`COMPLETED`, `FAILED`, `PENDING`) và hàng đợi upload R2 (`r2UploadWorker.cts`).
 
-### ③ Xác minh Phân hệ Desktop Kiosk (Cổng 5173)
+### ③ Xác minh AI Beauty Service & Queue (Cổng 8000)
+- **Vị trí**: `desktop/ai-service/main.py`, `desktop/ai-service/core/korean_beauty_engine.py`, `desktop/electron/aiEnhanceQueue.cts`
+- **Tiêu chuẩn đạt**:
+  - Service FastAPI sẵn sàng trên cổng `8000`, hàng đợi `AiEnhanceQueue` và kiểm tra toàn vẹn `enhanceIntegrity.cts` đầy đủ.
+
+### ④ Xác minh Phân hệ Desktop Kiosk (Cổng 5173)
 - **Lệnh build**: `npm --prefix desktop run build`
 - **Tiêu chuẩn đạt**:
   - 0 lỗi TypeScript (`tsc -b`), 0 lỗi Vite bundle.
   - Preload ContextIsolation an toàn phơi bày các bridge: `camera`, `printer`, `session`, `storage`, `window`.
 
-### ④ Xác minh Đối soát Kế toán 3 góc (Triple Reconciliation)
+### ⑤ Xác minh Đối soát Kế toán 3 góc (Triple Reconciliation)
 - **Vị trí**: `cms/src/lib/reconciliation/engine.ts`
-- **Test suite**: `cms/tests/reconciliation.test.ts`
+- **Test suite**: `cms/tests/priority2-system.test.ts`
 - **Tiêu chuẩn đạt**:
   - Đối chiếu khớp 100% giữa: Doanh thu VietQR ngân hàng ⇄ Tiền mặt tại quầy ⇄ Định mức tiêu hao giấy in DNP RX1HS.
 

@@ -199,9 +199,7 @@ export const AdminScreen: React.FC = () => {
     const [manualSyncMsg, setManualSyncMsg] = useState<string | null>(null)
     const [cmsPingResult, setCmsPingResult] = useState<string | null>(null)
     const [isPingingCms, setIsPingingCms] = useState<boolean>(false)
-    const [showScriptModal, setShowScriptModal] = useState<boolean>(false)
     const [isCopiedToken, setIsCopiedToken] = useState<boolean>(false)
-    const [isCopiedFolderId, setIsCopiedFolderId] = useState<boolean>(false)
 
     // Hardware Real-time Status
     const isEos = cameraType === 'eos'
@@ -636,14 +634,6 @@ export const AdminScreen: React.FC = () => {
         }
     }
 
-    const handleCopyFolderId = () => {
-        if (eventConfig.gdriveFolderId) {
-            navigator.clipboard.writeText(eventConfig.gdriveFolderId)
-            setIsCopiedFolderId(true)
-            setTimeout(() => setIsCopiedFolderId(false), 2000)
-        }
-    }
-
     // ──────────────────────────────────────────────────────────────────────────
     // 1. PIN PAD LOCK SCREEN (Touch-First)
     // ──────────────────────────────────────────────────────────────────────────
@@ -897,12 +887,8 @@ export const AdminScreen: React.FC = () => {
                             isPingingCms={isPingingCms}
                             handlePingCms={handlePingCms}
                             cmsPingResult={cmsPingResult}
-                            showScriptModal={showScriptModal}
-                            setShowScriptModal={setShowScriptModal}
                             isCopiedToken={isCopiedToken}
                             handleCopyToken={handleCopyToken}
-                            isCopiedFolderId={isCopiedFolderId}
-                            handleCopyFolderId={handleCopyFolderId}
                         />
                     )}
                 </main>

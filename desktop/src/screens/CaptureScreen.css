@@ -431,10 +431,10 @@
     border-radius: 6px;
 }
 
-/* ── Camera Viewfinder Container (16:9 ratio theo thiết lập máy ảnh Canon EOS R100 & EDSDK Live View) ──────── */
+/* ── Camera Viewfinder Container (3:2 ratio chuẩn máy ảnh Canon EOS R100 & EDSDK Live View) ──────── */
 .camera-viewfinder-wrapper {
-    aspect-ratio: 16 / 9;
-    width: min(100%, calc((100vh - 150px) * 16 / 9));
+    aspect-ratio: 3 / 2;
+    width: min(100%, calc((100vh - 150px) * 3 / 2));
     max-width: 100%;
     max-height: calc(100vh - 150px);
     height: auto;

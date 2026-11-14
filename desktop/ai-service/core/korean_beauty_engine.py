@@ -21,6 +21,7 @@ from typing import Optional, List, Dict, Any, Tuple
 import cv2
 import numpy as np
 from pydantic import BaseModel, Field
+from core.selective_spot_correction import correct_selective_spots
 
 logger = logging.getLogger("ai_service.korean_beauty")
 
@@ -35,8 +36,10 @@ class KoreanBeautyConfig(BaseModel):
     presetId: str = Field("korean_soft_beauty", description="ID của preset")
     enabled: bool = Field(True, description="Bật/tắt preset Korean Soft Beauty")
     skinSmoothing: float = Field(0.65, ge=0.0, le=1.0, description="Mức làm mịn bề mặt da")
-    blemishRemoval: float = Field(0.75, ge=0.0, le=1.0, description="Mức khử khuyết điểm và đốm thâm")
+    blemishRemoval: float = Field(0.75, ge=0.0, le=2.0, description="Mức khử khuyết điểm và đốm thâm (0–2; trên 1 là tăng cường)")
     selectiveBlemish: bool = Field(False, description="Bảo vệ cạnh nét và nốt tối khi nâng sáng khuyết điểm")
+    selectiveSpotCorrection: bool = Field(False, description="Sửa đốm đỏ và nốt tối nhỏ trước tone/makeup")
+    redSpotCorrection: bool = Field(True, description="Bật xử lý đốm mụn đỏ trong bước sửa khuyết điểm")
     shineReduction: float = Field(0.0, ge=0.0, le=1.0, description="Giảm phản sáng trên da, giữ lại texture")
     darkCirclesReduction: float = Field(0.40, ge=0.0, le=1.0, description="Nâng sáng quầng thâm dưới mắt")
     protectGlasses: bool = Field(False, description="Hạn chế biến dạng cạnh gọng quanh mắt")
@@ -67,14 +70,14 @@ class KoreanBeautyConfig(BaseModel):
     @classmethod
     def white_pink_v2(cls):
         """Texture-first trial preset; independent of the established V1 values."""
-        return cls(presetId="white_pink_v2", skinSmoothing=.70, blemishRemoval=.90,
+        return cls(presetId="white_pink_v2", skinSmoothing=.70, blemishRemoval=1.90,
                    skinEvening=.60, skinTextureRetention=.90, skinBrightening=.50,
                    rosyTone=.925, rosyBlush=.60, blushSpread=1.30,
                    blushAdaptation=.85, softGlow=.13,
                    lipEnhancement=.47, lipGloss=.90, eyeSharpening=.32,
                    slimFace=.10, bigEyes=.10, slimNose=.20, upperLipStrength=.445,
                    darkCirclesReduction=.70, skinYellowReduction=0.,
-                   upperLipPasses=1, protectGlasses=True, selectiveBlemish=True,
+                   upperLipPasses=1, protectGlasses=True, selectiveBlemish=True, selectiveSpotCorrection=True,
                    globalSharpening=0., foundationCoverage=0.)
 
     skinBrightening: float = Field(0.00, ge=0.0, le=1.0, description="Nâng sáng trắng hồng trong trẻo (0.00 bảo toàn ánh sáng đèn studio thật)")
@@ -1578,6 +1581,14 @@ class KoreanBeautyEngine:
             anatomy_guard = 1.0 - np.clip(lip_mask + eye_sharp_mask, 0.0, 1.0)
             lift *= edge_guard * dark_guard * anatomy_guard
         blended = np.clip(blended.astype(np.float32) + lift[..., np.newaxis], 0, 255).astype(np.uint8)
+
+        if cfg.presetId == 'white_pink_v2' and cfg.selectiveSpotCorrection and cfg.blemishRemoval > 0:
+            blended, spot_info, _ = correct_selective_spots(
+                blended, masks, faces, wire_prot, strength=min(1., cfg.blemishRemoval/1.90),
+                correct_red=cfg.redSpotCorrection)
+            self.last_timings['spot_correction_ms'] = spot_info['processing_ms']
+            self.last_timings['red_spots'] = spot_info['red_spots']
+            self.last_timings['dark_spots'] = spot_info['dark_spots']
 
         # 7. Selective under-eye correction. Dense V2 uses its dedicated lower-lid
         # skin mask and local cheek reference; V1/landmark fallback retain the

@@ -234,18 +234,6 @@ export const SELFBOOTH_PACKAGES: SelfboothPackage[] = [
 /** Tốc độ tua video timelapse hậu trường (VD: 2.5x) */
 export const DEFAULT_TIMELAPSE_SPEED = 2.5
 
-// ── 7. Cloud Storage (Google Drive) ──
-/** Mã thư mục Google Drive mặc định */
-export const DEFAULT_GDRIVE_FOLDER_ID = '1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
-
-/** Đường dẫn thư mục Google Drive mặc định */
-export const DEFAULT_GDRIVE_FOLDER_URL =
-    'https://drive.google.com/drive/folders/1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
-
-/** Webhook Google Apps Script mặc định để tự động tạo subfolder */
-export const DEFAULT_GDRIVE_WEBHOOK_URL =
-    'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
-
 // ── 8. Hardware & Camera Specifications ──
 /** USB Vendor ID của Canon EOS */
 export const CANON_USB_VENDOR_ID = 'VID_04A9'

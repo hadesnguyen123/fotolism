@@ -1,3 +1,4 @@
+import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, ALL_LAYOUTS } from '../store/appStore'
 import {
@@ -279,6 +280,32 @@ export default function PaymentScreen() {
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [finalAmount, copies, appliedCoupon, discountAmount])
 
+    if (eventConfig.captureMode !== 'selfbooth') return <>
+        <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}
+            bank={{ name: eventConfig.bankName || 'MBBank', holder: activeAccountHolder, account: activeAccountNumber, code: orderCode }}
+            onNavigate={(target) => { if (target === 'confirm-info') setScreen('confirm'); else if (target === 'welcome') setScreen('welcome'); }}
+            values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess }}
+            changes={{ paymentConfirmed: () => setShowStaffPinModal(true) }}
+            status={paymentSuccess ? 'Thanh toán thành công' : undefined}
+        />
+            <NumericKeypadModal
+                isOpen={showStaffPinModal}
+                title="Mã PIN Nhân Viên"
+                mask={true}
+                maxLength={8}
+                placeholder="NHẬP MÃ PIN..."
+                submitText="Xác nhận thanh toán"
+                errorMessage={
+                    staffPinError ? 'Mã PIN nhân viên không chính xác!' : null
+                }
+                onClose={() => {
+                    setShowStaffPinModal(false)
+                    setStaffPinError(false)
+                }}
+                onSubmit={(code) => handleVerifyStaffPin(code)}
+            />
+    </>
+
     return (
         <div className="payment-screen-container" id="payment-kiosk-screen">
             {/* ── Fixed Top Header: fotolism + 4 Bước (3. Thanh toán active) ── */}
@@ -381,7 +408,6 @@ export default function PaymentScreen() {
             <NumericKeypadModal
                 isOpen={showStaffPinModal}
                 title="Mã PIN Nhân Viên"
-                subtitle="Nhập mã PIN để xác nhận thanh toán tiền mặt"
                 mask={true}
                 maxLength={8}
                 placeholder="NHẬP MÃ PIN..."

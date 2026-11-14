@@ -1,28 +1,3 @@
-/* Online Google Fonts Fallback & Warm Minimal Luxury Typography */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&family=Baloo+2:wght@600;700;800&family=Quicksand:wght@500;600;700&display=swap');
-
-/* ── Local Bundled Cute Fonts (100% Offline Compatible) ───────────────────── */
-@font-face {
-    font-family: 'Baloo 2';
-    font-style: normal;
-    font-weight: 400 800;
-    font-display: swap;
-    src:
-        url('./assets/fonts/Baloo2-Variable.ttf') format('truetype-variations'),
-        url('./assets/fonts/Baloo2-Variable.ttf') format('truetype');
-}
-
-@font-face {
-    font-family: 'Quicksand';
-    font-style: normal;
-    font-weight: 300 700;
-    font-display: swap;
-    src:
-        url('./assets/fonts/Quicksand-Variable.ttf')
-            format('truetype-variations'),
-        url('./assets/fonts/Quicksand-Variable.ttf') format('truetype');
-}
-
 /* ── FOTOLISM 3.0 WARM MINIMAL LUXURY BRAND COLOR SYSTEM ─────────────────── */
 :root {
     /* ── 2.1 Primary Brand Colors ────────────────────────────── */
@@ -103,9 +78,15 @@
     --radius-xl: 36px;
     --radius-full: 9999px;
 
-    /* Typography Fonts — Fotolism 3.0 Standard */
-    --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    /* Typography Fonts — Fotolism 3.0 Standard (Offline Bundled) */
+    --font-sans: 'Google Sans Flex', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-serif: 'Noto Serif SC', serif;
+    --font-script: 'Pinyon Script', cursive;
+    --font-hand: 'Caveat', cursive;
+    --font-display: var(--font-sans);
+    --font-heading: var(--font-sans);
+    --font-body: var(--font-sans);
 
     /* Typography Scale — Fotolism 3.0 Touch-First Kiosk */
     --font-size-title: clamp(2.4rem, 3.4vw, 3.2rem);

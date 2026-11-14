@@ -1,0 +1,575 @@
+/* Fotolism UI Design — Adaptive Full-Viewport 1920x1080 Kiosk Styles */
+
+.reference-kiosk {
+  --bg-espresso: #522c1f;
+  --bg-espresso-alt: #653125;
+  --bg-cream: #fdf5ed;
+  --text-cream: #f6f3e8;
+  --text-cream-alt: #f7f8e0;
+  --text-brown: #653125;
+  --text-brown-dark: #4d140d;
+  --text-muted: #785c4f;
+  --text-near-black: #151312;
+  --accent-blue: #88c9e3;
+  --accent-peach: #fcddc0;
+  --border-sand: #e5d9cf;
+  --border-tan: #c7ad9c;
+  --status-green-bg: #f0f7f0;
+  --status-green-text: #146e40;
+
+  --font-script: 'Pinyon Script', cursive;
+  --font-serif: 'Noto Serif SC', serif;
+  --font-sans: 'Google Sans Flex', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-hand: 'Bradley Hand', 'Caveat', cursive;
+}
+
+.reference-kiosk * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.reference-kiosk,
+.reference-kiosk,
+.reference-kiosk {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fullscreen adaptive viewport — matches active screen theme edge-to-edge */
+.reference-kiosk.fotolism-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  transition: background-color 0.25s ease;
+}
+
+.reference-kiosk.fotolism-viewport.theme-dark {
+  background-color: var(--bg-espresso);
+}
+
+.reference-kiosk.fotolism-viewport.theme-light {
+  background-color: var(--bg-cream);
+}
+
+/* Full-bleed paper grit texture for dark screens */
+.reference-kiosk .viewport-paper-grit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: color-burn;
+  opacity: 0.22;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.reference-kiosk .viewport-paper-grit img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: bottom center;
+  display: block;
+}
+
+/* Proportional stage that scales to fit 100vw x 100vh without flex shrinking */
+.reference-kiosk .fotolism-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  flex-shrink: 0;
+  transform-origin: center center;
+  z-index: 2;
+}
+
+/* 1920x1080 design coordinate frame centered inside the adaptive stage */
+.reference-kiosk .screen-canvas-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform: translate(-50%, -50%);
+}
+
+/* Interactive button states */
+.reference-kiosk .interactive-btn {
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), filter 0.16s ease;
+}
+
+.reference-kiosk .interactive-btn:hover {
+  transform: scale(1.03);
+}
+
+.reference-kiosk .interactive-btn:active {
+  transform: scale(0.97);
+}
+
+.reference-kiosk .interactive-card {
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), filter 0.18s ease;
+}
+
+.reference-kiosk .interactive-card:hover {
+  transform: translateY(-4px);
+}
+
+.reference-kiosk .interactive-card:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reference-kiosk .interactive-btn,
+  .reference-kiosk .interactive-card {
+    transition: none !important;
+  }
+  .reference-kiosk .interactive-btn:hover,
+  .reference-kiosk .interactive-btn:active,
+  .reference-kiosk .interactive-card:hover,
+  .reference-kiosk .interactive-card:active {
+    transform: none !important;
+  }
+}
+
+/* Adaptive Top Header Bar */
+.reference-kiosk .header-bar-adaptive {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 150px);
+  max-width: 1770px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+/* Adaptive Bottom Navigation Bar */
+.reference-kiosk .bottom-bar-adaptive {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 128px);
+  max-width: 1792px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.reference-kiosk .brand-logo {
+  position: relative;
+  width: 250px;
+  height: 82.483px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.reference-kiosk .brand-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Timer widget (top right or top center) */
+.reference-kiosk .timer-shell {
+  position: relative;
+  width: 272px;
+  height: 148.364px;
+  border-radius: 138.473px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.reference-kiosk .timer-oval-img {
+  position: absolute;
+  inset: 15.01% 5.71% 16.5% 7.08%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reference-kiosk .timer-oval-img img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: scaleX(-1) rotate(-6.76deg);
+}
+
+.reference-kiosk .timer-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 50px;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Nav buttons ("quay lại" / "tiếp tục") */
+.reference-kiosk .nav-pill-btn {
+  position: relative;
+  width: 220px;
+  height: 120px;
+  border-radius: 112px;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.reference-kiosk .nav-pill-oval {
+  position: absolute;
+  inset: 23.96% 7.04% 25.44% 8.42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reference-kiosk .nav-pill-oval img {
+  width: 104%;
+  height: 107%;
+  max-width: none;
+  display: block;
+  transform: scaleY(-1);
+}
+
+.reference-kiosk .nav-pill-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -54%);
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -2.24px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+/* Camera flash animation */
+@keyframes cameraFlash {
+  0% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.reference-kiosk .camera-flash-overlay {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  pointer-events: none;
+  animation: cameraFlash 0.45s ease-out forwards;
+  z-index: 30;
+}
+
+/* Welcome screen blue stars gentle wiggle ("rung rinh") — auto-play continuously, no drop-shadow */
+@keyframes starWiggle {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(-5.5deg) scale(1.035);
+  }
+  50% {
+    transform: rotate(5deg) scale(1.045);
+  }
+  75% {
+    transform: rotate(-3.5deg) scale(1.02);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+.reference-kiosk .welcome-star-hitbox {
+  pointer-events: none;
+}
+
+.reference-kiosk .welcome-star-anim {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  animation: starWiggle 2.2s ease-in-out infinite;
+}
+
+.reference-kiosk .welcome-star-delay-1 {
+  animation-delay: 0.35s;
+}
+
+.reference-kiosk .welcome-star-delay-2 {
+  animation-delay: 0.75s;
+}
+
+.reference-kiosk .welcome-star-delay-3 {
+  animation-delay: 1.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reference-kiosk .welcome-star-anim {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   Screen 7 (Đang in ảnh - 10:23 / 11:94):
+   Bouncing Ball Animation for the Blue Star along the 4 parabolic arcs
+   (Parabolic gravity timing + Squash on impact + Stretch on launch/drop)
+   ========================================================================== */
+@keyframes bouncingStarArc {
+  0% {
+    transform: translate3d(-24px, 210px, 0) rotate(0deg) scale(0.92, 1.08);
+  }
+  5% {
+    transform: translate3d(-12px, 168px, 0) rotate(16deg) scale(0.96, 1.04);
+  }
+  10% {
+    /* Peak 1 (11:164) */
+    transform: translate3d(2px, 145.1px, 0) rotate(36deg) scale(1, 1);
+  }
+  15% {
+    transform: translate3d(15px, 165px, 0) rotate(54deg) scale(0.95, 1.05);
+  }
+  19% {
+    transform: translate3d(24px, 196px, 0) rotate(66deg) scale(0.88, 1.14);
+  }
+  21.5% {
+    /* Valley 1 impact (11:156) — Squash */
+    transform: translate3d(27.27px, 224px, 0) rotate(72deg) scale(1.26, 0.74);
+  }
+  24.5% {
+    /* Rebound launch — Stretch */
+    transform: translate3d(45px, 185px, 0) rotate(84deg) scale(0.88, 1.14);
+  }
+  29% {
+    transform: translate3d(69px, 156px, 0) rotate(96deg) scale(0.96, 1.04);
+  }
+  33.5% {
+    /* Peak 2 (11:185) */
+    transform: translate3d(93.96px, 147.59px, 0) rotate(108deg) scale(1, 1);
+  }
+  38% {
+    transform: translate3d(119px, 156px, 0) rotate(120deg) scale(0.96, 1.04);
+  }
+  42% {
+    transform: translate3d(144px, 185px, 0) rotate(132deg) scale(0.88, 1.14);
+  }
+  45% {
+    /* Valley 2 impact (11:158) — Squash */
+    transform: translate3d(161.81px, 224px, 0) rotate(144deg) scale(1.26, 0.74);
+  }
+  48% {
+    /* Rebound launch — Stretch */
+    transform: translate3d(180px, 185px, 0) rotate(156deg) scale(0.88, 1.14);
+  }
+  52% {
+    transform: translate3d(204px, 156px, 0) rotate(168deg) scale(0.96, 1.04);
+  }
+  56.5% {
+    /* Peak 3 (11:187) */
+    transform: translate3d(228.5px, 147.59px, 0) rotate(180deg) scale(1, 1);
+  }
+  61% {
+    transform: translate3d(253px, 156px, 0) rotate(192deg) scale(0.96, 1.04);
+  }
+  65% {
+    transform: translate3d(278px, 185px, 0) rotate(204deg) scale(0.88, 1.14);
+  }
+  68% {
+    /* Valley 3 impact (11:183) — Squash */
+    transform: translate3d(296.35px, 224px, 0) rotate(216deg) scale(1.26, 0.74);
+  }
+  72% {
+    /* Long Arc 4 launch — Stretch */
+    transform: translate3d(332px, 183px, 0) rotate(232deg) scale(0.87, 1.15);
+  }
+  77.5% {
+    transform: translate3d(382px, 154px, 0) rotate(250deg) scale(0.96, 1.04);
+  }
+  84% {
+    /* Peak 4 (11:189) */
+    transform: translate3d(433.97px, 145.1px, 0) rotate(270deg) scale(1, 1);
+  }
+  91% {
+    transform: translate3d(494px, 154px, 0) rotate(294deg) scale(0.97, 1.03);
+  }
+  97% {
+    /* Right pass-through (11:320) */
+    transform: translate3d(542px, 167.59px, 0) rotate(312deg) scale(0.92, 1.08);
+  }
+  100% {
+    transform: translate3d(568px, 178px, 0) rotate(324deg) scale(0.9, 1.1);
+  }
+}
+
+@keyframes trailStarPulse {
+  0%,
+  100% {
+    opacity: 0.14;
+    transform: scale(0.82);
+  }
+  8% {
+    opacity: 0.75;
+    transform: scale(1.06);
+  }
+  28% {
+    opacity: 0.28;
+    transform: scale(0.92);
+  }
+}
+
+.reference-kiosk .bouncing-loading-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  transform-origin: center bottom;
+  will-change: transform;
+  animation: bouncingStarArc 3.2s linear infinite;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.reference-kiosk .loading-trail-star {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  transform-origin: center center;
+  animation: trailStarPulse 3.2s ease-out infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reference-kiosk .bouncing-loading-star,
+  .reference-kiosk .loading-trail-star {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   Fotolism Hand-Drawn Brush Stroke Borders (matches Figma --brushstyle)
+   Uses an isolated ::after overlay with SVG feDisplacementMap so inner text
+   and images remain 100% razor-sharp while borders have the organic brush edge.
+   ========================================================================== */
+.reference-kiosk .brush-border-brown::after,
+.reference-kiosk .brush-border-tan::after,
+.reference-kiosk .brush-border-cream::after,
+.reference-kiosk .brush-border-soft-brown::after,
+.reference-kiosk .brush-border-black::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 10;
+  filter: url(#fotolism-brush-stroke);
+}
+
+.reference-kiosk .brush-border-brown::after {
+  border: 2.2px solid #653125;
+}
+
+.reference-kiosk .brush-border-tan::after {
+  border: 1.8px solid #c7ad9c;
+}
+
+.reference-kiosk .brush-border-cream::after {
+  border: 2.2px solid #f6f3e8;
+}
+
+.reference-kiosk .brush-border-soft-brown::after {
+  border: 1.6px solid rgba(101, 49, 37, 0.49);
+}
+
+.reference-kiosk .brush-border-black::after {
+  border: 1.2px solid rgba(20, 110, 64, 0.55);
+}
+
+/* Floating step navigator bar for testing & previewing all 7 frames */
+.reference-kiosk .floating-step-dock {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(28, 14, 9, 0.82);
+  border: 1px solid rgba(246, 243, 232, 0.18);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-sans);
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.reference-kiosk .floating-step-dock:hover {
+  opacity: 1;
+}
+
+.reference-kiosk .dock-step-btn {
+  border: none;
+  background: transparent;
+  color: rgba(246, 243, 232, 0.75);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.reference-kiosk .dock-step-btn:hover {
+  color: #f6f3e8;
+  background: rgba(246, 243, 232, 0.12);
+}
+
+.reference-kiosk .dock-step-btn.active {
+  background: #88c9e3;
+  color: #151312;
+  font-weight: 600;
+}
+
+.reference-kiosk { font-family: var(--font-sans); }
+.reference-kiosk * { font-family: inherit; }
+.reference-kiosk .reference-operation-status { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); z-index:30; padding:8px 16px; border-radius:20px; background:#fdf5ed; color:#653125; }
+.reference-kiosk video,.reference-kiosk .camera-preview-element { width:100%; height:100%; object-fit:cover; }
+
+.reference-kiosk { --font-body: var(--font-sans); }
+.reference-kiosk button, .reference-kiosk input { font-family: var(--font-sans) !important; }
+.reference-delivery { position:absolute; z-index:50; inset:0; display:flex; justify-content:center; align-items:center; background:#522c1f; color:#f6f3e8; }
+.reference-delivery-card { display:flex; flex-direction:column; align-items:center; gap:24px; }
+.reference-delivery img { width:260px; height:260px; border-radius:16px; }
+.reference-delivery button { min-height:56px; min-width:180px; padding:12px 32px; border:0; color:#653125; background:#f6f3e8; border-radius:999px; font-size:22px; }
+.app-root:has(.reference-kiosk) .photobooth-countdown-badge { visibility:hidden; }
+.reference-kiosk .interactive-strip-preview.strip-2x6-view { width:190px; height:570px; max-width:none; }
+.reference-kiosk .interactive-strip-preview.postcard-4x6-view { width:380px; height:570px; max-width:none; }
+.reference-kiosk .strip-reposition-banner { display:none; }

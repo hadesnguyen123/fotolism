@@ -8,16 +8,13 @@ import {
     Camera,
     Activity,
     Cloud,
-    Folder,
     Copy,
     Eye,
     EyeOff,
-    Code2,
     Server,
     RefreshCw,
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
-import { GOOGLE_APPS_SCRIPT_SAMPLE } from '../../lib/gdriveWebhookScript'
 import { fotolismApi, isBrowser } from '../../lib/api'
 
 interface AdminSystemTabProps {
@@ -26,12 +23,8 @@ interface AdminSystemTabProps {
     isPingingCms: boolean
     handlePingCms: () => void
     cmsPingResult: string | null
-    showScriptModal: boolean
-    setShowScriptModal: (show: boolean) => void
     isCopiedToken: boolean
     handleCopyToken: () => void
-    isCopiedFolderId: boolean
-    handleCopyFolderId: () => void
 }
 
 export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
@@ -40,14 +33,10 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
     isPingingCms,
     handlePingCms,
     cmsPingResult,
-    showScriptModal,
-    setShowScriptModal,
     isCopiedToken,
     handleCopyToken,
-    isCopiedFolderId,
-    handleCopyFolderId,
 }) => {
-    const { deviceConfig, setDeviceConfig, eventConfig, setEventConfig } =
+    const { deviceConfig, setDeviceConfig } =
         useAppStore()
 
     const [shutterSoundEnabled, setShutterSoundEnabled] =
@@ -490,91 +479,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                 </div>
             </div>
 
-            {/* ── Card 5: Google Drive & Trả Ảnh QR ── */}
-            <div className="panel-card-touch">
-                <div className="panel-card-header">
-                    <div className="panel-title-group">
-                        <Folder size={24} strokeWidth={2.2} />
-                        <span className="panel-title-text">
-                            Google Drive &amp; Trả Ảnh QR
-                        </span>
-                        <span
-                            className={`pill-badge ${eventConfig.gdriveAutoSync !== false ? 'pill-green' : 'pill-amber'}`}
-                        >
-                            <span
-                                className={
-                                    eventConfig.gdriveAutoSync !== false
-                                        ? 'badge-dot-green'
-                                        : 'badge-dot-amber'
-                                }
-                            />
-                            {eventConfig.gdriveAutoSync !== false
-                                ? 'Bật'
-                                : 'Tắt'}
-                        </span>
-                    </div>
-
-                    <button
-                        className="btn-touch-outline"
-                        onClick={() => setShowScriptModal(true)}
-                    >
-                        <Code2 size={18} />
-                        <span>Mã Script</span>
-                    </button>
-                </div>
-
-                <div
-                    className="switch-row-touch"
-                    style={{ marginBottom: '16px' }}
-                >
-                    <span className="switch-label-touch">
-                        Tự động đẩy ảnh lên Google Drive sau khi in
-                    </span>
-                    <label className="switch-toggle-touch">
-                        <input
-                            type="checkbox"
-                            checked={eventConfig.gdriveAutoSync !== false}
-                            onChange={(e) =>
-                                setEventConfig({
-                                    gdriveAutoSync: e.target.checked,
-                                })
-                            }
-                        />
-                        <span className="switch-slider-touch" />
-                    </label>
-                </div>
-
-                <div className="form-group-touch">
-                    <label className="form-label-touch">Folder ID</label>
-                    <div className="token-field-touch">
-                        <input
-                            type="text"
-                            value={eventConfig.gdriveFolderId || ''}
-                            onChange={(e) =>
-                                setEventConfig({
-                                    gdriveFolderId: e.target.value,
-                                })
-                            }
-                            className="form-input-touch-inner"
-                            placeholder="1FcgyAe79bpnZnygxR4i4b4qM_42oB5eU"
-                        />
-                        <button
-                            type="button"
-                            className="btn-token-action"
-                            onClick={handleCopyFolderId}
-                            title="Sao chép Folder ID"
-                        >
-                            <Copy size={18} />
-                        </button>
-                    </div>
-                    {isCopiedFolderId && (
-                        <span className="token-copied-pill">
-                            Đã sao chép Folder ID!
-                        </span>
-                    )}
-                </div>
-            </div>
-
             {/* ── Card 6: Cloudflare R2 Storage & Upload Worker (Fotolism 3.0) ── */}
             <div className="panel-card-touch">
                 <div className="panel-card-header">
@@ -800,54 +704,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                 </div>
             </div>
 
-            {/* ── MODAL HIỂN THỊ MÃ GOOGLE APPS SCRIPT ── */}
-            {showScriptModal && (
-                <div
-                    className="admin-modal-backdrop"
-                    onClick={() => setShowScriptModal(false)}
-                >
-                    <div
-                        className="admin-script-modal"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="modal-header-touch">
-                            <h3 className="modal-title-touch">
-                                Mã Nguồn Google Apps Script (Web App)
-                            </h3>
-                            <button
-                                className="btn-modal-close"
-                                onClick={() => setShowScriptModal(false)}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                        <p className="modal-desc-touch">
-                            Sao chép đoạn mã bên dưới và triển khai (Deploy) làm
-                            Web App trên Google Apps Script để tự động nhận ảnh
-                            và trả link QR:
-                        </p>
-                        <div className="code-snippet-box">
-                            <pre>{GOOGLE_APPS_SCRIPT_SAMPLE}</pre>
-                        </div>
-                        <div className="modal-footer-touch">
-                            <button
-                                className="btn-touch-primary"
-                                onClick={() => {
-                                    navigator.clipboard.writeText(
-                                        GOOGLE_APPS_SCRIPT_SAMPLE
-                                    )
-                                    alert(
-                                        'Đã sao chép mã script vào bộ nhớ tạm!'
-                                    )
-                                }}
-                            >
-                                <Copy size={18} />
-                                <span>Sao Chép Mã Script</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

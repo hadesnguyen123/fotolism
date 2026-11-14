@@ -1,61 +1,44 @@
-# FOTOLISM 3.0 — MODULE MAP & AGENT NAVIGATION GUIDE
+# FOTOLISM 3.0 — BẢN ĐỒ MODULE & HƯỚNG DẪN ĐIỀU HƯỚNG AGENT
 
-Tài liệu định vị nhanh cho Coding Agent (Antigravity / Cursor) nhằm tối ưu hóa chi phí Context Token.
+> Tài liệu định vị mã nguồn dành cho Coding Agent (Antigravity/Cursor).
+> **Mục tiêu:** Giảm lượng context token tiêu thụ, định vị đúng mã nguồn và tránh đọc các file không cần thiết.
 
----
+## 1. Nguyên tắc điều hướng
 
-## 1. Nguyên Tắc Điều Hướng (Navigation Heuristics)
+1. **Xác định nghiệp vụ:** Xác định module liên quan trước khi đọc mã nguồn.
+2. **Tìm kiếm trước:** Ưu tiên tìm theo tên file, symbol hoặc function.
+3. **Đọc có chọn lọc:** Chỉ đọc hàm hoặc đoạn mã liên quan trực tiếp.
+4. **Truy vết khi cần:** Chỉ mở rộng sang các file import, caller hoặc dependency khi cần thiết.
+5. **Giới hạn phạm vi:** Không đọc module khác nếu luồng xử lý không liên quan.
+6. **Xác minh đường dẫn:** Kiểm tra file tồn tại trước khi đọc vì bản đồ có thể chưa được cập nhật.
+7. **Tránh quét toàn bộ:** Không đọc đệ quy toàn bộ thư mục hoặc repository mặc định.
+8. **Tái sử dụng context:** Không đọc lại những file đã kiểm tra nếu nội dung không thay đổi.
 
-1. **Tra cứu Symbol/Function trước**: Sử dụng công cụ grep hoặc targeted read thay vì nạp toàn bộ thư mục.
-2. **Bắt đầu từ Primary Entry Point**: Luôn mở file Entry Point tương ứng với nghiệp vụ trước tiên.
-3. **Tra cứu Dependency có định hướng**: Chỉ đọc các file trong danh sách liên đới khi hàm cần sửa trực tiếp gọi tới chúng.
-4. **Không nạp file thuộc domain khác**: Tránh đọc các file CSS không liên quan hoặc các module nằm ngoài phạm vi nghiệp vụ.
+## 2. Bản đồ nghiệp vụ và điểm vào mã nguồn
 
----
+### 2.1. Camera & LiveView
 
-## 2. Ma Trận Ánh Xạ Nghiệp Vụ & Entry Points
+| Nghiệp vụ | File chính |
+|---|---|
+| Quản lý EDSDK, session, chụp ảnh và LiveView | `desktop/native-daemon/CanonDaemon.cs` |
+| Giao tiếp Camera IPC | `desktop/electron/ipc/cameraIpc.cts` |
+| Giao diện chụp ảnh | `desktop/src/screens/CaptureScreen.tsx` |
+| Làm đẹp LiveView | `desktop/src/components/BeautyCameraView.tsx` |
+| Hướng dẫn tỷ lệ khung hình | `desktop/src/components/capture/CaptureAspectGuide.tsx` |
+| Khai báo Native EDSDK | `desktop/native-daemon/EdsdkNative.cs` |
 
-| Nghiệp vụ chính | Primary Entry Point (Đọc trước) | Dependencies liên đới (Chỉ đọc khi cần) | Vùng KHÔNG cần đọc |
-| :--- | :--- | :--- | :--- |
-| **Canon Camera & LiveView** | `desktop/native-daemon/CanonDaemon.cs`<br/>`desktop/electron/ipc/cameraIpc.cts`<br/>`desktop/src/screens/CaptureScreen.tsx` | `desktop/native-daemon/EdsdkNative.cs`<br/>`desktop/src/components/BeautyCameraView.tsx`<br/>`desktop/src/components/capture/CaptureAspectGuide.tsx` | `cms/`, `PaymentScreen.tsx`, `canvasCompositor.ts` |
-| **Khung ảnh, Crop & In ấn** | `desktop/src/lib/canvasCompositor.ts`<br/>`desktop/src/screens/ReviewScreen.tsx` | `desktop/electron/ipc/printerIpc.cts`<br/>`desktop/src/components/review/InteractiveStripPreview.tsx`<br/>`desktop/src/screens/ReviewScreen.css` | `desktop/ai-service/`, `CanonDaemon.cs`, `cms/` |
-| **Làm đẹp chân dung (AI)** | `desktop/ai-service/api/routes/enhance.py`<br/>`desktop/src/services/beautyEngine.ts` | `desktop/ai-service/core/korean_beauty_engine.py`<br/>`desktop/src/lib/faceDetector.ts` | `cms/`, `printerIpc.cts`, `ReviewScreen.tsx` |
-| **Thanh toán & Thu ngân POS**| `desktop/src/screens/PaymentScreen.tsx`<br/>`cms/src/app/pos/page.tsx` | `cms/src/app/api/pricing/route.ts`<br/>`cms/src/lib/data/store.ts` | `CanonDaemon.cs`, `canvasCompositor.ts`, `ai-service/` |
-| **Quản trị Thiết bị / Kiosk** | `cms/src/app/devices/page.tsx`<br/>`cms/src/app/devices/hooks/useDeviceManager.ts` | `cms/src/app/devices/components/KiosksTab.tsx`<br/>`desktop/src/services/cloudSyncService.ts` | `desktop/src/lib/canvasCompositor.ts`, `ai-service/` |
-| **Bảng giá, Voucher & Gói chụp** | `cms/src/app/pricing/page.tsx`<br/>`cms/src/app/pricing/hooks/usePricingManager.ts` | `cms/src/app/pricing/components/PackagesTab.tsx`<br/>`desktop/src/config/coupons.ts` | `CanonDaemon.cs`, `BeautyCameraView.tsx` |
-| **Đồng bộ Offline ➔ Online** | `desktop/src/services/cloudSyncService.ts`<br/>`desktop/electron/sessionDatabase.cts` | `cms/src/app/api/kiosk/sessions/route.ts`<br/>`desktop/electron/ipc/sessionIpc.cts` | UI CSS files, `ai-service/` |
+### 2.2. Khung ảnh, Crop & In ấn
 
----
+| Nghiệp vụ | File chính |
+|---|---|
+| Ghép khung ảnh, crop | `desktop/src/lib/canvasCompositor.ts` |
+| Luồng xem lại ảnh | `desktop/src/screens/ReviewScreen.tsx` |
+| Giao tiếp máy in | `desktop/electron/ipc/printerIpc.cts` |
+| Xem trước ảnh strip | `desktop/src/components/review/InteractiveStripPreview.tsx` |
 
-## 3. Bản Đồ Cấu Trúc Thư Mục Tối Giản
+### 2.3. AI Beauty Engine
 
-```
-f:\Fotolism\
-├── desktop/                        # Electron + React Kiosk Client (Port 5173)
-│   ├── electron/                   # Electron Main Process & Native Bridges
-│   │   ├── main.cts                # Window lifecycle & IPC Handlers
-│   │   ├── preload.cts             # Context isolation bridge
-│   │   └── sessionDatabase.cts     # SQLite local session persistence
-│   ├── native-daemon/              # C# 64-bit Canon EDSDK Daemon (Port 8899)
-│   │   ├── CanonDaemon.cs          # P/Invoke, Session lifecycle, Live View & Shutter
-│   │   └── build.ps1               # Script biên dịch csc.exe 64-bit
-│   ├── ai-service/                 # Python FastAPI Offline AI Engine (Port 8000)
-│   │   ├── main.py                 # FastAPI app entry point
-│   │   ├── api/routes/             # /enhance, /camera, /composite routes
-│   │   └── core/                   # Korean beauty algorithms & LUT managers
-│   └── src/                        # React Frontend Source
-│       ├── components/             # Reusable UI widgets
-│       ├── screens/                # Flow màn hình chính của Kiosk
-│       ├── lib/                    # Canvas compositor, API bridges, constants
-│       ├── services/               # Beauty engine, Cloud sync service
-│       └── store/                  # Zustand state management
-├── cms/                            # Next.js 16 Cloud CMS & POS (Port 3000)
-│   └── src/
-│       ├── app/                    # Next.js App Router pages (/pos, /devices, /pricing)
-│       ├── components/             # CMS Shared UI components
-│       └── lib/                    # Supabase clients & local data store
-└── docs/                           # Tài liệu kiến trúc và bản đồ module
-    ├── architecture.md             # Kiến trúc tổng quan & Data flow
-    ├── module-map.md               # Bản đồ điều hướng Agent (file này)
-    └── benchmark-baseline.md       # Đo lường Input/Output tokens
-```
+| Nghiệp vụ | File chính |
+|---|---|
+| API xử lý ảnh | `desktop/ai-service/api/routes/enhance.py` |
+| Thuật

@@ -7,7 +7,7 @@
     max-height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: #faf6f0;
+    background-color: #fdf5ed;
     user-select: none;
     overflow: hidden;
     position: relative;
@@ -17,8 +17,8 @@
 /* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
 .review-fixed-brand-logo {
     position: absolute;
-    top: 20px;
-    left: 48px;
+    top: 5.2vh;
+    left: 5.2vw;
     height: clamp(44px, 3.2vw, 56px);
     width: auto;
     object-fit: contain;
@@ -31,7 +31,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: 28px;
+    margin-top: 6vh;
     margin-bottom: 16px;
     background: transparent;
     border-bottom: none;
@@ -57,8 +57,8 @@
 .review-header-title {
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -88,24 +88,24 @@
 .review-content-pastel {
     flex: 1;
     display: grid;
-    grid-template-columns: 440px 1fr;
-    gap: 48px;
-    padding: 12px 48px;
-    max-width: 1200px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: clamp(32px, 4vw, 80px);
+    padding: 24px 0;
+    max-width: min(1440px, 80vw);
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
     align-items: center;
-    height: calc(100vh - 190px);
-    max-height: calc(100vh - 190px);
+    min-height: 0;
+    margin-bottom: 190px;
     overflow: hidden;
 }
 
 /* ── Left: Photobooth Strip Frame & Media View (Fixed 440px column) ──── */
 .strip-frame-container {
-    width: 440px;
-    min-width: 440px;
-    max-width: 440px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -529,8 +529,8 @@
 }
 
 .copies-btn-pastel {
-    width: 32px;
-    height: 32px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     background: #ffffff;
     border: 1px solid var(--color-pink-light);
@@ -845,4 +845,139 @@
     100% {
         left: 100%;
     }
+}
+
+/* Completion screen follows the cream / espresso reference screens. */
+.review-screen-pastel {
+    color: #653125;
+    font-family: 'Google Sans Flex', sans-serif;
+}
+
+.review-header-title {
+    font-family: 'Noto Serif SC', 'Google Sans Flex', serif;
+    font-size: clamp(30px, 2.92vw, 56px);
+    font-weight: 600;
+    color: #653125;
+    letter-spacing: -0.04em;
+}
+
+.review-preview-panel {
+    height: min(52vh, 580px);
+    border-radius: 24px;
+    background: #f7e9dc;
+    border: 1px solid #e5d9cf;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.review-preview-panel .frame-preview-wrapper {
+    height: 100%;
+    max-height: 100%;
+}
+
+.review-preview-panel .review-final-strip-card {
+    height: 100%;
+    max-height: 100%;
+    width: auto;
+    max-width: 100%;
+    flex-shrink: 1;
+}
+
+.review-delivery-deck {
+    max-width: 680px;
+    gap: 20px;
+}
+
+.review-screen-pastel .delivery-card-pastel {
+    border: 1px solid #e5d9cf;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(64, 33, 20, 0.06);
+    gap: 16px;
+}
+
+.review-qr-card {
+    min-height: 300px;
+}
+
+.review-qr-card .btn-selfbooth-qr-top {
+    justify-content: flex-start;
+    padding: 0;
+    height: 48px;
+    color: #653125;
+    background: transparent;
+    box-shadow: none;
+    font-weight: 600;
+    letter-spacing: 0;
+    font-size: 1.25rem;
+}
+
+.review-qr-card .btn-selfbooth-qr-top:hover {
+    transform: none;
+    color: #4d140d;
+}
+
+.review-screen-pastel .selfbooth-qr-img-box-large {
+    background: #fff;
+    border: 1px solid #e5d9cf;
+    box-shadow: none;
+}
+
+.review-screen-pastel .card-title-pastel {
+    color: #653125;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.review-screen-pastel .print-copies-row {
+    background: #fdf5ed;
+    border-radius: 16px;
+    padding: 16px;
+    gap: 16px;
+}
+
+.review-screen-pastel .copies-btn-pastel {
+    border-color: #e5d9cf;
+    color: #653125;
+}
+
+.review-screen-pastel .print-btn-pastel {
+    min-height: 54px;
+    box-shadow: none;
+    background: #522c1f;
+}
+
+.review-screen-pastel .print-btn-pastel:disabled {
+    background: #eee6df;
+    color: #927e72;
+}
+
+.review-screen-pastel .loader-spinner-pink {
+    border-color: #e5d9cf;
+    border-top-color: #653125;
+}
+
+.review-screen-pastel .composite-generating-loader {
+    text-align: center;
+    line-height: 1.5;
+}
+
+.review-screen-pastel .review-bottom-bar-pastel {
+    position: absolute;
+    bottom: 100px;
+    padding: 0 100px;
+    height: 60px;
+}
+
+.review-screen-pastel .selfbooth-review-minimal {
+    min-height: 0;
+    margin-bottom: 180px;
+}
+
+@media (max-height: 800px) {
+    .review-content-pastel { padding: 16px 0; }
+    .review-screen-pastel .delivery-card-pastel { padding: 16px 20px; gap: 10px; }
+    .review-delivery-deck { gap: 12px; }
+    .review-qr-card { min-height: 0; }
+    .review-preview-panel { height: 48vh; }
 }

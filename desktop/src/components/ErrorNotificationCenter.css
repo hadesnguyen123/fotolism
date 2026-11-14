@@ -84,7 +84,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: var(--font-heading, 'Baloo 2', sans-serif);
+    font-family: var(--font-heading, 'Google Sans Flex', sans-serif);
 }
 
 .error-toast-icon {
@@ -99,7 +99,7 @@
     padding: 3px 8px;
     border-radius: 6px;
     text-transform: uppercase;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
 }
 
 .log-badge-camera {
@@ -179,7 +179,7 @@
     font-size: 0.92rem;
     line-height: 1.45;
     color: #f9fafb;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
     font-weight: 500;
     word-break: break-word;
 }
@@ -252,7 +252,7 @@
     border-radius: 28px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     cursor: pointer;
-    font-family: var(--font-heading, 'Baloo 2', sans-serif);
+    font-family: var(--font-heading, 'Google Sans Flex', sans-serif);
     font-size: 0.95rem;
     font-weight: 700;
     backdrop-filter: blur(14px);
@@ -377,7 +377,7 @@
 .drawer-title {
     margin: 0;
     font-size: 1.45rem;
-    font-family: var(--font-heading, 'Baloo 2', sans-serif);
+    font-family: var(--font-heading, 'Google Sans Flex', sans-serif);
     font-weight: 800;
     color: #fff;
     letter-spacing: -0.3px;
@@ -387,7 +387,7 @@
     margin: 4px 0 0 0;
     font-size: 0.88rem;
     color: #9ca3af;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
 }
 
 .drawer-close-btn {
@@ -438,7 +438,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
 }
 
 .filter-tab:hover {
@@ -477,7 +477,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
 }
 
 .drawer-copy-all-btn {
@@ -532,7 +532,7 @@
     font-size: 1.25rem;
     font-weight: 700;
     color: #f3f4f6;
-    font-family: var(--font-heading, 'Baloo 2', sans-serif);
+    font-family: var(--font-heading, 'Google Sans Flex', sans-serif);
 }
 
 .empty-subtext {
@@ -597,7 +597,7 @@
     font-size: 0.9rem;
     font-weight: 700;
     color: #f9fafb;
-    font-family: var(--font-heading, 'Baloo 2', sans-serif);
+    font-family: var(--font-heading, 'Google Sans Flex', sans-serif);
 }
 
 .log-item-right {
@@ -621,7 +621,7 @@
     font-size: 0.92rem;
     line-height: 1.45;
     color: #e5e7eb;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
     font-weight: 500;
     word-break: break-word;
 }
@@ -696,7 +696,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-family: var(--font-body, 'Quicksand', sans-serif);
+    font-family: var(--font-body, 'Inter', sans-serif);
 }
 
 .drawer-close-bottom-btn:hover {

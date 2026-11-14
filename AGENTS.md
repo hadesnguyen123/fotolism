@@ -1,45 +1,39 @@
-# fotolism 3.0 — Hướng dẫn Antigravity
+# Fotolism 3.0 — Agent Rules
 
-## 1. Kiến trúc & Bản đồ Module
-- `desktop/`: Electron + React, Kiosk (5173).
-- `desktop/native-daemon/`: C#/.NET, Canon EDSDK (8899).
-- `cms/`: Next.js + Supabase, CMS/POS (3000).
-- `desktop/ai-service/`: Python FastAPI, AI Engine (8000).
-- **Tra cứu nhanh Entry Points**: Xem [docs/module-map.md](file:///f:/Fotolism/docs/module-map.md) trước khi đọc code.
-- **Bản đồ kiến trúc chi tiết**: Xem [docs/architecture.md](file:///f:/Fotolism/docs/architecture.md).
+## 1. Context
+- `desktop/`: Electron + React — Kiosk.
+- `desktop/native-daemon/`: C#/.NET — Canon EDSDK.
+- `desktop/ai-service/`: Python FastAPI — AI.
+- `cms/`: Next.js + Supabase — CMS/POS.
+- `docs/module-map.md`: Định vị mã nguồn.
+- `docs/architecture.md`: Kiến trúc hệ thống.
+- Chỉ đọc tài liệu khi cần. **Search → Read → Edit → Verify**. Không quét toàn repo; chỉ truy vết dependency liên quan.
 
-## 2. Quy tắc định vị & tối ưu Token
-- **Search trước, đọc sau**: Sử dụng grep/symbol lookup trước khi nạp file.
-- **Nạp đúng Primary Entry Point**: Chỉ bắt đầu từ file đại diện của nghiệp vụ (xem `docs/module-map.md`).
-- **Lần theo Dependency khi cần**: Không cấm đọc sâu, nhưng chỉ lần theo chuỗi import/call stack trực tiếp liên quan.
-- **Tránh nạp chéo domain**: Task Camera không nạp CSS/CMS; task CMS không nạp mã nguồn C# Camera daemon.
+## 2. Bất biến
+- Kiosk offline-first; Cloud Sync dùng Outbox + retry idempotent.
+- Canon Daemon độc quyền EDSDK session; chụp tuần tự, chống trùng `captureId`.
+- Bảo toàn ảnh gốc; lỗi AI không được chặn chụp/in.
+- UI touch-first, tối giản, dùng Lucide Icons; **tuân thủ thiết kế tham chiếu có sẵn**, không tự thay đổi design system.
+- Không tự ý thay đổi giá, thanh toán, quy tắc in, schema, API contract hoặc kiến trúc.
 
-## 3. Quy tắc bất biến
-- Kiosk hoạt động offline; dữ liệu đồng bộ Cloud qua Outbox và retry idempotent.
-- Chỉ Canon Daemon quản lý EDSDK session; không đóng session sau mỗi lần chụp.
-- Lệnh chụp xử lý tuần tự, chống trùng bằng `captureId`.
-- UI touch-first, thương hiệu `fotolism`, thiết kế tối giản, sử dụng Lucide Icons.
-- Không tự ý thay đổi bảng giá, quy tắc in ấn và thanh toán.
+## 3. Thực thi
+- Xác định phạm vi; ưu tiên minimal diff và tái sử dụng code.
+- Không refactor, thêm dependency hoặc sửa ngoài phạm vi.
+- Không tự commit, push, deploy.
+- Chỉ hỏi khi thiếu thông tin quan trọng hoặc có rủi ro cao.
+- Chỉ dùng subagent cho task độc lập, đủ lớn; phân chia file ownership, tránh xung đột và test trùng.
 
-## 4. Tiếp nhận & Thực thi
-- Xác định mục tiêu, phạm vi, ràng buộc và kết quả mong muốn.
-- Chỉ sửa những gì cần thiết, không tự ý mở rộng hoặc refactor ngoài phạm vi.
-- Ưu tiên giải pháp đơn giản, tái sử dụng thành phần hiện có.
-- Không tự ý thay đổi kiến trúc, dependency, database schema hoặc dữ liệu quan trọng.
-- Không tự commit, push hoặc deploy.
-- Chỉ sử dụng Subagent khi thực sự cần.
+## 4. Kiểm thử
+- UI/CSS/Text: kiểm tra diff; kiểm tra trực quan khi khả thi.
+- Logic/API: test đúng module bị ảnh hưởng.
+- Camera/AI: test chuyên biệt khi có môi trường.
+- Không tự chạy full build/test/verify; không chạy lại test PASS khi code liên quan không đổi.
+- Không báo PASS nếu chưa thực sự kiểm tra.
 
-## 5. Kiểm thử thông minh
-- **UI/CSS/layout/text:** Chỉ kiểm tra diff; không chạy test/build mặc định.
-- **Logic component:** Chỉ chạy test liên quan nếu có.
-- **API/service:** Chỉ kiểm thử module bị ảnh hưởng.
-- **Hardware/AI:** Kiểm thử chuyên biệt khi cần và có môi trường phù hợp.
-- **Shared code/kiến trúc:** Đánh giá phạm vi ảnh hưởng trước khi kiểm thử.
-- Không tự chạy full test suite, full build hoặc `npm run verify` khi chưa được chấp thuận.
-- Không chạy lại test đã PASS nếu không có thay đổi liên quan.
-- Không báo kiểm thử thành công nếu chưa thực sự chạy.
+## 5. Báo cáo
+Trả lời ngắn gọn bằng tiếng Việt, chỉ gồm:
+- **Đã thay đổi**
+- **Đã kiểm tra**
+- **Vấn đề còn lại**
 
-## 6. Báo cáo
-- Trả lời ngắn gọn bằng tiếng Việt.
-- Chỉ báo cáo: **Đã thay đổi — Đã kiểm tra — Vấn đề còn lại**.
-- Không giải thích dài dòng hoặc tạo tài liệu khi không được yêu cầu.
+**Nguyên tắc: Ít context → Sửa tối thiểu → Test đúng phạm vi.**

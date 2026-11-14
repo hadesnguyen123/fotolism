@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import { getFotolismDir } from './common.cjs'
 import { SessionDB, type UploadTaskRecord } from '../sessionDatabase.cjs'
 import { r2UploadWorker, type UploadProgressEvent } from '../r2UploadWorker.cjs'
+import { assertEnhancedFile, enhancedFinalPath } from '../enhanceIntegrity.cjs'
 
 export function cleanupDiskStorage(retentionDays = 15): void {
     try {
@@ -127,252 +128,20 @@ export function registerStorageIpc(): void {
         }
     )
 
-    ipcMain.handle(
-        'storage:upload-drive-session',
-        async (
-            _event,
-            payload: {
-                parentFolderId: string
-                subfolderName: string
-                files: Array<{ name: string; dataUrl: string }>
-                webhookUrl?: string
-            }
-        ) => {
-            try {
-                const localSessionDir = path.join(
-                    getFotolismDir(),
-                    payload.subfolderName
-                )
-                if (!fs.existsSync(localSessionDir))
-                    fs.mkdirSync(localSessionDir, { recursive: true })
-
-                const savedFiles: string[] = []
-                for (const item of payload.files) {
-                    if (!item.dataUrl) continue
-                    try {
-                        const targetFilePath = path.join(
-                            localSessionDir,
-                            item.name
-                        )
-                        if (item.dataUrl.startsWith('data:')) {
-                            const base64Data = item.dataUrl.replace(
-                                /^data:[^;]+;base64,/,
-                                ''
-                            )
-                            const buffer = Buffer.from(base64Data, 'base64')
-                            fs.writeFileSync(targetFilePath, buffer)
-                            savedFiles.push(targetFilePath)
-                        } else if (fs.existsSync(item.dataUrl)) {
-                            fs.copyFileSync(item.dataUrl, targetFilePath)
-                            savedFiles.push(targetFilePath)
-                        }
-                    } catch (fileErr) {
-                        console.warn(
-                            'Cannot write session file:',
-                            item.name,
-                            fileErr
-                        )
-                    }
-                }
-
-                let cloudFolderUrl = `https://drive.google.com/drive/folders/${payload.parentFolderId}`
-                let cloudFolderId = payload.parentFolderId
-
-                const effectiveWebhook =
-                    payload.webhookUrl &&
-                    payload.webhookUrl.trim().startsWith('http')
-                        ? payload.webhookUrl.trim()
-                        : 'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
-
-                if (effectiveWebhook) {
-                    try {
-                        const filesForWebhook = payload.files.map((f) => {
-                            let dataUrl = f.dataUrl
-                            if (!dataUrl.startsWith('data:')) {
-                                try {
-                                    const mimeType = f.name.endsWith('.webm')
-                                        ? 'video/webm'
-                                        : 'image/jpeg'
-                                    if (fs.existsSync(dataUrl)) {
-                                        const buf = fs.readFileSync(dataUrl)
-                                        dataUrl = `data:${mimeType};base64,${buf.toString('base64')}`
-                                    } else {
-                                        const targetFilePath = path.join(
-                                            localSessionDir,
-                                            f.name
-                                        )
-                                        if (fs.existsSync(targetFilePath)) {
-                                            const buf =
-                                                fs.readFileSync(targetFilePath)
-                                            dataUrl = `data:${mimeType};base64,${buf.toString('base64')}`
-                                        }
-                                    }
-                                } catch (readErr) {
-                                    console.warn(
-                                        'Failed to read file for webhook base64:',
-                                        f.name,
-                                        readErr
-                                    )
-                                }
-                            }
-                            return { name: f.name, dataUrl }
-                        })
-
-                        const validFilesForWebhook = filesForWebhook.filter(
-                            (f) => f.dataUrl && f.dataUrl.startsWith('data:')
-                        )
-                        console.log(
-                            `[Google Drive Webhook] Uploading ${validFilesForWebhook.length}/${filesForWebhook.length} valid files to Webhook: ${effectiveWebhook}`
-                        )
-
-                        const res = await fetch(effectiveWebhook, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'text/plain;charset=utf-8',
-                            },
-                            body: JSON.stringify({
-                                action: 'create_session_folder',
-                                parentFolderId: payload.parentFolderId,
-                                folderName: payload.subfolderName,
-                                files: validFilesForWebhook,
-                            }),
-                            redirect: 'follow',
-                        })
-
-                        if (!res.ok) {
-                            const errText = await res.text()
-                            console.error(
-                                `[Google Drive Webhook] Server returned HTTP ${res.status}:`,
-                                errText.slice(0, 200)
-                            )
-                            return {
-                                success: false,
-                                error: `Webhook phản hồi lỗi HTTP ${res.status}. Vui lòng kiểm tra quyền truy cập trên Google Apps Script.`,
-                            }
-                        }
-
-                        const resJson: any = await res.json()
-                        if (
-                            !resJson ||
-                            !resJson.success ||
-                            !resJson.folderUrl
-                        ) {
-                            console.error(
-                                '[Google Drive Webhook] Invalid response from script:',
-                                resJson
-                            )
-                            return {
-                                success: false,
-                                error:
-                                    resJson?.error ||
-                                    'Không nhận được đường link thư mục từ Google Drive Webhook.',
-                            }
-                        }
-
-                        cloudFolderUrl = resJson.folderUrl
-                        cloudFolderId = resJson.folderId || cloudFolderId
-                        console.log(
-                            `[Google Drive Webhook] Upload SUCCESS! Cloud Folder URL: ${cloudFolderUrl}`
-                        )
-                    } catch (netErr: any) {
-                        console.error(
-                            '[Google Drive Webhook] Network / Upload error:',
-                            netErr.message
-                        )
-                        return {
-                            success: false,
-                            error: `Lỗi kết nối Webhook: ${netErr.message}`,
-                        }
-                    }
-                }
-
-                return {
-                    success: true,
-                    data: {
-                        localDir: localSessionDir,
-                        cloudFolderUrl,
-                        cloudFolderId,
-                        subfolderName: payload.subfolderName,
-                        filesCount: savedFiles.length,
-                    },
-                }
-            } catch (err: any) {
-                console.error('Upload drive session failed:', err)
-                return { success: false, error: err.message }
-            }
-        }
-    )
-
-    ipcMain.handle(
-        'storage:test-webhook',
-        async (_event, webhookUrl: string) => {
-            try {
-                if (!webhookUrl || !webhookUrl.trim().startsWith('http')) {
-                    return {
-                        success: false,
-                        error: 'URL Webhook không hợp lệ.',
-                    }
-                }
-                const res = await fetch(webhookUrl.trim(), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'test_connection',
-                        timestamp: new Date().toISOString(),
-                    }),
-                })
-
-                if (res.status === 401 || res.status === 403) {
-                    return {
-                        success: false,
-                        statusCode: res.status,
-                        error: `Lỗi HTTP ${res.status}: Webhook đang bị chặn quyền truy cập. Trong Google Apps Script > Quản lý bản triển khai > Chỉnh sửa > Hãy chọn 'Người có quyền truy cập: Bất kỳ ai' (Anyone).`,
-                    }
-                }
-
-                const text = await res.text()
-                let json: any = null
-                try {
-                    json = JSON.parse(text)
-                } catch {}
-
-                if (json && json.success) {
-                    return {
-                        success: true,
-                        statusCode: res.status,
-                        message:
-                            'Kết nối Webhook thành công! Google Drive đã sẵn sàng nhận ảnh.',
-                    }
-                }
-
-                if (res.ok) {
-                    return {
-                        success: true,
-                        statusCode: res.status,
-                        message:
-                            'Webhook phản hồi 200 OK. Đã xác nhận quyền "Bất kỳ ai" thành công!',
-                    }
-                }
-
-                return {
-                    success: false,
-                    statusCode: res.status,
-                    error: `Webhook phản hồi mã lỗi HTTP ${res.status}. Vui lòng kiểm tra mã Apps Script.`,
-                }
-            } catch (err: any) {
-                return {
-                    success: false,
-                    error: `Lỗi kết nối Webhook: ${err.message}`,
-                }
-            }
-        }
-    )
-
     // ── FOTOLISM 3.0: CLOUDFLARE R2 UPLOAD WORKER IPC ──
 
-    ipcMain.handle('storage:get-upload-status', async () => {
+    ipcMain.handle('storage:get-upload-status', async (_event, sessionId?: string) => {
         try {
             const stats = r2UploadWorker.getStats()
+            if (sessionId) {
+                const tasks = SessionDB.getUploadTasksForSession(sessionId)
+                stats.pendingTasks = tasks.filter(t => t.status === 'PENDING' || t.status === 'FAILED_RETRYABLE').length
+                stats.uploadingTasks = tasks.filter(t => t.status === 'UPLOADING').length
+                stats.activeStreams = stats.uploadingTasks
+                stats.failedTasks = tasks.filter(t => t.status === 'FAILED_PERMANENT').length
+                stats.uploadedTasks = tasks.filter(t => t.status === 'UPLOADED').length
+                stats.isProcessing = stats.uploadingTasks > 0
+            }
             return { success: true, data: stats }
         } catch (err: any) {
             return { success: false, error: err.message }
@@ -641,6 +410,11 @@ export function registerStorageIpc(): void {
                     isFinal: boolean
                 }> = []
 
+                // Validate every source before writing or enqueueing any final file.
+                for (const shot of shots || []) {
+                    assertEnhancedFile(cleanFilePath(shot.rawPath), cleanFilePath(shot.enhancedPath))
+                }
+
                 // 1. Lưu các ảnh chụp đơn lẻ vào raw/ và final/
                 if (Array.isArray(shots)) {
                     for (let i = 0; i < shots.length; i++) {
@@ -656,10 +430,9 @@ export function registerStorageIpc(): void {
                                   'fotolism_enhanced_'
                               )
                             : `enhanced_${shotBaseName}`
-                        const finalTarget = path.join(finalDir, enhancedBaseName)
-
                         const cleanRaw = cleanFilePath(s.rawPath)
                         const cleanEnh = cleanFilePath(s.enhancedPath)
+                        const finalTarget = enhancedFinalPath(cleanEnh, finalDir, enhancedBaseName)
 
                         // Lưu raw file
                         if (cleanRaw && fs.existsSync(cleanRaw)) {
@@ -685,11 +458,13 @@ export function registerStorageIpc(): void {
                             ) {
                                 fs.copyFileSync(cleanEnh, finalTarget)
                             }
-                        } else if (fs.existsSync(rawTarget)) {
-                            // Nếu chưa có file enhance riêng thì copy raw sang final đảm bảo luôn có đủ ảnh
-                            fs.copyFileSync(rawTarget, finalTarget)
+                        } else {
+                            throw new Error(`Ảnh AI chưa sẵn sàng: ${shotBaseName}`)
                         }
 
+                        if (!fs.existsSync(rawTarget) || !fs.existsSync(finalTarget)) {
+                            throw new Error(`Ảnh chưa lưu đầy đủ: ${shotBaseName}`)
+                        }
                         if (fs.existsSync(finalTarget)) {
                             finalFilesToEnqueue.push({
                                 imageId: s.id || `shot_${i + 1}`,
@@ -784,6 +559,9 @@ export function registerStorageIpc(): void {
                         cmsUrl,
                         files: finalFilesToEnqueue,
                     })
+                    if (!r2Result.success) throw new Error(r2Result.error || 'Không thể tạo hàng đợi upload')
+                } else {
+                    throw new Error('Không có ảnh để upload')
                 }
 
                 return {

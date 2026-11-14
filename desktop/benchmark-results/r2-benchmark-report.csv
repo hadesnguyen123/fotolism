@@ -1,2 +1,0 @@
-ScenarioId,Concurrency,Description,MedianPureTimeSec,P95PureTimeSec,MedianThroughputMbps,MedianEndToEndSec,AvgLatencyMs,P95LatencyMs,TimeToFirstImageSec,TotalRetries,SuccessRate,AvgRamDeltaMb
-B03,4,"Mặc định Fotolism (Concurrency 4)",184.07,184.07,22.79,184.27,14577,19960,13.3,0,100%,9.2

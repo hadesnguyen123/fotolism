@@ -7,8 +7,6 @@ import {
 import { fotolismApi, mockApi } from '../lib/api'
 import { cloudSyncService } from '../services/cloudSyncService'
 import {
-    DEFAULT_GDRIVE_FOLDER_ID,
-    DEFAULT_GDRIVE_WEBHOOK_URL,
     DEFAULT_PRINT_SCALE,
     FILE_PREFIX_FINAL,
     FILE_PREFIX_SHOT,
@@ -23,13 +21,13 @@ import {
 } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ProcessingScreen.css'
+import { isPhotoEnhanced } from '../lib/enhanceState'
 
 export default function ProcessingScreen() {
     const {
         session,
         setCompositeStripUrl,
-        setGdriveUrl,
-        setCloudFolderUrl,
+        setGalleryUrl,
         selectedFrameSize,
         selectedLayout,
         selectedTheme,
@@ -50,22 +48,16 @@ export default function ProcessingScreen() {
     const isSelfbooth = eventConfig.captureMode === 'selfbooth'
     const isStarted = useRef(false)
 
-    // Đặt tên thư mục phiên chụp chuẩn
-    const subfolderName = useRef(() => {
-        const now = new Date()
-        const pad = (n: number) => (n < 10 ? '0' : '') + n
-        const timeStamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}h${pad(now.getMinutes())}`
-        const prefix = isSelfbooth
-            ? 'Fotolism_Selfbooth'
-            : 'Fotolism_Photobooth'
-        return `${prefix}_${timeStamp}_${(session?.sessionId || 'session').slice(-6)}`
-    }).current()
-
     async function processMediaAndUpload() {
         try {
             setErrorMessage(null)
+            useAppStore.getState().setIsSyncingMedia(true)
+            useAppStore.getState().setMediaSyncError(null)
 
             const photos = session?.photos || []
+            if (photos.some((photo) => !isPhotoEnhanced(photo))) {
+                throw new Error('Ảnh AI chưa hoàn tất. Hãy quay lại bước chụp để xử lý lại trước khi tạo final.')
+            }
             let stripUrl: string | null = null
 
             let pairedPrintUrl: string | null = null
@@ -154,7 +146,7 @@ export default function ProcessingScreen() {
                 console.log(
                     '[ProcessingScreen] Finalizing session media into sessions/{sessionId}/raw & final...'
                 )
-                await api.storage.finalizeSessionMedia({
+                const finalized = await api.storage.finalizeSessionMedia({
                     sessionId,
                     customerName: session?.customerName || undefined,
                     sessionType: isSelfbooth ? 'selfbooth' : 'photobooth',
@@ -165,11 +157,9 @@ export default function ProcessingScreen() {
                     pairedPrintFileName,
                     shots: mediaShots,
                 })
+                if (!finalized.success) throw new Error(finalized.error || 'Không thể lưu ảnh phiên chụp')
             } catch (finalizeErr) {
-                console.warn(
-                    '[ProcessingScreen] finalizeSessionMedia warning:',
-                    finalizeErr
-                )
+                throw finalizeErr
             }
 
             // ── BƯỚC 3: ĐỒNG BỘ SESSION METADATA LÊN CLOUD CMS & SUPABASE NGAY LẬP TỨC ──
@@ -206,7 +196,6 @@ export default function ProcessingScreen() {
                 coupon_code: null,
                 paper_consumed: isSelfbooth ? 0 : 2,
                 storage_url: galleryTargetUrl,
-                drive_url: galleryTargetUrl,
                 status: 'completed',
                 created_at: new Date().toISOString(),
                 photos: sourcePhotos.map(
@@ -219,114 +208,22 @@ export default function ProcessingScreen() {
             })
 
             // Cập nhật URL thư mục Cloud đồng nhất với QR Code
-            setCloudFolderUrl(galleryTargetUrl)
-            setGdriveUrl(galleryTargetUrl)
-            useAppStore.getState().setDriveSyncDone(true)
-            useAppStore.getState().setIsSyncingDrive(false)
-            setUploadDone(true)
-
-            // ── BƯỚC 4: Upload Phụ Lên Google Drive (nếu người dùng bật cấu hình Drive) ──
-            const effectiveWebhookUrl =
-                eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
-            const parentFolderId =
-                eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID
-
-            let cloudFolder = useAppStore.getState().cloudFolderUrl || null
-
-            if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
-                const filesToUpload: Array<{ name: string; dataUrl: string }> =
-                    []
-
-                // Dải ảnh in hoàn chỉnh (chỉ cho Photobooth nếu có stripUrl)
-                if (!isSelfbooth && stripUrl) {
-                    filesToUpload.push({
-                        name: `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`,
-                        dataUrl: stripUrl,
-                    })
-                }
-
-                // Đẩy toàn bộ ảnh chụp đơn lẻ (cả Photobooth và kho ảnh Selfbooth)
-                const sourcePhotos =
-                    session?.selfboothLibrary &&
-                    session.selfboothLibrary.length > 0
-                        ? session.selfboothLibrary
-                        : photos
-
-                sourcePhotos.forEach((p, idx) => {
-                    const dataUrl =
-                        p.compositedPath || p.enhancedPath || p.rawPath
-                    if (dataUrl && dataUrl.trim().length > 0) {
-                        filesToUpload.push({
-                            name: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
-                            dataUrl,
-                        })
-                    }
-                })
-
-                console.log(
-                    '[ProcessingScreen] Uploading session media to Drive...',
-                    filesToUpload.length,
-                    'files'
-                )
-
-                try {
-                    const res = await api.storage.uploadDriveSession({
-                        parentFolderId,
-                        subfolderName,
-                        files: filesToUpload,
-                        webhookUrl: effectiveWebhookUrl,
-                    })
-
-                    if (
-                        res?.success &&
-                        res.data?.cloudFolderUrl &&
-                        !res.data.cloudFolderUrl.includes(
-                            DEFAULT_GDRIVE_FOLDER_ID
-                        )
-                    ) {
-                        cloudFolder = res.data.cloudFolderUrl
-                    } else {
-                        // Direct renderer fallback nếu IPC chính lỗi
-                        const directRes = await fetch(effectiveWebhookUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'text/plain;charset=utf-8',
-                            },
-                            body: JSON.stringify({
-                                action: 'create_session_folder',
-                                parentFolderId,
-                                folderName: subfolderName,
-                                files: filesToUpload.filter(
-                                    (f) =>
-                                        f.dataUrl &&
-                                        f.dataUrl.startsWith('data:')
-                                ),
-                            }),
-                        })
-                        const directJson = await directRes.json()
-                        if (
-                            directJson &&
-                            directJson.success &&
-                            directJson.folderUrl
-                        ) {
-                            cloudFolder = directJson.folderUrl
-                        }
-                    }
-                } catch (uploadErr) {
-                    console.warn(
-                        '[ProcessingScreen] Upload to Drive error, activating offline fallback:',
-                        uploadErr
-                    )
+            setGalleryUrl(galleryTargetUrl)
+            useAppStore.getState().setStorageUrl(galleryTargetUrl)
+            // Enqueue is durable locally, but is not a Cloud acknowledgement.
+            if (!isBrowser) {
+                const deadline = Date.now() + 60000
+                while (true) {
+                    const status = await api.storage.getUploadStatus(sessionId)
+                    if (!status.success || !status.data) throw new Error(status.error || 'Không đọc được trạng thái upload')
+                    if (status.data.failedTasks > 0) throw new Error('Upload chưa thành công. Ảnh đã lưu tại máy; hãy thử lại khi có mạng.')
+                    if (status.data.pendingTasks === 0 && status.data.uploadingTasks === 0 && status.data.activeStreams === 0) break
+                    if (Date.now() >= deadline) throw new Error('Cloud chưa xác nhận xong. Ảnh vẫn được giữ trong hàng đợi tại máy.')
+                    await new Promise((resolve) => setTimeout(resolve, 500))
                 }
             }
-
-            // Lưu URL thư mục Cloud
-            if (cloudFolder) {
-                setCloudFolderUrl(cloudFolder)
-                setGdriveUrl(cloudFolder)
-                useAppStore.getState().setDriveSyncDone(true)
-                useAppStore.getState().setIsSyncingDrive(false)
-            }
+            useAppStore.getState().setMediaSyncDone(true)
+            useAppStore.getState().setIsSyncingMedia(false)
             setUploadDone(true)
 
             // ── BƯỚC 5: Tạo Mã QR Tải Ảnh đồng nhất với link Storage ──
@@ -350,8 +247,10 @@ export default function ProcessingScreen() {
         } catch (err: any) {
             console.error('[ProcessingScreen] Process failed:', err)
             setErrorMessage(err.message || 'Lỗi xử lý ảnh. Vui lòng thử lại.')
+            useAppStore.getState().setMediaSyncError(err.message || 'Lỗi xử lý ảnh.')
         } finally {
             setIsRetrying(false)
+            useAppStore.getState().setIsSyncingMedia(false)
         }
     }
 
@@ -426,7 +325,7 @@ export default function ProcessingScreen() {
                             )}
                         </div>
                         <span className="proc-step-text">
-                            Tải ảnh lên Cloud & Google Drive
+                            Tải ảnh lên Cloud & Cloud Gallery
                         </span>
                     </div>
 

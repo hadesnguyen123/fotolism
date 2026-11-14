@@ -25,7 +25,7 @@ export function loadSavedBeautyConfig(): BeautyConfig {
             const parsed = JSON.parse(raw)
             return { ...DEFAULT_BEAUTY_CONFIG, ...parsed, mirror: true }
         }
-    } catch {}
+    } catch { }
     return DEFAULT_BEAUTY_CONFIG
 }
 
@@ -102,20 +102,20 @@ export const createBeautyCameraSlice: StateCreator<
     const active = hasCustom
         ? saved
         : {
-              beautyEnabled: naturalPreset?.beautyEnabled ?? true,
-              slimFace: naturalPreset?.slimFace ?? 4,
-              vLine: naturalPreset?.vLine ?? 4,
-              bigEyes: naturalPreset?.bigEyes ?? 5,
-              skinSmoothing: naturalPreset?.skinSmoothing ?? 45,
-              skinToneEvenness: naturalPreset?.skinToneEvenness ?? 30,
-              rosyTone: naturalPreset?.rosyTone ?? 10,
-              blush: naturalPreset?.blush ?? 10,
-              whiteningTone: 0,
-              glowClarity: 0,
-              brightnessAdjust: 100,
-              contrastAdjust: 100,
-              saturationAdjust: 100,
-          }
+            beautyEnabled: naturalPreset?.beautyEnabled ?? true,
+            slimFace: naturalPreset?.slimFace ?? 8,
+            vLine: naturalPreset?.vLine ?? 8,
+            bigEyes: naturalPreset?.bigEyes ?? 10,
+            skinSmoothing: naturalPreset?.skinSmoothing ?? 60,
+            skinToneEvenness: naturalPreset?.skinToneEvenness ?? 50,
+            rosyTone: naturalPreset?.rosyTone ?? 10,
+            blush: naturalPreset?.blush ?? 10,
+            whiteningTone: naturalPreset?.whiteningTone ?? 10,
+            glowClarity: 0,
+            brightnessAdjust: 100,
+            contrastAdjust: 100,
+            saturationAdjust: 100,
+        }
 
     return {
         beautyEnabled: active.beautyEnabled !== false,
@@ -135,12 +135,12 @@ export const createBeautyCameraSlice: StateCreator<
             }
         },
         selectedBeautyPreset: 'natural',
-        slimFace: active.slimFace ?? 4,
-        vLine: active.vLine ?? 4,
-        bigEyes: active.bigEyes ?? 5,
-        skinSmoothing: active.skinSmoothing ?? 45,
-        skinToneEvenness: active.skinToneEvenness ?? 30,
-        whiteningTone: active.whiteningTone ?? 0,
+        slimFace: active.slimFace ?? 8,
+        vLine: active.vLine ?? 8,
+        bigEyes: active.bigEyes ?? 10,
+        skinSmoothing: active.skinSmoothing ?? 60,
+        skinToneEvenness: active.skinToneEvenness ?? 50,
+        whiteningTone: active.whiteningTone ?? 10,
         rosyTone: active.rosyTone ?? 10,
         blush: active.blush ?? active.rosyTone ?? 10,
         glowClarity: active.glowClarity ?? 0,
@@ -305,14 +305,14 @@ export const createBeautyCameraSlice: StateCreator<
                             ...parsed,
                             beautyEnabled: true,
                             selectedBeautyPreset: 'natural',
-                            skinSmoothing: 45,
-                            skinToneEvenness: 30,
-                            vLine: 4,
-                            bigEyes: 5,
+                            skinSmoothing: 60,
+                            skinToneEvenness: 50,
+                            vLine: 8,
+                            bigEyes: 10,
                             blush: 10,
                             rosyTone: 10,
-                            slimFace: 4,
-                            whiteningTone: 0,
+                            slimFace: 8,
+                            whiteningTone: 10,
                             glowClarity: 0,
                             brightnessAdjust: 100,
                             contrastAdjust: 100,
@@ -415,7 +415,7 @@ export const createBeautyCameraSlice: StateCreator<
                         String(ringLightEnabled)
                     )
                 }
-            } catch {}
+            } catch { }
             set({ ringLightEnabled })
         },
         setRingLightLevel: (ringLightLevel) => {
@@ -426,7 +426,7 @@ export const createBeautyCameraSlice: StateCreator<
                         String(ringLightLevel)
                     )
                 }
-            } catch {}
+            } catch { }
             set({ ringLightLevel })
         },
 
@@ -458,7 +458,7 @@ export const createBeautyCameraSlice: StateCreator<
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('fotolism_camera_type', type)
                 }
-            } catch {}
+            } catch { }
             set({
                 cameraType: type,
                 selectedCameraId: type === 'eos' ? 'canon-daemon-stream' : null,
@@ -472,7 +472,7 @@ export const createBeautyCameraSlice: StateCreator<
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('fotolism_mirror_camera', 'true')
                 }
-            } catch {}
+            } catch { }
             set({ mirrorCamera: true })
         },
     }

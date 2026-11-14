@@ -15,7 +15,7 @@
     box-shadow: 0 4px 16px rgba(80, 42, 29, 0.08);
     z-index: 120;
     user-select: none;
-    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-family: var(--font-body, 'Google Sans Flex', system-ui, sans-serif);
     font-weight: 700;
     font-size: 0.95rem;
     letter-spacing: 0.2px;
@@ -29,7 +29,7 @@
 }
 
 .photobooth-countdown-badge .countdown-badge-time {
-    font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 1.25rem;
     font-weight: 800;
     color: #502a1d;

@@ -61,8 +61,8 @@
 .theme-header-title {
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -228,7 +228,7 @@
 
 .theme-slot-placeholder {
     color: #8c7368;
-    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-family: var(--font-body, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 0.82rem;
     font-weight: 600;
     display: flex;
@@ -266,7 +266,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -330,8 +330,8 @@
 .carousel-card-title {
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -342,7 +342,7 @@
 }
 
 .carousel-layout-tag {
-    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-family: var(--font-body, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 0.85rem;
     font-weight: 600;
     color: #502a1d;
@@ -513,7 +513,7 @@
 }
 
 .frame-mini-brand-footer {
-    font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 0.58rem;
     font-weight: 700;
     text-align: center;
@@ -659,8 +659,8 @@
     border-radius: 9999px;
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -694,8 +694,8 @@
     border-radius: 9999px;
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -766,8 +766,8 @@
 .theme-modal-title {
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -779,7 +779,7 @@
 }
 
 .theme-modal-desc {
-    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-family: var(--font-body, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 0.95rem;
     color: #7a665a;
     line-height: 1.55;
@@ -801,7 +801,7 @@
     color: #502a1d;
     border: 1.5px solid #eae0d7;
     border-radius: 9999px;
-    font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 1.05rem;
     font-weight: 700;
     cursor: pointer;
@@ -821,7 +821,7 @@
     color: #ffffff;
     border: none;
     border-radius: 9999px;
-    font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 1.05rem;
     font-weight: 700;
     cursor: pointer;

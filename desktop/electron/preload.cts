@@ -94,10 +94,10 @@ const api = {
             const payload: EdsdkCapturePayload =
                 typeof payloadOrPath === 'string'
                     ? {
-                          savePath: payloadOrPath,
-                          shotIndex: maybeShotIndex ?? 0,
-                          slotIndex: maybeShotIndex ?? 0,
-                      }
+                        savePath: payloadOrPath,
+                        shotIndex: maybeShotIndex ?? 0,
+                        slotIndex: maybeShotIndex ?? 0,
+                    }
                     : payloadOrPath
             return ipcRenderer.invoke('camera:edsdk-capture', payload)
         },
@@ -191,27 +191,8 @@ const api = {
         openFolder: (targetPath?: string): IpcResponse =>
             ipcRenderer.invoke('storage:open-folder', targetPath),
 
-        uploadDriveSession: (payload: {
-            parentFolderId: string
-            subfolderName: string
-            files: Array<{ name: string; dataUrl: string }>
-            webhookUrl?: string
-        }): IpcResponse<{
-            localDir: string
-            cloudFolderUrl: string
-            cloudFolderId: string
-            subfolderName: string
-            filesCount: number
-        }> => ipcRenderer.invoke('storage:upload-drive-session', payload),
-
-        testDriveWebhook: (
-            webhookUrl: string
-        ): IpcResponse<{ message: string; statusCode?: number }> =>
-            ipcRenderer.invoke('storage:test-webhook', webhookUrl),
-
-        // Cloudflare R2 Upload Outbox & Worker APIs
-        getUploadStatus: (): IpcResponse<any> =>
-            ipcRenderer.invoke('storage:get-upload-status'),
+        getUploadStatus: (sessionId?: string): IpcResponse<any> =>
+            ipcRenderer.invoke('storage:get-upload-status', sessionId),
 
         setConcurrency: (
             concurrency: number
@@ -284,9 +265,6 @@ const api = {
 
 // Expose as 'fotolism' (new brand), keep 'joyBooth' alias for backward compat
 contextBridge.exposeInMainWorld('fotolism', api)
-contextBridge.exposeInMainWorld('joyBooth', api) // backward compat alias
 
 // TypeScript type declaration cho renderer
 export type FotolismAPI = typeof api
-/** @deprecated Use FotolismAPI */
-export type JoyBoothAPI = typeof api

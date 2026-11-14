@@ -338,6 +338,7 @@ export class R2UploadWorker {
     ): Promise<string> {
         const res = await fetch(`${this.cmsUrl}/api/storage/upload-urls`, {
             method: 'POST',
+            signal: AbortSignal.timeout(15000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sessionId: task.session_id,
@@ -385,6 +386,7 @@ export class R2UploadWorker {
     ): Promise<void> {
         const res = await fetch(`${this.cmsUrl}/api/storage/confirm`, {
             method: 'POST',
+            signal: AbortSignal.timeout(15000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sessionId: task.session_id,
@@ -398,11 +400,10 @@ export class R2UploadWorker {
 
         if (!res.ok) {
             const errText = await res.text()
-            console.warn(
-                `[R2 Upload Worker] CMS confirm warning (HTTP ${res.status}):`,
-                errText
-            )
+            throw new Error(`CMS confirm failed (HTTP ${res.status}): ${errText}`)
         }
+        const result = await res.json() as { success?: boolean; error?: string }
+        if (!result.success) throw new Error(result.error || 'CMS chưa xác nhận file')
     }
 
     /**

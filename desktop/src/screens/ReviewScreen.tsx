@@ -9,8 +9,6 @@ import {
     FILE_PREFIX_SHOT,
     FILE_PREFIX_FINAL,
     SESSION_FOLDER_PREFIX,
-    DEFAULT_GDRIVE_FOLDER_ID,
-    DEFAULT_GDRIVE_WEBHOOK_URL,
     DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
 import QRCode from 'qrcode'
@@ -18,7 +16,9 @@ import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { PrintActionDeck } from '../components/review/PrintActionDeck'
+import '../components/reference/fonts.css'
 import './ReviewScreen.css'
+import { isPhotoEnhanced } from '../lib/enhanceState'
 
 export default function ReviewScreen() {
     const {
@@ -33,15 +33,12 @@ export default function ReviewScreen() {
         placedStickers,
         selectedFrameSize,
         selectedCopies,
-        setGdriveUrl,
-        isSyncingDrive,
-        setIsSyncingDrive,
-        driveSyncDone,
-        setDriveSyncDone,
-        driveSyncError: syncError,
-        setDriveSyncError: setSyncError,
-        cloudFolderUrl,
-        setCloudFolderUrl,
+        isSyncingMedia,
+        setIsSyncingMedia,
+        setMediaSyncDone,
+        mediaSyncError: syncError,
+        setMediaSyncError: setSyncError,
+        galleryUrl,
         printScale,
     } = useAppStore()
 
@@ -58,7 +55,7 @@ export default function ReviewScreen() {
     const [isGeneratingComposite, setIsGeneratingComposite] =
         useState<boolean>(true)
 
-    // ── Google Drive & Local Session Folder ──
+    // ── Cloud Gallery & Local Session Folder ──
     const [subfolderName] = useState<string>(() => {
         const now = new Date()
         const pad = (n: number) => String(n).padStart(2, '0')
@@ -99,153 +96,19 @@ export default function ReviewScreen() {
             .catch((err) => console.error('Error generating QR:', err))
     }, [targetCloudUrl])
 
-    // Sinh bản ghép canvas composite chất lượng cao & Đẩy ảnh lên Google Drive
+    // Sinh bản ghép canvas composite chất lượng cao & Đẩy ảnh lên Cloud Gallery
     useEffect(() => {
         let isMounted = true
 
         async function processSessionMedia() {
             try {
+                if (!photos.length || photos.some((photo) => !isPhotoEnhanced(photo))) {
+                    throw new Error('Ảnh AI chưa hoàn tất. Hãy quay lại bước chụp và thử lại.')
+                }
                 if (isSelfboothMode) {
                     // Chế độ Selfbooth: Không cần ghép khung in ấn
                     setIsGeneratingComposite(false)
 
-                    // Nếu đã hoàn thành đồng bộ từ bước ProcessingScreen thì không cần gọi lại
-                    if (
-                        driveSyncDone &&
-                        cloudFolderUrl &&
-                        !cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)
-                    ) {
-                        return
-                    }
-
-                    // Nếu đang trong quá trình đồng bộ nền từ CaptureScreen/ProcessingScreen thì chờ đợi
-                    if (isSyncingDrive) {
-                        return
-                    }
-
-                    if (
-                        eventConfig.gdriveEnabled &&
-                        eventConfig.gdriveAutoSync
-                    ) {
-                        setIsSyncingDrive(true)
-                        const filesToUpload: Array<{
-                            name: string
-                            dataUrl: string
-                        }> = []
-                        const sourcePhotos =
-                            session?.selfboothLibrary &&
-                            session.selfboothLibrary.length > 0
-                                ? session.selfboothLibrary
-                                : photos
-
-                        sourcePhotos.forEach((p, idx) => {
-                            const dataUrl =
-                                p.compositedPath || p.enhancedPath || p.rawPath
-                            if (dataUrl && dataUrl.trim().length > 0) {
-                                filesToUpload.push({
-                                    name: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
-                                    dataUrl,
-                                })
-                            }
-                        })
-
-                        const effectiveWebhookUrl =
-                            eventConfig.gdriveWebhookUrl ||
-                            DEFAULT_GDRIVE_WEBHOOK_URL
-                        const api = isBrowser ? mockApi : fotolismApi
-                        let res = await api.storage.uploadDriveSession({
-                            parentFolderId:
-                                eventConfig.gdriveFolderId ||
-                                DEFAULT_GDRIVE_FOLDER_ID,
-                            subfolderName,
-                            files: filesToUpload,
-                            webhookUrl: effectiveWebhookUrl,
-                        })
-
-                        if (
-                            !res.success ||
-                            !res.data?.cloudFolderUrl ||
-                            res.data.cloudFolderUrl.includes(
-                                DEFAULT_GDRIVE_FOLDER_ID
-                            )
-                        ) {
-                            try {
-                                const directRes = await fetch(
-                                    effectiveWebhookUrl,
-                                    {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type':
-                                                'text/plain;charset=utf-8',
-                                        },
-                                        body: JSON.stringify({
-                                            action: 'create_session_folder',
-                                            parentFolderId:
-                                                eventConfig.gdriveFolderId ||
-                                                DEFAULT_GDRIVE_FOLDER_ID,
-                                            folderName: subfolderName,
-                                            files: filesToUpload.filter(
-                                                (f) =>
-                                                    f.dataUrl &&
-                                                    f.dataUrl.startsWith(
-                                                        'data:'
-                                                    )
-                                            ),
-                                        }),
-                                    }
-                                )
-                                const directJson = await directRes.json()
-                                if (
-                                    directJson &&
-                                    directJson.success &&
-                                    directJson.folderUrl
-                                ) {
-                                    res = {
-                                        success: true,
-                                        data: {
-                                            localDir: '',
-                                            cloudFolderUrl:
-                                                directJson.folderUrl,
-                                            cloudFolderId:
-                                                directJson.folderId || '',
-                                            subfolderName,
-                                            filesCount: filesToUpload.length,
-                                        },
-                                    }
-                                }
-                            } catch (directErr) {
-                                console.warn(
-                                    '[ReviewScreen] Selfbooth direct fetch failed:',
-                                    directErr
-                                )
-                            }
-                        }
-
-                        if (
-                            isMounted &&
-                            res.success &&
-                            res.data?.cloudFolderUrl &&
-                            !res.data.cloudFolderUrl.includes(
-                                DEFAULT_GDRIVE_FOLDER_ID
-                            )
-                        ) {
-                            setCloudFolderUrl(res.data.cloudFolderUrl)
-                            setGdriveUrl(res.data.cloudFolderUrl)
-                            setSyncError(null)
-                            setIsSyncingDrive(false)
-                            setDriveSyncDone(true)
-                        } else if (isMounted) {
-                            setIsSyncingDrive(false)
-                            setDriveSyncDone(false)
-                            setSyncError(
-                                res.error ||
-                                    'Chưa thể tạo thư mục hoặc tải ảnh lên Google Drive.'
-                            )
-                        }
-                    } else if (isMounted) {
-                        setIsSyncingDrive(false)
-                        setDriveSyncDone(true)
-                    }
                     return
                 }
 
@@ -255,14 +118,7 @@ export default function ReviewScreen() {
                 if (prebuiltStrip) {
                     setCompositeStripUrl(prebuiltStrip)
                     setIsGeneratingComposite(false)
-                    if (
-                        cloudFolderUrl ||
-                        useAppStore.getState().cloudFolderUrl
-                    ) {
-                        setIsSyncingDrive(false)
-                        setDriveSyncDone(true)
-                        return
-                    }
+                    return
                 }
 
                 // Sinh dải ảnh in hoàn chỉnh cho cả Photobooth và Selfbooth (fallback)
@@ -335,153 +191,18 @@ export default function ReviewScreen() {
                     }
                 }
 
-                // Tự động tạo thư mục con & đẩy toàn bộ ảnh lên Google Drive (và lưu cục bộ)
-                if (eventConfig.gdriveEnabled && eventConfig.gdriveAutoSync) {
-                    setIsSyncingDrive(true)
-
-                    const filesToUpload: Array<{
-                        name: string
-                        dataUrl: string
-                    }> = []
-
-                    // 1. Dải ảnh in hoàn chỉnh
-                    if (stripUrl) {
-                        filesToUpload.push({
-                            name: `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`,
-                            dataUrl: stripUrl,
-                        })
-                    }
-
-                    // 2. Toàn bộ ảnh chụp đơn lẻ (bao gồm toàn bộ kho ảnh Selfbooth nếu có)
-                    const sourcePhotos =
-                        session?.selfboothLibrary &&
-                        session.selfboothLibrary.length > 0
-                            ? session.selfboothLibrary
-                            : photos
-
-                    sourcePhotos.forEach((p, idx) => {
-                        const dataUrl =
-                            p.compositedPath || p.enhancedPath || p.rawPath
-                        if (dataUrl && dataUrl.trim().length > 0) {
-                            filesToUpload.push({
-                                name: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
-                                dataUrl,
-                            })
-                        }
-                    })
-
-                    const effectiveWebhookUrl =
-                        eventConfig.gdriveWebhookUrl ||
-                        DEFAULT_GDRIVE_WEBHOOK_URL
-                    console.log(
-                        '[ReviewScreen] Uploading Photobooth to Google Drive Webhook:',
-                        effectiveWebhookUrl,
-                        'files count:',
-                        filesToUpload.length
-                    )
-
-                    const api = isBrowser ? mockApi : fotolismApi
-                    let res = await api.storage.uploadDriveSession({
-                        parentFolderId:
-                            eventConfig.gdriveFolderId ||
-                            DEFAULT_GDRIVE_FOLDER_ID,
-                        subfolderName,
-                        files: filesToUpload,
-                        webhookUrl: effectiveWebhookUrl,
-                    })
-
-                    // Direct Renderer Fallback: Bỏ qua phụ thuộc Electron Main Process cũ, gọi trực tiếp từ Renderer
-                    if (
-                        !res.success ||
-                        !res.data?.cloudFolderUrl ||
-                        res.data.cloudFolderUrl.includes(
-                            DEFAULT_GDRIVE_FOLDER_ID
-                        )
-                    ) {
-                        console.log(
-                            '[ReviewScreen] Photobooth IPC returned fallback/error, trying direct renderer upload...'
-                        )
-                        try {
-                            const directRes = await fetch(effectiveWebhookUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'text/plain;charset=utf-8',
-                                },
-                                body: JSON.stringify({
-                                    action: 'create_session_folder',
-                                    folderName: subfolderName,
-                                    files: filesToUpload,
-                                }),
-                            })
-                            const directJson = await directRes.json()
-                            if (
-                                directJson &&
-                                directJson.success &&
-                                directJson.folderUrl
-                            ) {
-                                console.log(
-                                    '[ReviewScreen] Photobooth direct renderer upload SUCCESS:',
-                                    directJson.folderUrl
-                                )
-                                res = {
-                                    success: true,
-                                    data: {
-                                        localDir: '',
-                                        cloudFolderUrl: directJson.folderUrl,
-                                        cloudFolderId:
-                                            directJson.folderId || '',
-                                        subfolderName,
-                                        filesCount:
-                                            directJson.filesCount ||
-                                            filesToUpload.length,
-                                    },
-                                }
-                            }
-                        } catch (directErr: any) {
-                            console.warn(
-                                '[ReviewScreen] Photobooth direct fetch fallback error:',
-                                directErr.message
-                            )
-                        }
-                    }
-
-                    if (
-                        isMounted &&
-                        res.success &&
-                        res.data?.cloudFolderUrl &&
-                        !res.data.cloudFolderUrl.includes(
-                            DEFAULT_GDRIVE_FOLDER_ID
-                        )
-                    ) {
-                        setCloudFolderUrl(res.data.cloudFolderUrl)
-                        setGdriveUrl(res.data.cloudFolderUrl)
-                        setSyncError(null)
-                        setIsSyncingDrive(false)
-                        setDriveSyncDone(true)
-                    } else if (isMounted) {
-                        setIsSyncingDrive(false)
-                        setDriveSyncDone(false)
-                        setSyncError(
-                            res.error ||
-                                'Chưa thể tạo thư mục hoặc tải ảnh lên Google Drive.'
-                        )
-                    }
-                } else if (isMounted) {
-                    setIsSyncingDrive(false)
-                    setDriveSyncDone(true)
-                }
             } catch (err: any) {
                 console.error(
-                    'Failed to generate strip composite or upload to Drive:',
+                    'Failed to generate strip composite:',
                     err
                 )
                 if (isMounted) {
                     setIsGeneratingComposite(false)
-                    setIsSyncingDrive(false)
-                    setDriveSyncDone(false)
+                    setIsSyncingMedia(false)
+                    setMediaSyncDone(false)
                     setSyncError(
                         err.message ||
-                            'Lỗi xử lý dải ảnh và tải lên Google Drive.'
+                            'Lỗi xử lý dải ảnh và tải lên Cloud Gallery.'
                     )
                 }
             }
@@ -500,7 +221,6 @@ export default function ReviewScreen() {
         selectedFilter,
         eventConfig,
         subfolderName,
-        setGdriveUrl,
     ])
 
     // Đánh dấu vé lượt chụp hoàn thành (COMPLETED) trên Cloud CMS
@@ -571,7 +291,6 @@ export default function ReviewScreen() {
                 coupon_code: null,
                 paper_consumed: isSelfboothMode ? 0 : printCopies,
                 storage_url: storageUrl,
-                drive_url: storageUrl,
                 status: 'completed',
                 created_at: new Date().toISOString(),
                 photos: photos.map((p) => {
@@ -589,7 +308,7 @@ export default function ReviewScreen() {
             selectedFrameSize,
             printCopies,
             photos,
-            cloudFolderUrl,
+            galleryUrl,
             subfolderName,
             isSelfboothMode,
         ]
@@ -604,8 +323,8 @@ export default function ReviewScreen() {
         const timer = setInterval(() => {
             setCountdownToIdle((prev) => {
                 if (prev <= 1) {
-                    // Nếu các tiến trình ngầm (tải Drive, nén composite) chưa hoàn tất, hoãn đếm ngược
-                    if (isSyncingDrive || isGeneratingComposite) {
+                    // Nếu các tiến trình ngầm (đồng bộ media, nén composite) chưa hoàn tất, hoãn đếm ngược
+                    if (isSyncingMedia || isGeneratingComposite) {
                         return 15
                     }
                     clearInterval(timer)
@@ -617,7 +336,7 @@ export default function ReviewScreen() {
         }, 1000)
 
         return () => clearInterval(timer)
-    }, [isSyncingDrive, isGeneratingComposite])
+    }, [isSyncingMedia, isGeneratingComposite])
 
     // Dọn dẹp Object URL nhị phân khi unmount
     useEffect(() => {
@@ -631,7 +350,7 @@ export default function ReviewScreen() {
     }, [compositeStripUrl])
 
     function handleFinish() {
-        if (isSyncingDrive || isGeneratingComposite) {
+        if (isSyncingMedia || isGeneratingComposite) {
             console.log('Background upload/sync is still active, waiting...')
             return
         }
@@ -650,6 +369,9 @@ export default function ReviewScreen() {
 
         try {
             const api = isBrowser ? mockApi : fotolismApi
+            if (!photos.length || photos.some((photo) => !isPhotoEnhanced(photo))) {
+                throw new Error('Ảnh AI chưa hoàn tất; chưa thể in ảnh final.')
+            }
             let pathToPrint =
                 compositeStripUrl || photos[0]?.compositedPath || ''
 
@@ -705,132 +427,12 @@ export default function ReviewScreen() {
     }
 
     async function handleRetryUpload() {
-        setSyncError(null)
-        setIsSyncingDrive(true)
-        setDriveSyncDone(false)
-
-        try {
-            const filesToUpload: Array<{ name: string; dataUrl: string }> = []
-            if (!isSelfboothMode && compositeStripUrl) {
-                filesToUpload.push({
-                    name: `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`,
-                    dataUrl: compositeStripUrl,
-                })
-            }
-
-            photos.forEach((p, idx) => {
-                const dataUrl = p.compositedPath || p.enhancedPath || p.rawPath
-                if (dataUrl && dataUrl.trim().length > 0) {
-                    filesToUpload.push({
-                        name: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
-                        dataUrl,
-                    })
-                }
-            })
-
-            const effectiveWebhookUrl =
-                eventConfig.gdriveWebhookUrl || DEFAULT_GDRIVE_WEBHOOK_URL
-            console.log(
-                '[ReviewScreen] Retrying upload to Google Drive Webhook:',
-                effectiveWebhookUrl,
-                'files count:',
-                filesToUpload.length
-            )
-
-            const api = isBrowser ? mockApi : fotolismApi
-            let res = await api.storage.uploadDriveSession({
-                parentFolderId:
-                    eventConfig.gdriveFolderId || DEFAULT_GDRIVE_FOLDER_ID,
-                subfolderName,
-                files: filesToUpload,
-                webhookUrl: effectiveWebhookUrl,
-            })
-
-            if (
-                !res.success ||
-                !res.data?.cloudFolderUrl ||
-                res.data.cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)
-            ) {
-                console.log(
-                    '[ReviewScreen] Retry IPC returned fallback/error, trying direct renderer upload...'
-                )
-                try {
-                    const validDataFiles = filesToUpload.filter(
-                        (f) => f.dataUrl && f.dataUrl.startsWith('data:')
-                    )
-                    const directRes = await fetch(effectiveWebhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            action: 'create_session_folder',
-                            parentFolderId:
-                                eventConfig.gdriveFolderId ||
-                                DEFAULT_GDRIVE_FOLDER_ID,
-                            folderName: subfolderName,
-                            files: validDataFiles,
-                        }),
-                        redirect: 'follow',
-                    })
-                    const directJson = await directRes.json()
-                    if (
-                        directJson &&
-                        directJson.success &&
-                        directJson.folderUrl
-                    ) {
-                        console.log(
-                            '[ReviewScreen] Retry direct renderer upload SUCCESS:',
-                            directJson.folderUrl
-                        )
-                        res = {
-                            success: true,
-                            data: {
-                                localDir: '',
-                                cloudFolderUrl: directJson.folderUrl,
-                                cloudFolderId: directJson.folderId || '',
-                                subfolderName,
-                                filesCount:
-                                    directJson.filesCount ||
-                                    validDataFiles.length,
-                            },
-                        }
-                    }
-                } catch (directErr: any) {
-                    console.warn(
-                        '[ReviewScreen] Retry direct fetch fallback error:',
-                        directErr.message
-                    )
-                }
-            }
-
-            if (
-                res.success &&
-                res.data?.cloudFolderUrl &&
-                !res.data.cloudFolderUrl.includes(DEFAULT_GDRIVE_FOLDER_ID)
-            ) {
-                setCloudFolderUrl(res.data.cloudFolderUrl)
-                setGdriveUrl(res.data.cloudFolderUrl)
-                setSyncError(null)
-                setIsSyncingDrive(false)
-                setDriveSyncDone(true)
-            } else {
-                setIsSyncingDrive(false)
-                setDriveSyncDone(false)
-                setSyncError(
-                    res.error ||
-                        'Chưa thể tạo thư mục hoặc tải ảnh lên Google Drive.'
-                )
-            }
-        } catch (err: any) {
-            console.error('[ReviewScreen] Retry upload exception:', err)
-            setIsSyncingDrive(false)
-            setDriveSyncDone(false)
-            setSyncError(err.message || 'Lỗi kết nối tải ảnh lên Drive.')
-        }
+        setScreen('processing')
     }
 
-    function handleOpenDriveBrowser() {
-        if (cloudFolderUrl) {
-            window.open(cloudFolderUrl, '_blank')
+    function handleOpenGallery() {
+        if (galleryUrl) {
+            window.open(galleryUrl, '_blank')
         }
     }
 
@@ -846,23 +448,7 @@ export default function ReviewScreen() {
             {/* ── Top Header: Tiêu đề trung tâm ── */}
             <header className="review-header-pastel">
                 <div className="review-header-center">
-                    <div className="review-header-icon-box" aria-hidden="true">
-                        <svg
-                            width="34"
-                            height="34"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#502A1D"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <rect x="3" y="3" width="18" height="18" rx="4" />
-                            <circle cx="8.5" cy="8.5" r="1.5" fill="#502A1D" />
-                            <path d="M21 15l-5-5L5 21" />
-                        </svg>
-                    </div>
-                    <h1 className="review-header-title">Ảnh Hoàn Thiện</h1>
+                    <h1 className="review-header-title">Ảnh hoàn thiện</h1>
                 </div>
             </header>
 
@@ -870,10 +456,7 @@ export default function ReviewScreen() {
             {isSelfboothMode ? (
                 /* ── CHẾ ĐỘ SELFBOOTH: CHỈ HIỆN DUY NHẤT QR VỚI NÚT 'QUÉT QR TẢI ẢNH' KHI ĐÃ ĐẨY XONG ẢNH ── */
                 <main className="selfbooth-review-minimal">
-                    {isSyncingDrive ||
-                    (eventConfig.gdriveEnabled &&
-                        !driveSyncDone &&
-                        !syncError) ? (
+                    {isSyncingMedia ? (
                         <div
                             className="selfbooth-minimal-card animate-pop"
                             style={{
@@ -901,7 +484,7 @@ export default function ReviewScreen() {
                                     margin: '22px 0 8px',
                                 }}
                             >
-                                Đang tải ảnh lên Google Drive...
+                                Đang chuẩn bị ảnh của bạn...
                             </h2>
                             <p
                                 style={{
@@ -913,7 +496,7 @@ export default function ReviewScreen() {
                                 }}
                             >
                                 Hệ thống đang tự động tạo thư mục và đẩy toàn bộ
-                                ảnh của bạn lên Google Drive. Vui lòng đợi trong
+                                ảnh của bạn lên Cloud Gallery. Vui lòng đợi trong
                                 giây lát để nhận mã QR.
                             </p>
                             <div className="selfbooth-loading-pulse-bar">
@@ -946,7 +529,7 @@ export default function ReviewScreen() {
                                     margin: 0,
                                 }}
                             >
-                                Chưa thể tạo thư mục tải ảnh
+                                Chưa thể tải ảnh về điện thoại
                             </h2>
                             <p
                                 style={{
@@ -996,7 +579,7 @@ export default function ReviewScreen() {
                         <div className="selfbooth-minimal-card animate-pop">
                             <button
                                 className="btn-selfbooth-qr-top"
-                                onClick={handleOpenDriveBrowser}
+                                onClick={handleOpenGallery}
                                 title="Quét QR tải ảnh"
                             >
                                 <QrCode size={24} strokeWidth={2.2} />
@@ -1023,10 +606,10 @@ export default function ReviewScreen() {
                 /* Main 2-Column Content CHO PHOTOBOOTH */
                 <main className="review-content-pastel">
                     {/* Left: Photobooth Strip Frame */}
-                    <section className="strip-frame-container">
+                    <section className="strip-frame-container review-preview-panel">
                         <div className="frame-preview-wrapper fade-in">
                             {isGeneratingComposite || !compositeStripUrl ? (
-                                <div className="composite-generating-loader">
+                                <div className="composite-generating-loader" role="status" aria-live="polite">
                                     <span className="loader-spinner-pink" />
                                     <span
                                         style={{
@@ -1079,10 +662,10 @@ export default function ReviewScreen() {
                     {/* Right: Instant QR & Print */}
                     <section className="review-delivery-deck">
                         {/* Card QR Tải Ảnh - Đồng bộ phong cách tối giản với Selfbooth */}
-                        <div className="delivery-card-pastel animate-pop">
+                        <div className="delivery-card-pastel review-qr-card animate-pop">
                             <button
                                 className="btn-selfbooth-qr-top"
-                                onClick={handleOpenDriveBrowser}
+                                onClick={handleOpenGallery}
                                 title="Quét QR tải ảnh"
                                 style={{ width: '100%' }}
                             >
@@ -1090,10 +673,7 @@ export default function ReviewScreen() {
                                 <span>Quét QR tải ảnh</span>
                             </button>
 
-                            {isSyncingDrive ||
-                            (eventConfig.gdriveEnabled &&
-                                !driveSyncDone &&
-                                !syncError) ? (
+                            {isSyncingMedia ? (
                                 <div
                                     style={{
                                         padding: '24px 16px',
@@ -1120,7 +700,7 @@ export default function ReviewScreen() {
                                             margin: '16px 0 6px',
                                         }}
                                     >
-                                        Đang tải ảnh lên Google Drive...
+                                        Đang chuẩn bị ảnh của bạn...
                                     </h3>
                                     <p
                                         style={{
@@ -1131,9 +711,8 @@ export default function ReviewScreen() {
                                             lineHeight: 1.4,
                                         }}
                                     >
-                                        Hệ thống đang tự động tải ảnh và video
-                                        lên Google Drive. Vui lòng đợi trong
-                                        giây lát để nhận mã QR.
+                                        Ảnh và video đang được chuẩn bị.
+                                        Vui lòng đợi trong giây lát để nhận mã QR.
                                     </p>
                                     <div
                                         className="selfbooth-loading-pulse-bar"
@@ -1167,7 +746,7 @@ export default function ReviewScreen() {
                                             margin: 0,
                                         }}
                                     >
-                                        Chưa thể tạo thư mục tải ảnh
+                                        Chưa thể tải ảnh về điện thoại
                                     </h3>
                                     <p
                                         style={{
@@ -1274,19 +853,19 @@ export default function ReviewScreen() {
                     style={{ justifyContent: 'flex-end' }}
                 >
                     <button
-                        className={`kiosk-nav-btn btn-nav-next ${isSyncingDrive || isGeneratingComposite ? 'disabled' : ''}`}
+                        className={`kiosk-nav-btn btn-nav-next ${isSyncingMedia || isGeneratingComposite ? 'disabled' : ''}`}
                         id="finish-button"
-                        disabled={isSyncingDrive || isGeneratingComposite}
+                        disabled={isSyncingMedia || isGeneratingComposite}
                         onClick={handleFinish}
                         title={
-                            isSyncingDrive
+                            isSyncingMedia
                                 ? 'Đang hoàn tất lưu ảnh ngầm...'
                                 : 'Tiếp tục'
                         }
                         aria-label="Tiếp tục"
                         style={{ margin: '0 0 0 auto' }}
                     >
-                        {isSyncingDrive
+                        {isSyncingMedia
                             ? 'Đang lưu ảnh ngầm...'
                             : `Tiếp tục (${countdownToIdle}s)`}
                     </button>

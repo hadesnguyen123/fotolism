@@ -515,7 +515,7 @@
 }
 
 .confirm-keyboard-title {
-    font-family: var(--font-display, 'Baloo 2', inherit);
+    font-family: var(--font-display, 'Google Sans Flex', inherit);
     font-size: 1.6rem;
     font-weight: 800;
     color: #502a1d;

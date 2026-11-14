@@ -103,6 +103,8 @@ export async function cropImageToAspect(
     canvas.height = cropH
     const ctx = canvas.getContext('2d')
     if (!ctx) return sourceDataUrl
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
     return canvas.toDataURL('image/jpeg', 0.98)
@@ -194,6 +196,8 @@ export async function generateStripComposite(
     if (!ctx) {
         throw new Error('Could not get canvas context')
     }
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     // 1. Vẽ nền (Background Color / Gradient)
     if (opts.theme.overlayUrl) {
@@ -446,8 +450,8 @@ export async function generateStripComposite(
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
 
-        // Tiêu đề sự kiện (Font Cute bo tròn)
-        ctx.font = '800 28px "Baloo 2", "Quicksand", sans-serif'
+        // Tiêu đề sự kiện
+        ctx.font = '800 28px "Google Sans Flex", "Inter", sans-serif'
         ctx.letterSpacing = '1px'
         ctx.fillText(
             opts.eventName || DEFAULT_EVENT_NAME,
@@ -456,7 +460,7 @@ export async function generateStripComposite(
         )
 
         // Ngày tháng & Bộ lọc
-        ctx.font = '700 16px "Quicksand", sans-serif'
+        ctx.font = '700 16px "Inter", sans-serif'
         ctx.letterSpacing = '0.5px'
         ctx.globalAlpha = 0.85
         ctx.fillText(
@@ -560,6 +564,8 @@ export async function preparePrintImageForDNP(
         canvas.height = 1800
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
 
         // Màu nền lấp viền lấy từ 4 góc ảnh
         const bgColor = sampleImageEdgeColor(img)
@@ -617,6 +623,8 @@ export async function preparePrintImageForDNP(
     canvas.height = srcH
     const ctx = canvas.getContext('2d')
     if (!ctx) return sourceDataUrl
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     const bgColor = sampleImageEdgeColor(img)
     ctx.fillStyle = bgColor

@@ -17,6 +17,8 @@ Phiên bản tối ưu hóa chuẩn xác theo Capture One Reference:
 import logging
 import time
 import traceback
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -405,6 +407,9 @@ def enhance_image(req: EnhanceRequest):
         out_filename = f"enhanced_{int(start_time * 1000)}.jpg"
         out_path = STORAGE["enhanced"] / out_filename
 
+    if out_path == input_path:
+        raise HTTPException(status_code=400, detail='Ảnh AI phải được lưu riêng để giữ nguyên RAW')
+
     try:
         img = cv2.imread(str(input_path))
         if img is None:
@@ -434,7 +439,7 @@ def enhance_image(req: EnhanceRequest):
                 if req.beautyLevel != 50:
                     scale = req.beautyLevel / 50.0
                     k_cfg.skinSmoothing = float(np.clip(k_cfg.skinSmoothing * scale, 0.0, 1.0))
-                    k_cfg.blemishRemoval = float(np.clip(k_cfg.blemishRemoval * scale, 0.0, 1.0))
+                    k_cfg.blemishRemoval = float(np.clip(k_cfg.blemishRemoval * scale, 0.0, 2.0))
                     k_cfg.skinEvening = float(np.clip(k_cfg.skinEvening * scale, 0.0, 1.0))
                     k_cfg.skinBrightening = float(np.clip(k_cfg.skinBrightening * scale, 0.0, 1.0))
                     k_cfg.softGlow = float(np.clip(k_cfg.softGlow * scale, 0.0, 1.0))
@@ -460,7 +465,21 @@ def enhance_image(req: EnhanceRequest):
         else:
             final_img = styled_img
 
-        cv2.imwrite(str(out_path), final_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+        # Publish only a complete image. Failed retries must never overwrite AI with RAW.
+        suffix = out_path.suffix.lower()
+        params = [cv2.IMWRITE_JPEG_QUALITY, 100] if suffix in ('.jpg', '.jpeg') else []
+        encoded, image_bytes = cv2.imencode(suffix, final_img, params)
+        if not encoded:
+            raise RuntimeError('Không thể mã hóa ảnh AI')
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=out_path.parent, suffix=suffix, delete=False) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(image_bytes.tobytes())
+            os.replace(temporary_path, out_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
         duration_ms = int((time.time() - start_time) * 1000)
 
         return EnhanceResponse(
@@ -481,20 +500,4 @@ def enhance_image(req: EnhanceRequest):
         err_msg = f"{type(e).__name__}: {str(e)}"
         logger.error(f"[AI Enhance Exception] {err_msg}\n{traceback.format_exc()}")
 
-        try:
-            import shutil
-            shutil.copy(str(input_path), str(out_path))
-            return EnhanceResponse(
-                success=False,
-                data=EnhanceResponseData(
-                    enhancedPath=str(out_path),
-                    status="fallback",
-                    beautyLevel=req.beautyLevel,
-                    styleId=req.styleId,
-                    presetId=active_preset if 'active_preset' in locals() else req.presetId,
-                    processingTimeMs=duration_ms,
-                    message=f"Xảy ra lỗi, đã fallback sang ảnh gốc: {err_msg}"
-                )
-            )
-        except Exception as copy_err:
-            raise HTTPException(status_code=500, detail=f"Lỗi xử lý và không thể tạo fallback: {copy_err}")
+        raise HTTPException(status_code=500, detail=f"Không thể xử lý AI; ảnh gốc được giữ nguyên: {err_msg}") from e

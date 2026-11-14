@@ -75,17 +75,17 @@ export const BEAUTY_PRESETS: BeautyPreset[] = [
         name: 'Tự Nhiên (Natural)',
         icon: '✨',
         description:
-            'Chất ảnh Studio tự nhiên: Mịn nhẹ 45%, đều màu da 30%, cằm V-line 4%, mắt to 5%, má hồng 10%',
+            'Chất ảnh Studio tự nhiên: Mịn da 60%, đều màu da 50%, trắng sáng 10%, thon mặt 8%, cằm V-line 8%, mắt to 10%, má hồng 10%',
         beautyEnabled: true,
-        skinSmoothing: 45,
-        smoothing: 45,
-        skinToneEvenness: 30,
-        vLine: 4,
-        bigEyes: 5,
+        skinSmoothing: 60,
+        smoothing: 60,
+        skinToneEvenness: 50,
+        vLine: 8,
+        bigEyes: 10,
         blush: 10,
         rosyTone: 10,
-        slimFace: 4,
-        whiteningTone: 0,
+        slimFace: 8,
+        whiteningTone: 10,
         glowClarity: 0,
         brightness: 100,
         contrast: 100,
@@ -323,13 +323,14 @@ void main() {
 
         faceSkinMask = max(faceSkinMask, ovalMask);
 
-        // 5. Vùng má hồng quả táo (Apple Cheek)
-        vec2 leftCheek = vec2(lEye.x - faceW * 0.04, lEye.y + faceH * 0.14);
-        vec2 rightCheek = vec2(rEye.x + faceW * 0.04, rEye.y + faceH * 0.14);
-        vec2 rCheekRad = vec2(max(faceW * 0.15, 0.025), max(faceH * 0.10, 0.02));
+        // 5. Vùng má hồng quả táo (Apple Cheek) — khóa chặt bên trong ovalMask để không tràn ra ngoài mặt/tai/nền
+        vec2 leftCheek = vec2(mix(lEye.x, fCenter.x, 0.12), lEye.y + faceH * 0.14);
+        vec2 rightCheek = vec2(mix(rEye.x, fCenter.x, 0.12), rEye.y + faceH * 0.14);
+        vec2 rCheekRad = vec2(max(faceW * 0.12, 0.02), max(faceH * 0.09, 0.018));
         float dL = length((uv - leftCheek) / rCheekRad);
         float dR = length((uv - rightCheek) / rCheekRad);
-        float bWeight = max(exp(-dL * dL * 2.2), exp(-dR * dR * 2.2)) * chinCutoff;
+        float cheekBoundary = smoothstep(0.88, 0.35, ellipDist) * chinCutoff * eyeGuard * mouthGuard;
+        float bWeight = max(exp(-dL * dL * 2.6), exp(-dR * dR * 2.6)) * cheekBoundary;
         blushMask = max(blushMask, bWeight);
     }
 

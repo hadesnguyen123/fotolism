@@ -3,7 +3,7 @@ import { create } from 'zustand'
 // ─── 1. Re-export toàn bộ Config tĩnh (Layouts, Themes, Stickers, Filters, Coupons) ──
 export * from '../config/layouts'
 export * from '../config/themes'
-export * from '../config/stickers'
+export type { PlacedSticker } from './slices/layoutThemeSlice'
 export * from '../config/filters'
 export * from '../config/coupons'
 

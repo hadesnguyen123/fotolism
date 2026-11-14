@@ -1,3 +1,5 @@
+import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
+import { COLOR_FILTERS } from '../config/filters'
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAppStore, THEME_OPTIONS, type ThemeItem } from '../store/appStore'
 import { Layers } from 'lucide-react'
@@ -153,6 +155,8 @@ export default function ThemeSelectScreen() {
         initOffset: SlotOffset
         slotPixelWidth: number
         slotPixelHeight: number
+        slotCenterX: number
+        slotCenterY: number
         // 1 finger pan
         startX: number
         startY: number
@@ -177,6 +181,8 @@ export default function ThemeSelectScreen() {
         })
 
         const rect = target.getBoundingClientRect()
+        const slotCenterX = rect.left + rect.width / 2
+        const slotCenterY = rect.top + rect.height / 2
         const currentOffset = slotOffsetsRef.current[index] || { x: 0, y: 0, scale: 1.0 }
         const pointers = Array.from(activePointersRef.current.values())
 
@@ -186,6 +192,8 @@ export default function ThemeSelectScreen() {
                 initOffset: { ...currentOffset },
                 slotPixelWidth: rect.width,
                 slotPixelHeight: rect.height,
+                slotCenterX,
+                slotCenterY,
                 startX: e.clientX,
                 startY: e.clientY,
                 initialPinchDist: 0,
@@ -204,6 +212,8 @@ export default function ThemeSelectScreen() {
                 initOffset: { ...currentOffset },
                 slotPixelWidth: rect.width,
                 slotPixelHeight: rect.height,
+                slotCenterX,
+                slotCenterY,
                 startX: midX,
                 startY: midY,
                 initialPinchDist: Math.max(dist, 10),
@@ -229,6 +239,8 @@ export default function ThemeSelectScreen() {
             initOffset,
             slotPixelWidth,
             slotPixelHeight,
+            slotCenterX,
+            slotCenterY,
             startX,
             startY,
             initialPinchDist,
@@ -266,7 +278,7 @@ export default function ThemeSelectScreen() {
                 return next
             })
         } else if (pointers.length >= 2) {
-            // Cử chỉ 2 ngón tay: Mở rộng 2 ngón phóng to (Pinch to zoom) & di chuyển
+            // Cử chỉ 2 ngón tay: Pinch-to-zoom lấy tâm giữa 2 ngón & di chuyển mượt
             const p1 = pointers[0]
             const p2 = pointers[1]
             const currentDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY)
@@ -280,14 +292,21 @@ export default function ThemeSelectScreen() {
             const currentMidY = (p1.clientY + p2.clientY) / 2
             const midDx = currentMidX - initialMidpoint.x
             const midDy = currentMidY - initialMidpoint.y
+            const scaleRatio = nextScale / Math.max(initialScale, 1.0)
+            const focalShiftX =
+                ((initialMidpoint.x - slotCenterX) / Math.max(slotPixelWidth, 1)) *
+                (1 - scaleRatio)
+            const focalShiftY =
+                ((initialMidpoint.y - slotCenterY) / Math.max(slotPixelHeight, 1)) *
+                (1 - scaleRatio)
 
             const nextX = Math.max(
                 -1,
-                Math.min(1, initOffset.x + midDx / sensitivityX)
+                Math.min(1, initOffset.x + midDx / sensitivityX + focalShiftX)
             )
             const nextY = Math.max(
                 -1,
-                Math.min(1, initOffset.y + midDy / sensitivityY)
+                Math.min(1, initOffset.y + midDy / sensitivityY + focalShiftY)
             )
 
             setSlotOffsetsState((prev) => {
@@ -499,6 +518,50 @@ export default function ThemeSelectScreen() {
         }
     }, [selectedTheme.id, sortedThemes])
 
+    const referenceThemes = sortedThemes.map((theme) => ({
+        id: theme.id,
+        name: theme.name,
+        is2x6: (theme.frameSize || selectedFrameSize) === '2x6',
+        overlayUrl: theme.overlayUrl,
+        bgColor: theme.bgColor,
+    }))
+    const activeThemeIdx = Math.max(
+        0,
+        sortedThemes.findIndex((theme) => theme.id === selectedTheme.id)
+    )
+    const activeFilterIdx = Math.max(
+        0,
+        COLOR_FILTERS.findIndex((filter) => filter.id === selectedFilter.id)
+    )
+    if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView screen="frame-filter"
+        onNavigate={(target) => {
+            if (target === 'camera-booth') setScreen('capture');
+            else if (target === 'printing') { setStoreSlotOffsets(slotOffsetsRef.current); setScreen('processing'); }
+        }}
+        themes={referenceThemes}
+        framePreview={
+            <InteractiveStripPreview
+                selectedFrameSize={selectedFrameSize}
+                selectedTheme={selectedTheme}
+                selectedFilter={selectedFilter}
+                is2x6={is2x6}
+                frameSlots={frameSlots}
+                photos={displayedPhotos}
+                slotOffsets={slotOffsets}
+                activeDragIndex={activeDragIndex}
+                eventName={eventConfig.eventName}
+                onPointerDown={handleSlotPointerDown}
+                onPointerMove={handleSlotPointerMove}
+                onPointerUp={handleSlotPointerUp}
+                onWheel={handleSlotWheel}
+            />
+        }
+        values={{ selectedFrameIdx: activeThemeIdx, selectedFilterIdx: activeFilterIdx }}
+        changes={{
+            selectedFrameIdx: (value) => { const theme = sortedThemes[Number(value)]; if (theme) selectTheme(theme); },
+            selectedFilterIdx: (value) => { const filter = COLOR_FILTERS[Number(value)]; if (filter) selectFilter(filter); },
+        }}
+    />
     return (
         <div className="theme-screen-container" id="theme-select-screen">
             {/* ── Fixed Brand Logo góc trên bên trái ── */}

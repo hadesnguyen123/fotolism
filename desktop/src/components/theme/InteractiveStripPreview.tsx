@@ -1,5 +1,5 @@
 import React from 'react'
-import { Move, Camera } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import type {
     ThemeItem,
     FrameSize,
@@ -51,8 +51,7 @@ export const InteractiveStripPreview: React.FC<
     return (
         <div className="interactive-strip-preview-wrapper animate-pop">
             <div className="strip-reposition-banner">
-                <Move size={15} />
-                <span>Chạm kéo để căn chỉnh • Mở rộng 2 ngón để phóng to (Zoom)</span>
+                <span>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</span>
             </div>
 
             <div
@@ -90,10 +89,6 @@ export const InteractiveStripPreview: React.FC<
                         ''
                     const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
                     const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
-                    const hasOffset =
-                        Math.abs(offset.x || 0) > 0.01 ||
-                        Math.abs(offset.y || 0) > 0.01 ||
-                        scaleVal > 1.01
 
                     return (
                         <div
@@ -135,9 +130,7 @@ export const InteractiveStripPreview: React.FC<
                                                 selectedFilter.cssFilter !== 'none'
                                                     ? selectedFilter.cssFilter
                                                     : undefined,
-                                            transform: hasOffset
-                                                ? `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(${scaleVal * 1.08})`
-                                                : 'none',
+                                            transform: `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(${scaleVal * 1.08})`,
                                             transformOrigin: 'center center',
                                             transition:
                                                 activeDragIndex === idx
@@ -145,27 +138,6 @@ export const InteractiveStripPreview: React.FC<
                                                     : 'transform 0.12s ease-out',
                                         }}
                                     />
-                                    {scaleVal > 1.02 && (
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                bottom: 6,
-                                                left: 6,
-                                                backgroundColor:
-                                                    'rgba(0, 0, 0, 0.65)',
-                                                color: '#fff',
-                                                fontSize: '11px',
-                                                fontWeight: 700,
-                                                padding: '2px 6px',
-                                                borderRadius: '4px',
-                                                pointerEvents: 'none',
-                                                zIndex: 6,
-                                                backdropFilter: 'blur(2px)',
-                                            }}
-                                        >
-                                            {scaleVal.toFixed(1)}x
-                                        </div>
-                                    )}
                                     {(selectedFilter?.id === 'retro_90s' ||
                                         selectedFilter?.hasGrain) && (
                                         <div className="retro-film-grain-overlay" />
@@ -185,10 +157,6 @@ export const InteractiveStripPreview: React.FC<
                                     <span>Ảnh {idx + 1}</span>
                                 </div>
                             )}
-
-                            <div className="slot-drag-handle-badge">
-                                <Move size={14} />
-                            </div>
                         </div>
                     )
                 })}
