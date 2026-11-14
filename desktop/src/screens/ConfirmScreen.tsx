@@ -1,3 +1,4 @@
+import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, type DiscountCoupon } from '../store/appStore'
 import {
@@ -178,6 +179,14 @@ export default function ConfirmScreen() {
             setScreen('capture')
         }
     }
+
+    if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
+        screen="confirm-info"
+        onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
+        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: couponError || (appliedCoupon ? 'Đã áp dụng mã ưu đãi' : ''), finalTotal: finalAmount }}
+        changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
+        onPromo={() => handleApplyCoupon()}
+    />
 
     return (
         <div className="confirm-screen-container" id="confirm-screen">

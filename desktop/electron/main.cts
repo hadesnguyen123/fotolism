@@ -40,7 +40,7 @@ function createWindow() {
             preload: join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            webSecurity: true,
+            webSecurity: !isDev,
         },
     })
 

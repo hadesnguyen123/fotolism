@@ -13,7 +13,7 @@
     color: #502a1d;
     overflow: hidden;
     user-select: none;
-    font-family: var(--font-family, 'Quicksand', sans-serif);
+    font-family: var(--font-family, 'Inter', sans-serif);
     position: relative;
     box-sizing: border-box;
 }
@@ -52,8 +52,8 @@
 .selfbooth-header-title {
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -66,7 +66,7 @@
 }
 
 .selfbooth-header-subtitle {
-    font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+    font-family: var(--font-body, 'Google Sans Flex', system-ui, sans-serif);
     font-size: 1.05rem;
     font-weight: 500;
     color: #70594f;
@@ -210,7 +210,7 @@
 }
 
 .selfbooth-strip-brand-text {
-    font-family: var(--font-display, 'Baloo 2', cursive);
+    font-family: var(--font-display, 'Google Sans Flex', cursive);
     font-size: 1.25rem;
     font-weight: 800;
     letter-spacing: -0.3px;
@@ -381,7 +381,7 @@
 }
 
 .circle-slot-num {
-    font-family: var(--font-display, 'Baloo 2', sans-serif);
+    font-family: var(--font-display, 'Google Sans Flex', sans-serif);
     font-size: 0.88rem;
     font-weight: 800;
     color: #ffffff;
@@ -410,8 +410,8 @@
     border-radius: 9999px;
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );
@@ -472,8 +472,8 @@
     border-radius: 9999px;
     font-family: var(
         --font-display,
-        'Baloo 2',
-        'Plus Jakarta Sans',
+        'Google Sans Flex',
+        'Google Sans Flex',
         system-ui,
         sans-serif
     );

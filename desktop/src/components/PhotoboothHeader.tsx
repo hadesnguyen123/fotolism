@@ -12,7 +12,7 @@ export default function PhotoboothHeader({
 }: PhotoboothHeaderProps) {
     const steps = [
         { num: 1, label: 'Chọn layout' },
-        { num: 2, label: 'Confirm' },
+        { num: 2, label: 'Xác nhận' },
         { num: 3, label: 'Thanh toán' },
         { num: 4, label: 'Chụp ảnh' },
     ]

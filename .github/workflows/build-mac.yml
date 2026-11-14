@@ -1,4 +1,4 @@
-name: Build JoyBooth for macOS
+name: Build fotolism for macOS
 
 on:
   push:
@@ -33,5 +33,5 @@ jobs:
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JoyBooth-macOS-Installer
+          name: fotolism-macOS-Installer
           path: desktop/release/*.dmg

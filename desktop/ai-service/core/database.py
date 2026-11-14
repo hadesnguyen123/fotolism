@@ -68,7 +68,7 @@ async def init_db():
 
     conn.commit()
     conn.close()
-    print(f"📦 Database SQLite initialized at: {DB_PATH}")
+    print(f"[Database] SQLite initialized at: {DB_PATH}")
 
 def get_config_value(key: str, default: Any = None) -> Any:
     conn = get_connection()

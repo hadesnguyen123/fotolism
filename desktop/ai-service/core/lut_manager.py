@@ -25,7 +25,7 @@ class LUTManager:
 
     def resolve_style_path(self, style_id: str) -> Optional[Path]:
         """Tìm file LUT tương ứng với styleId."""
-        if not style_id or style_id.lower() in ("none", "raw", "original"):
+        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
             return None
 
         # Danh sách đường dẫn ưu tiên kiểm tra
@@ -44,7 +44,7 @@ class LUTManager:
 
     def get_style_luts(self, style_id: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Lấy 3 kênh LUT (B, G, R) tương ứng với styleId, có cơ chế cache & auto-invalidation."""
-        if not style_id or style_id.lower() in ("none", "raw", "original"):
+        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
             return self._identity, self._identity, self._identity
 
         lut_path = self.resolve_style_path(style_id)
@@ -83,7 +83,7 @@ class LUTManager:
 
     def apply_style(self, img_bgr: np.ndarray, style_id: str) -> np.ndarray:
         """Áp dụng Color Grading từ Style LUT lên ảnh."""
-        if not style_id or style_id.lower() in ("none", "raw", "original"):
+        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
             return img_bgr
 
         lut_b, lut_g, lut_r = self.get_style_luts(style_id)

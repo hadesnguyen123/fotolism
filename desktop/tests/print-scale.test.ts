@@ -44,11 +44,11 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
     })
 
     describe('1. Cấu hình & Lưu trữ bền vững (Persistence)', () => {
-        it('mặc định trả về 100.00% khi chưa có cấu hình lưu', () => {
-            expect(DEFAULT_PRINT_SCALE).toBe(100.0)
+        it('mặc định trả về 95.50% (Chuẩn DNP) khi chưa có cấu hình lưu', () => {
+            expect(DEFAULT_PRINT_SCALE).toBe(95.5)
             mockStorage.clear()
-            expect(loadSavedPrintScale()).toBe(100.0)
-            expect(useAppStore.getState().printScale).toBe(100.0)
+            expect(loadSavedPrintScale()).toBe(95.5)
+            expect(useAppStore.getState().printScale).toBe(95.5)
         })
 
         it('tự động lưu khi thay đổi và định dạng chính xác 2 chữ số thập phân (e.g. 99.75%)', () => {
@@ -83,10 +83,10 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             expect(useAppStore.getState().printScale).toBe(90)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, '120')
-            expect(loadSavedPrintScale()).toBe(100)
+            expect(loadSavedPrintScale()).toBe(95.5)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, 'invalid')
-            expect(loadSavedPrintScale()).toBe(100)
+            expect(loadSavedPrintScale()).toBe(95.5)
         })
     })
 
@@ -195,6 +195,95 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                 expect(lastDraw[4]).toBe(expectedH)
                 expect(lastDraw[1]).toBe(expectedOffsetX)
                 expect(lastDraw[2]).toBe(expectedOffsetY)
+            } finally {
+                ;(globalThis as any).document = prevDoc
+                ;(globalThis as any).Image = originalImage
+            }
+        })
+
+        it('với dải đơn 2x6 (600x1800), ghép 2 dải sát trục giữa x=600 trước rồi mới scale 95.50% cả khối 4x6', async () => {
+            const mockStrip = 'data:image/jpeg;base64,/strip_2x6'
+            const createdCanvases: any[] = []
+            const mainDrawCalls: any[] = []
+
+            const mockDocument = {
+                createElement: (tagName: string) => {
+                    if (tagName === 'canvas') {
+                        const canvasIndex = createdCanvases.length
+                        const canvas = {
+                            width: 0,
+                            height: 0,
+                            getContext: () => ({
+                                fillStyle: '',
+                                fillRect: () => {},
+                                drawImage: (...args: any[]) => {
+                                    // Canvas 0 là mainCanvas (1200x1800), canvas 1 là sampleCanvas
+                                    if (canvasIndex === 0) {
+                                        mainDrawCalls.push(args)
+                                    }
+                                },
+                                getImageData: () => ({
+                                    data: [20, 20, 20, 255],
+                                }),
+                                save: () => {},
+                                restore: () => {},
+                                beginPath: () => {},
+                                moveTo: () => {},
+                                lineTo: () => {},
+                                stroke: () => {},
+                                setLineDash: () => {},
+                            }),
+                            toDataURL: () =>
+                                'data:image/jpeg;base64,/paired_4x6_scaled',
+                        }
+                        createdCanvases.push(canvas)
+                        return canvas
+                    }
+                    return {}
+                },
+            }
+            const prevDoc = (globalThis as any).document
+            ;(globalThis as any).document = mockDocument
+
+            const originalImage = (globalThis as any).Image
+            class MockStripImage {
+                onload: (() => void) | null = null
+                src = ''
+                naturalWidth = 600
+                naturalHeight = 1800
+                width = 600
+                height = 1800
+                constructor() {
+                    setTimeout(() => {
+                        if (this.onload) this.onload()
+                    }, 0)
+                }
+            }
+            ;(globalThis as any).Image = MockStripImage
+
+            try {
+                const res = await preparePrintImageForDNP(mockStrip, 95.5)
+                expect(res).toBe('data:image/jpeg;base64,/paired_4x6_scaled')
+
+                const mainCanvas = createdCanvases[0]
+                expect(mainCanvas.width).toBe(1200)
+                expect(mainCanvas.height).toBe(1800)
+
+                // Tại 95.5%: mỗi dải rộng 573, cao 1719; lề ngoài trái = 27, trục cắt giữa = 600, lề trên = 41
+                expect(mainDrawCalls).toHaveLength(2)
+                const [leftStripCall, rightStripCall] = mainDrawCalls
+
+                // Dải 1: x=27..600 (573px), y=41..1760 (1719px)
+                expect(leftStripCall[1]).toBe(27)
+                expect(leftStripCall[2]).toBe(41)
+                expect(leftStripCall[3]).toBe(573)
+                expect(leftStripCall[4]).toBe(1719)
+
+                // Dải 2: x=600..1173 (573px), y=41..1760 (1719px)
+                expect(rightStripCall[1]).toBe(600)
+                expect(rightStripCall[2]).toBe(41)
+                expect(rightStripCall[3]).toBe(573)
+                expect(rightStripCall[4]).toBe(1719)
             } finally {
                 ;(globalThis as any).document = prevDoc
                 ;(globalThis as any).Image = originalImage

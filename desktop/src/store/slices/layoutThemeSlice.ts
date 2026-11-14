@@ -7,7 +7,14 @@ import type {
 import { ALL_LAYOUTS } from '../../config/layouts'
 import type { ThemeItem } from '../../config/themes'
 import { THEME_OPTIONS } from '../../config/themes'
-import type { PlacedSticker } from '../../config/stickers'
+export interface PlacedSticker {
+    id: string
+    icon: string
+    x: number
+    y: number
+    scale: number
+    rotation: number
+}
 import type { ColorFilterItem } from '../../config/filters'
 import { COLOR_FILTERS } from '../../config/filters'
 

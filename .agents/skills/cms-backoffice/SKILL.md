@@ -3,73 +3,38 @@ name: cms-backoffice
 description: Hướng dẫn quản trị hệ thống Cloud CMS, giám sát mạng lưới Kiosks đa điểm, đồng bộ bảng giá, khung ảnh và kế toán đối soát doanh thu 3 bên Fotolism 3.0.
 ---
 
-# ☁️ CMS Backoffice & Cloud Accounting Skill — Fotolism 3.0
+# CMS Backoffice & Cloud Accounting Skill — Fotolism 3.0
 
-Hướng dẫn chuẩn hóa quy trình quản trị mạng lưới máy Kiosk Photobooth phân tán từ xa thông qua nền tảng Cloud CMS tập trung của Fotolism.
+Tuân thủ `AGENTS.md` và `.agents/rules/cms-safety.md` (bắt buộc Supabase RLS theo `branch_id`, đồng bộ idempotent, hỏi trước khi sửa đối soát/VietQR/migrations).
 
----
+## 1. Phân vùng cổng mạng (Port Partitioning)
 
-## 1. Kiến Trúc Phân Vùng Mạng (Port Partitioning)
-
-Để đảm bảo các phân hệ không xung đột tài nguyên mạng trên máy trạm hoặc máy chủ:
-
-| Phân hệ | Cổng (Port) | Công nghệ | Nhiệm vụ chính |
+| Phân hệ | Cổng | Công nghệ | Vai trò |
 | :--- | :---: | :--- | :--- |
-| **Desktop Kiosk** | `5173` | Electron + React 19 + Vite | Giao diện màn hình cảm ứng khách hàng, điều khiển máy ảnh & in ấn |
-| **Canon Camera Daemon** | `8899` | C#/.NET 64-bit Persistent Daemon | Quản lý độc quyền Canon EOS R100 EDSDK, MJPEG LiveView |
-| **Cloud CMS Backoffice & API** | `3000` | Next.js 16 (App Router) + Supabase | Giao diện Web quản trị Kiosks, quầy thu ngân POS `/pos`, REST API `/api/kiosk/*` |
-| **AI Enhance Service** | `8000` | Python FastAPI + OpenCV/GFPGAN | Tăng cường độ nét chân dung offline |
+| **Desktop Kiosk** | `5173` | Electron + React 19 + Vite | UI cảm ứng, điều khiển camera & in ấn |
+| **Canon Camera Daemon** | `8899` | C#/.NET 64-bit | Độc quyền Canon EDSDK, MJPEG LiveView |
+| **Cloud CMS & API** | `3000` | Next.js 16 + Supabase | Quản trị Kiosks, POS `/pos`, `/api/kiosk/*` |
+| **AI Enhance Service** | `8000` | Python FastAPI + OpenCV | Làm đẹp chân dung offline |
 
----
+## 2. Luồng đồng bộ Kiosk ⇄ Cloud (Offline-First)
 
-## 2. Các Luồng Dữ Liệu Đồng Bộ Kiosk ⇄ Cloud (Offline-First)
+1. **Heartbeat (30s)**: Kiosk gửi ping, giấy in còn lại, trạng thái máy in.
+2. **Pull Config**: Kéo bảng giá, mã giảm giá, khung ảnh từ CMS.
+3. **Outbox Push**: Lưu SQLite cục bộ trước; khi có mạng đẩy phiên chụp & giao dịch idempotent (`kiosk_id`, `session_id`, `transaction_id`).
 
-Mọi Kiosk đều hoạt động độc lập ngay cả khi mất mạng Internet. Khi có mạng trở lại, hệ thống tự động đẩy dữ liệu lên Cloud CMS:
+## 3. API Kiosk ⇄ CMS (`http://localhost:3000`)
 
-```
-┌─────────────────────────────────┐               ┌─────────────────────────────────┐
-│       Máy Trạm Kiosk Cục Bộ     │               │          Cloud CMS Center       │
-│ - SQLite Lưu trữ bền vững       │               │ - PostgreSQL / Supabase RLS     │
-│ - Lưu Sessions, Captures, Prints│               │ - Web Dashboard Đa Điểm         │
-└────────────────┬────────────────┘               └────────────────┬────────────────┘
-                 │                                                 │
-                 │ 1. Heartbeat mỗi 30s (Ping, Giấy in, Nhiệt độ)   │
-                 ├────────────────────────────────────────────────►│
-                 │                                                 │
-                 │ 2. Kéo Cấu hình (Bảng giá, Mã giảm giá, Khung)  │
-                 │◄────────────────────────────────────────────────┤
-                 │                                                 │
-                 │ 3. Đẩy Giao dịch & Lịch sử phiên chụp hoàn tất   │
-                 ├────────────────────────────────────────────────►│
-                 │                                                 │
-                 │ 4. Đối soát kế toán 3 bên tự động               │
-                 │◄───────────────────────────────────────────────►│
-```
+| Endpoint | Method | Chức năng | Payload / Tham số |
+| :--- | :---: | :--- | :--- |
+| `/api/kiosks` | `GET` | Danh sách Kiosks | ID máy, cơ sở, trạng thái online, giấy còn lại |
+| `/api/kiosk/heartbeat` | `POST` | Nhịp tim định kỳ | `{"kiosk_id", "paperRemaining", "appVersion", "printer_status"}` |
+| `/api/pricing` | `GET` | Đồng bộ bảng giá | Gói `2x6`, `4x6`, phí in thêm |
+| `/api/kiosk/sessions` | `POST` | Đẩy phiên chụp hoàn tất | `{"session_code", "kiosk_id", "amount", "payment_method": "vietqr"\|"cash"}` |
+| `/api/kiosk/tickets` | `GET/POST` | Vé chụp & hàng chờ POS | Cấp PIN 4 số, Photobooth / Selfbooth |
+| `/api/kiosk/payments/check` | `GET` | Thăm dò giao dịch VietQR | `?orderCode=FTL######&amount=######` |
+| `/api/reconciliation` | `GET` | Báo cáo đối soát 3 bên | VietQR ngân hàng ⇄ Tiền mặt ⇄ Giấy in tiêu hao |
 
----
+## 4. Đối soát kế toán 3 bên (`cms/src/lib/reconciliation/engine.ts`)
 
-## 3. Danh Mục API Kiosk ⇄ CMS Chuẩn (Port 3000)
-
-| Endpoint | Method | Chức năng | Chi tiết Payload |
-| :--- | :--- | :--- | :--- |
-| `http://localhost:3000/api/kiosks` | `GET` | Lấy danh sách toàn bộ Kiosks | Trả về ID máy, tên cơ sở, trạng thái online, định mức giấy còn lại |
-| `http://localhost:3000/api/kiosk/heartbeat` | `POST` | Kiosk gửi nhịp tim định kỳ | `{"kiosk_id": string, "paperRemaining": int, "appVersion": string, "printer_status": string}` |
-| `http://localhost:3000/api/pricing` | `GET` | Đồng bộ bảng giá gói chụp | Gói 2x6 strip, gói 4x6 đơn, phí in thêm bản copy |
-| `http://localhost:3000/api/kiosk/sessions` | `POST` | Đẩy phiên chụp & giao dịch hoàn tất | `{"session_code": string, "kiosk_id": string, "amount": int, "payment_method": "vietqr"|"cash"}` |
-| `http://localhost:3000/api/kiosk/tickets` | `GET/POST` | Quản lý vé chụp & hàng chờ POS | Cấp mã PIN 4 số, dịch vụ Photobooth / Selfbooth |
-| `http://localhost:3000/api/kiosk/payments/check` | `GET` | Thăm dò giao dịch SePay/VietQR tức thì | `?orderCode=FTL######&amount=######` |
-| `http://localhost:3000/api/reconciliation` | `GET` | Báo cáo đối soát 3 góc | Đối chiếu: Doanh thu VietQR ngân hàng ⇄ Tiền mặt nhân viên nộp ⇄ Số lượng giấy in tiêu hao |
-
----
-
-## 4. Quy Trình Đối Soát Kế Toán 3 Bên (3-Way Reconciliation)
-
-1. **Góc 1: Doanh thu Ngân hàng (VietQR MBBank / SePay / Casso)**:
-   - Dữ liệu Webhook tự động biến động số dư tài khoản ngân hàng.
-2. **Góc 2: Tiền mặt tại Kiosk (Cash Collector / POS Counter)**:
-   - Số tiền mặt khách đưa nhân viên hoặc nạp vào đầu đọc tiền mặt tự động, ghi nhận kênh `manual_cash`.
-3. **Góc 3: Giấy in tiêu hao thực tế (Hardware Spooler Audit)**:
-   - Số lượt máy in nhiệt DNP/HiTi đã cắt giấy thật qua lệnh phần cứng.
-4. **Phát hiện gian lận (Discrepancy Alarm)**:
-   - Công thức: `Tổng tiền ghi nhận = (Số lượt in thực tế × Đơn giá gói) - Khấu trừ Voucher hợp lệ`.
-   - Nếu chênh lệch (Delta) > 0: Hệ thống tự động gắn cờ đỏ cảnh báo gian lận hoặc thất thoát giấy in để quản lý cơ sở kiểm tra camera an ninh.
+- **3 nguồn đối chiếu**: (1) Webhook ngân hàng (VietQR / SePay / Casso), (2) Tiền mặt tại quầy/máy (`manual_cash`), (3) Số lượt cắt giấy thực tế từ Hardware Spooler (`PrintJobs`).
+- **Công thức phát hiện lệch (Discrepancy Alarm)**: `Tổng tiền ghi nhận = (Số lượt in thực tế × Đơn giá gói) - Khấu trừ Voucher hợp lệ`. Nếu `Delta > 0` → gắn cờ đỏ cảnh báo thất thoát/gian lận.

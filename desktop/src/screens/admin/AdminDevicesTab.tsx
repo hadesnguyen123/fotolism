@@ -9,8 +9,11 @@ import {
     SunMedium,
     Sparkles,
     Settings,
+    Ban,
 } from 'lucide-react'
-import { useAppStore, BEAUTY_PRESETS } from '../../store/appStore'
+import { useAppStore } from '../../store/appStore'
+import { BeautyCameraView } from '../../components/BeautyCameraView'
+import { DEFAULT_PRINT_SCALE } from '../../lib/constants'
 
 export type HardwareSubTab = 'camera' | 'printer' | 'remote'
 
@@ -44,6 +47,7 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
     setHardwareSubTab,
     daemonStatus,
     webcamVideoRef,
+    webcamStream,
     isTestingShutter,
     shutterTestResult,
     handleTestShutter,
@@ -69,21 +73,21 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         setRingLightEnabled,
         brightnessAdjust,
         setBrightnessAdjust,
-        selectedBeautyPreset,
-        applyBeautyPreset,
-        slimFace,
-        setSlimFace,
+        beautyEnabled,
+        setBeautyEnabled,
         vLine,
         setVLine,
         bigEyes,
         setBigEyes,
         skinSmoothing,
         setSkinSmoothing,
-        whiteningTone,
-        setWhiteningTone,
-        rosyTone,
-        setRosyTone,
+        skinToneEvenness,
+        setSkinToneEvenness,
+        blush,
+        setBlush,
         resetAdjustments,
+        disableBeautyRollback,
+        enableNaturalBeauty,
         getBeautyFilterCss,
         printScale,
         setPrintScale,
@@ -236,18 +240,20 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Viewfinder 16:9 */}
+                            {/* Viewfinder 16:9 với WebGL Beauty Real-time đồng bộ */}
                             <div className="liveview-viewfinder-box">
                                 {cameraType === 'eos' ? (
                                     isCameraOnline ? (
-                                        <img
-                                            src="http://127.0.0.1:8899/liveview"
-                                            alt="Canon Live View"
+                                        <BeautyCameraView
+                                            mjpegUrl="http://127.0.0.1:8899/liveview"
+                                            mirrorCamera={true}
+                                            beautyEnabled={beautyEnabled}
+                                            skinSmoothing={skinSmoothing}
+                                            skinToneEvenness={skinToneEvenness}
+                                            vLine={vLine}
+                                            bigEyes={bigEyes}
+                                            blush={blush}
                                             className="liveview-feed-media"
-                                            style={{
-                                                transform: 'scaleX(-1)',
-                                                filter: getBeautyFilterCss(),
-                                            }}
                                         />
                                     ) : (
                                         <div className="liveview-offline-placeholder">
@@ -263,6 +269,18 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                             </span>
                                         </div>
                                     )
+                                ) : webcamStream ? (
+                                    <BeautyCameraView
+                                        stream={webcamStream}
+                                        mirrorCamera={true}
+                                        beautyEnabled={beautyEnabled}
+                                        skinSmoothing={skinSmoothing}
+                                        skinToneEvenness={skinToneEvenness}
+                                        vLine={vLine}
+                                        bigEyes={bigEyes}
+                                        blush={blush}
+                                        className="liveview-feed-media"
+                                    />
                                 ) : (
                                     <video
                                         ref={webcamVideoRef}
@@ -384,115 +402,193 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Thẻ AI Làm Đẹp */}
+                            {/* Thẻ AI Làm Đẹp (Live View) */}
                             <div className="panel-card-touch">
                                 <div className="panel-card-header">
                                     <div className="panel-title-group">
                                         <Sparkles size={20} strokeWidth={2.2} />
                                         <span className="panel-title-text">
-                                            AI Làm Đẹp
+                                            AI Làm Đẹp (Live View)
                                         </span>
                                     </div>
 
-                                    <button
-                                        className="btn-restore-touch"
-                                        onClick={resetAdjustments}
-                                        title="Khôi phục mặc định"
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                        }}
                                     >
-                                        <RotateCcw
-                                            size={16}
-                                            strokeWidth={2.4}
-                                        />
-                                        <span>Khôi Phục</span>
-                                    </button>
-                                </div>
+                                        {/* Nút Disable / Rollback về máy ảnh gốc */}
+                                        {beautyEnabled ? (
+                                            <button
+                                                className="btn-disable-beauty-touch"
+                                                onClick={disableBeautyRollback}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(239, 68, 68, 0.6)',
+                                                    backgroundColor:
+                                                        'rgba(239, 68, 68, 0.15)',
+                                                    color: '#f87171',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="Tắt toàn bộ Beauty và Rollback về hình ảnh camera gốc"
+                                            >
+                                                <Ban
+                                                    size={15}
+                                                    strokeWidth={2.4}
+                                                />
+                                                <span>Disable (Rollback Gốc)</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="btn-enable-beauty-touch"
+                                                onClick={enableNaturalBeauty}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(56, 189, 248, 0.6)',
+                                                    backgroundColor:
+                                                        'rgba(56, 189, 248, 0.15)',
+                                                    color: '#38bdf8',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="Bật lại AI Beauty tự nhiên"
+                                            >
+                                                <Sparkles
+                                                    size={15}
+                                                    strokeWidth={2.4}
+                                                />
+                                                <span>Bật Lại Beauty</span>
+                                            </button>
+                                        )}
 
-                                {/* Presets Nhanh */}
-                                <div className="beauty-presets-touch-row">
-                                    {BEAUTY_PRESETS.map((preset) => (
-                                        <button
-                                            key={preset.id}
-                                            className={`preset-pill-touch ${selectedBeautyPreset === preset.id ? 'active' : ''}`}
-                                            onClick={() =>
-                                                applyBeautyPreset(preset.id)
-                                            }
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}
                                         >
-                                            <span>{preset.name}</span>
+                                            <span
+                                                style={{
+                                                    fontSize: '13px',
+                                                    color: beautyEnabled
+                                                        ? '#38bdf8'
+                                                        : '#94a3b8',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                {beautyEnabled
+                                                    ? 'Đang Bật'
+                                                    : 'Đã Tắt'}
+                                            </span>
+                                            <label className="switch-toggle-touch">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={beautyEnabled}
+                                                    onChange={(e) =>
+                                                        setBeautyEnabled(
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                />
+                                                <span className="switch-slider-touch" />
+                                            </label>
+                                        </div>
+
+                                        <button
+                                            className="btn-restore-touch"
+                                            onClick={resetAdjustments}
+                                            title="Khôi phục mặc định"
+                                        >
+                                            <RotateCcw
+                                                size={16}
+                                                strokeWidth={2.4}
+                                            />
+                                            <span>Khôi Phục</span>
                                         </button>
-                                    ))}
+                                    </div>
                                 </div>
 
-                                {/* 6 Thanh Kéo Thông Số AI Touch-First */}
-                                <div className="beauty-sliders-grid">
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Thon Gọn Má
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {slimFace}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={slimFace}
-                                            onChange={(e) =>
-                                                setSlimFace(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
-                                    </div>
-
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Cằm V-Line
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {vLine}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={vLine}
-                                            onChange={(e) =>
-                                                setVLine(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
-                                    </div>
-
-                                    <div className="slider-group-touch">
-                                        <div className="slider-label-row">
-                                            <span className="slider-title">
-                                                Mắt To
-                                            </span>
-                                            <span className="slider-value-badge">
-                                                {bigEyes}%
+                                {/* Banner thông báo trạng thái khi đang Disable / Rollback */}
+                                {!beautyEnabled && (
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '10px 14px',
+                                            backgroundColor:
+                                                'rgba(239, 68, 68, 0.12)',
+                                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                                            borderRadius: '8px',
+                                            marginTop: '12px',
+                                            marginBottom: '8px',
+                                            color: '#fca5a5',
+                                            fontSize: '13px',
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}
+                                        >
+                                            <Ban
+                                                size={16}
+                                                strokeWidth={2.2}
+                                            />
+                                            <span>
+                                                <strong>Đã Tắt Beauty (Rollback):</strong> Live View đang hiển thị 100% hình ảnh nguyên bản từ cảm biến máy ảnh, không can thiệp làm đẹp.
                                             </span>
                                         </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={100}
-                                            value={bigEyes}
-                                            onChange={(e) =>
-                                                setBigEyes(
-                                                    parseInt(e.target.value, 10)
-                                                )
-                                            }
-                                            className="touch-range-slider"
-                                        />
+                                        <button
+                                            onClick={enableNaturalBeauty}
+                                            style={{
+                                                padding: '4px 12px',
+                                                borderRadius: '6px',
+                                                backgroundColor: '#3b82f6',
+                                                color: '#fff',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap',
+                                                marginLeft: '12px',
+                                            }}
+                                        >
+                                            Bật Lại Natural
+                                        </button>
                                     </div>
+                                )}
 
+                                {/* 5 Thanh Kéo Hiệu Ứng Live View Chuẩn Hóa */}
+                                <div
+                                    className="beauty-sliders-grid"
+                                    style={{
+                                        opacity: beautyEnabled ? 1 : 0.45,
+                                        pointerEvents: beautyEnabled
+                                            ? 'auto'
+                                            : 'none',
+                                        transition: 'opacity 0.2s',
+                                    }}
+                                >
+                                    {/* 1. Mịn Da (Target: 45%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
@@ -516,22 +612,23 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         />
                                     </div>
 
+                                    {/* 2. Đều Màu Da (Target: 30%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
-                                                Trắng Sáng
+                                                Đều Màu Da
                                             </span>
                                             <span className="slider-value-badge">
-                                                {whiteningTone}%
+                                                {skinToneEvenness ?? 30}%
                                             </span>
                                         </div>
                                         <input
                                             type="range"
                                             min={0}
                                             max={100}
-                                            value={whiteningTone}
+                                            value={skinToneEvenness ?? 30}
                                             onChange={(e) =>
-                                                setWhiteningTone(
+                                                setSkinToneEvenness(
                                                     parseInt(e.target.value, 10)
                                                 )
                                             }
@@ -539,22 +636,71 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         />
                                     </div>
 
+                                    {/* 3. Cằm V-Line (Target: 4%) */}
                                     <div className="slider-group-touch">
                                         <div className="slider-label-row">
                                             <span className="slider-title">
-                                                Má Hồng
+                                                Cằm V-Line
                                             </span>
                                             <span className="slider-value-badge">
-                                                {rosyTone}%
+                                                {vLine}%
                                             </span>
                                         </div>
                                         <input
                                             type="range"
                                             min={0}
                                             max={100}
-                                            value={rosyTone}
+                                            value={vLine}
                                             onChange={(e) =>
-                                                setRosyTone(
+                                                setVLine(
+                                                    parseInt(e.target.value, 10)
+                                                )
+                                            }
+                                            className="touch-range-slider"
+                                        />
+                                    </div>
+
+                                    {/* 4. Mắt To (Target: 5%) */}
+                                    <div className="slider-group-touch">
+                                        <div className="slider-label-row">
+                                            <span className="slider-title">
+                                                Mắt To
+                                            </span>
+                                            <span className="slider-value-badge">
+                                                {bigEyes}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={bigEyes}
+                                            onChange={(e) =>
+                                                setBigEyes(
+                                                    parseInt(e.target.value, 10)
+                                                )
+                                            }
+                                            className="touch-range-slider"
+                                        />
+                                    </div>
+
+                                    {/* 5. Má Hồng (Target: 10%) */}
+                                    <div className="slider-group-touch">
+                                        <div className="slider-label-row">
+                                            <span className="slider-title">
+                                                Má Hồng
+                                            </span>
+                                            <span className="slider-value-badge">
+                                                {blush ?? 10}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={blush ?? 10}
+                                            onChange={(e) =>
+                                                setBlush(
                                                     parseInt(e.target.value, 10)
                                                 )
                                             }
@@ -703,15 +849,17 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         100.00%, bước 0.25%)
                                     </span>
                                 </div>
-                                {printScale !== 100 && (
+                                {printScale !== DEFAULT_PRINT_SCALE && (
                                     <button
                                         type="button"
                                         className="btn-print-scale-reset"
-                                        onClick={() => setPrintScale(100)}
-                                        title="Khôi phục mặc định 100.00%"
+                                        onClick={() =>
+                                            setPrintScale(DEFAULT_PRINT_SCALE)
+                                        }
+                                        title={`Khôi phục chuẩn DNP ${DEFAULT_PRINT_SCALE.toFixed(2)}%`}
                                     >
                                         <RotateCcw size={14} />
-                                        <span>Đặt lại 100%</span>
+                                        <span>Đặt lại {DEFAULT_PRINT_SCALE.toFixed(2)}%</span>
                                     </button>
                                 )}
                             </div>
@@ -731,18 +879,18 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                     className="touch-range-slider print-scale-slider"
                                 />
                                 <div className="print-scale-ticks">
-                                    <span>90.00% (Thu nhỏ tối đa)</span>
-                                    <span>95.00%</span>
-                                    <span>98.00%</span>
+                                    <span>90.00%</span>
+                                    <span>92.50%</span>
                                     <span
                                         className={
-                                            printScale === 99.75
+                                            printScale === 95.5
                                                 ? 'tick-highlight'
                                                 : ''
                                         }
                                     >
-                                        99.75%
+                                        95.50% (Chuẩn DNP)
                                     </span>
+                                    <span>98.00%</span>
                                     <span
                                         className={
                                             printScale === 100

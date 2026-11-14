@@ -17,13 +17,10 @@ export default function PhotoboothCountdownBadge() {
     const isPhotoboothActive =
         !isSelfbooth &&
         photoboothSessionEndTime !== null &&
-        (screen === 'capture' ||
-            screen === 'select-theme' ||
-            screen === 'select-filter' ||
-            screen === 'select-sticker')
+        (screen === 'capture' || screen === 'select-theme')
 
     const [secondsLeft, setSecondsLeft] = useState<number>(() => {
-        if (!photoboothSessionEndTime) return 240
+        if (!photoboothSessionEndTime) return 150
         return Math.max(
             0,
             Math.ceil((photoboothSessionEndTime - Date.now()) / 1000)
@@ -48,25 +45,13 @@ export default function PhotoboothCountdownBadge() {
                 hasTimedOutRef.current = true
                 clearInterval(timer)
 
-                // Hết 4 phút: Tự động chuyển tiếp luồng
+                // Hết 2 phút 30 giây: Tự động chuyển tiếp luồng (chờ AI enhance hoàn tất ở màn capture)
                 const currentScreen = useAppStore.getState().screen
                 if (currentScreen === 'capture') {
-                    const currentPhotos =
-                        useAppStore.getState().session?.photos || []
-                    const needed = selectedLayout.photosCount || 4
-                    if (currentPhotos.length > 0) {
-                        const filled = [...currentPhotos]
-                        while (filled.length < needed) {
-                            filled.push(filled[filled.length - 1])
-                        }
-                        setSessionPhotos(filled.slice(0, needed))
-                    }
-                    setScreen('select-theme')
-                } else if (
-                    currentScreen === 'select-theme' ||
-                    currentScreen === 'select-filter' ||
-                    currentScreen === 'select-sticker'
-                ) {
+                    window.dispatchEvent(
+                        new CustomEvent('fotolism:photobooth-capture-timeout')
+                    )
+                } else if (currentScreen === 'select-theme') {
                     setScreen('processing')
                 }
             }
@@ -92,7 +77,7 @@ export default function PhotoboothCountdownBadge() {
     return (
         <div
             className={`photobooth-countdown-badge ${isDanger ? 'danger' : isWarning ? 'warning' : ''}`}
-            title="Thời gian chụp và chọn ảnh còn lại của phiên Photobooth (4 phút)"
+            title="Thời gian chụp và chọn ảnh còn lại của phiên Photobooth (2 phút 30 giây)"
             role="timer"
             aria-live="polite"
         >

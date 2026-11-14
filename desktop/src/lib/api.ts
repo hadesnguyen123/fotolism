@@ -141,22 +141,7 @@ export interface FotolismAPI {
             fileName: string
         ) => IpcResponse<{ savedPath: string }>
         openFolder: (targetPath?: string) => IpcResponse
-        uploadDriveSession: (payload: {
-            parentFolderId: string
-            subfolderName: string
-            files: Array<{ name: string; dataUrl: string }>
-            webhookUrl?: string
-        }) => IpcResponse<{
-            localDir: string
-            cloudFolderUrl: string
-            cloudFolderId: string
-            subfolderName: string
-            filesCount: number
-        }>
-        testDriveWebhook: (
-            webhookUrl: string
-        ) => IpcResponse<{ message: string; statusCode?: number }>
-        getUploadStatus: () => IpcResponse<{
+        getUploadStatus: (sessionId?: string) => IpcResponse<{
             concurrency: number
             activeStreams: number
             pendingTasks: number
@@ -190,8 +175,10 @@ export interface FotolismAPI {
             customerName?: string
             sessionType?: string
             cmsUrl?: string
-            compositeDataUrl: string
+            compositeDataUrl?: string
             compositeFileName?: string
+            pairedPrintDataUrl?: string
+            pairedPrintFileName?: string
             shots: Array<{
                 slotIndex: number
                 rawPath?: string
@@ -205,7 +192,8 @@ export interface FotolismAPI {
             sessionDir: string
             rawDir: string
             finalDir: string
-            compositePath: string
+            compositePath?: string
+            pairedPrintPath?: string
             enqueuedCount: number
             files: Array<{
                 imageId: string
@@ -561,45 +549,6 @@ const defaultMockApi: FotolismAPI = {
             data: { savedPath: `${MOCK_SAVE_BASE}/_mock_${fileName}` },
         }),
         openFolder: async () => ({ success: true }),
-        uploadDriveSession: async (payload: {
-            parentFolderId: string
-            subfolderName: string
-            files: Array<{ name: string; dataUrl: string }>
-            webhookUrl?: string
-        }) => ({
-            success: true,
-            data: {
-                localDir: `${MOCK_SAVE_BASE}/${payload.subfolderName}`,
-                cloudFolderUrl: `https://drive.google.com/drive/folders/mock_session_${payload.subfolderName}`,
-                cloudFolderId: `mock_session_${payload.subfolderName}`,
-                subfolderName: payload.subfolderName,
-                filesCount: payload.files.length,
-            },
-        }),
-        testDriveWebhook: async (webhookUrl: string) => {
-            try {
-                const res = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'test_connection',
-                        timestamp: new Date().toISOString(),
-                    }),
-                })
-                if (res.status === 401 || res.status === 403) {
-                    return {
-                        success: false,
-                        error: `Lỗi HTTP ${res.status}: Webhook đang bị chặn quyền truy cập. Hãy chọn 'Người có quyền truy cập: Bất kỳ ai' (Anyone).`,
-                    }
-                }
-                return {
-                    success: true,
-                    data: { message: 'Kết nối Webhook thành công!' },
-                }
-            } catch (err: any) {
-                return { success: false, error: err.message }
-            }
-        },
         getUploadStatus: async () => ({
             success: true,
             data: {
@@ -637,6 +586,9 @@ const defaultMockApi: FotolismAPI = {
                 rawDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\raw`,
                 finalDir: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final`,
                 compositePath: `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final\\${payload.compositeFileName || 'fotolism_final.jpg'}`,
+                pairedPrintPath: payload.pairedPrintFileName
+                    ? `F:\\Fotolism_image\\sessions\\${payload.sessionId}\\final\\${payload.pairedPrintFileName}`
+                    : undefined,
                 enqueuedCount: payload.shots.length + 1,
                 files: [],
             },

@@ -47,22 +47,19 @@ Hoạt động trực tiếp trên màn hình xem trước [BeautyCameraView.tsx
 
 ---
 
-## 2. Tầng 2: AI Face Restoration Cho Ảnh 24MP (Server-Side / Offline)
+## 2. Tầng 2: AI Beauty & Face Enhancement Cho Ảnh 24MP (Server-Side / Offline)
 
-Được kích hoạt khi khách hàng bấm chụp ảnh để xuất bản in chất lượng cao nhất:
+Được kích hoạt sau khi chụp ảnh để xuất bản in và gallery chất lượng cao nhất:
 
-- **Dịch vụ**: Python FastAPI (`ai-service/main.py`) chạy cục bộ trên Kiosk.
-- **Mô hình AI**:
-  - `GFPGANv1.4`: Tái tạo nét mắt, nụ cười và răng cực sắc nét trong điều kiện thiếu sáng.
-  - `CodeFormer`: Cân bằng giữa độ nét AI và tính chân thực tự nhiên của da người.
-- **Endpoint**: `POST http://localhost:8000/enhance`
-  ```json
-  {
-    "imagePath": "F:/Fotolism_image/sessions/sess_123/raw_slot_0.jpg",
-    "beautyLevel": 65,
-    "fidelity": 0.7
-  }
-  ```
+- **Dịch vụ**: Python FastAPI (`desktop/ai-service/main.py`) chạy cục bộ trên cổng `8000`.
+- **Pipeline xử lý thực tế**:
+  - `face_detection_yunet_2023mar.onnx`: Nhận diện khuôn mặt nhanh và chính xác.
+  - `core/korean_beauty_engine.py`: Làm mịn da, cân chỉnh tông trắng hồng Hàn Quốc tự nhiên, giữ chi tiết mắt/môi/tóc.
+  - `core/selective_spot_correction.py`: Xử lý khuyết điểm cục bộ có chọn lọc.
+  - `core/white_balance.py` & `core/lut_manager.py`: Cân bằng trắng và áp LUT màu chuẩn studio.
+- **Hàng đợi & Toàn vẹn dữ liệu (Electron)**:
+  - `desktop/electron/aiEnhanceQueue.cts` (`AiEnhanceQueue`): Giới hạn CPU/RAM và gộp request trùng key.
+  - `desktop/electron/enhanceIntegrity.cts`: Xác thực file đầu ra hợp lệ; nếu AI lỗi hoặc timeout, fallback an toàn về ảnh gốc để không chặn chụp/in.
 
 ---
 

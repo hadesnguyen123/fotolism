@@ -1,7 +1,6 @@
 # Node.js
 node_modules/
 desktop/node_modules/
-joybooth-cms/
 cms/
 fotolism/
 npm-debug.log*
@@ -80,7 +79,6 @@ mcp_config.json
 Thumbs.db
 
 # Local Planning & Roadmap Docs
-JOYBOOTH_CMS_AND_ACCOUNTING_ROADMAP.md
 *ROADMAP*.md
 *PLAN*.md
 docs/local/

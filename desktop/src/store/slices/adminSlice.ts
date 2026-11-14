@@ -13,9 +13,6 @@ import {
     DEFAULT_IDLE_TIMEOUT_SECONDS,
     DEFAULT_SELFBOOTH_DURATION_SECONDS,
     DEFAULT_TIMELAPSE_SPEED,
-    DEFAULT_GDRIVE_FOLDER_ID,
-    DEFAULT_GDRIVE_FOLDER_URL,
-    DEFAULT_GDRIVE_WEBHOOK_URL,
     SAVE_ROOT_DIR,
     LS_EVENT_CONFIG_KEY,
     LS_PRINT_SCALE_KEY,
@@ -54,11 +51,6 @@ export interface EventConfig {
     idleTimeoutSeconds: number
     timelapseEnabled: boolean
     timelapseSpeed: number
-    gdriveEnabled: boolean
-    gdriveFolderId: string
-    gdriveFolderUrl: string
-    gdriveWebhookUrl: string
-    gdriveAutoSync: boolean
     saveDirectory: string
     adminPin: string
 }
@@ -89,11 +81,6 @@ export const DEFAULT_EVENT_CONFIG: EventConfig = {
     idleTimeoutSeconds: DEFAULT_IDLE_TIMEOUT_SECONDS,
     timelapseEnabled: false,
     timelapseSpeed: DEFAULT_TIMELAPSE_SPEED,
-    gdriveEnabled: true,
-    gdriveFolderId: DEFAULT_GDRIVE_FOLDER_ID,
-    gdriveFolderUrl: DEFAULT_GDRIVE_FOLDER_URL,
-    gdriveWebhookUrl: DEFAULT_GDRIVE_WEBHOOK_URL,
-    gdriveAutoSync: true,
     saveDirectory: SAVE_ROOT_DIR,
     adminPin: DEFAULT_ADMIN_PIN,
 }
@@ -106,6 +93,12 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
                 : null
         if (raw) {
             const parsed = JSON.parse(raw)
+            // Remove retired provider settings without changing other saved options.
+            const retiredKeys = Object.keys(parsed).filter((key) => key.startsWith('gdrive'))
+            for (const key of retiredKeys) delete parsed[key]
+            if (retiredKeys.length > 0) {
+                localStorage.setItem(LS_EVENT_CONFIG_KEY, JSON.stringify(parsed))
+            }
             if (
                 !parsed.eventName ||
                 parsed.eventName === 'FOTOLISM PHOTOBOOTH' ||
@@ -146,18 +139,6 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
                 parsed.extraCopyPrice2x6 === 20000
             ) {
                 parsed.extraCopyPrice2x6 = DEFAULT_EXTRA_COPY_PRICE_2X6
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem(
-                        LS_EVENT_CONFIG_KEY,
-                        JSON.stringify(parsed)
-                    )
-                }
-            }
-            if (
-                !parsed.gdriveWebhookUrl ||
-                !parsed.gdriveWebhookUrl.includes('AKfycbw2koNyt')
-            ) {
-                parsed.gdriveWebhookUrl = DEFAULT_GDRIVE_WEBHOOK_URL
                 if (typeof window !== 'undefined') {
                     localStorage.setItem(
                         LS_EVENT_CONFIG_KEY,

@@ -1,3 +1,4 @@
+import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, type CaptureMode } from '../store/appStore'
 import { DEFAULT_ADMIN_PIN } from '../lib/constants'
@@ -57,11 +58,11 @@ export default function IdleScreen() {
 
         // ── ƯU TIÊN 0: MÃ TEST 1234 TỰ ĐỘNG VÀO NGAY LẬP TỨC ──
         if (rawCode === '1234') {
-            setWelcomeGuest('Mã test 1234: Mở buồng chụp thành công!')
+            setWelcomeGuest('Thành công')
             setTimeout(() => {
                 setShowPinModal(false)
                 setCaptureMode(pendingMode)
-                startNewSession()
+                startNewSession('1234')
                 setCustomerInfo({
                     customerName: 'Khách Test 1234',
                     customerPhone: null,
@@ -83,11 +84,11 @@ export default function IdleScreen() {
             '8888'
         ).trim()
         if (rawCode === machineAdminPin || rawCode === '8888') {
-            setWelcomeGuest('Đã mở khóa bằng mã PIN của máy!')
+            setWelcomeGuest('Thành công')
             setTimeout(() => {
                 setShowPinModal(false)
                 setCaptureMode(pendingMode)
-                startNewSession()
+                startNewSession(rawCode)
                 setCustomerInfo({
                     customerName: 'Khách mở khóa (PIN máy)',
                     customerPhone: null,
@@ -125,9 +126,7 @@ export default function IdleScreen() {
                     return
                 }
 
-                setWelcomeGuest(
-                    `Xin chào ${ticket.customer_name || 'Khách Hàng'}!`
-                )
+                setWelcomeGuest('Thành công')
 
                 // Tự động phân luồng theo gói dịch vụ đã đăng ký tại quầy CMS (nếu có)
                 const effectiveMode: CaptureMode =
@@ -167,7 +166,7 @@ export default function IdleScreen() {
                 setTimeout(() => {
                     setShowPinModal(false)
                     setCaptureMode(effectiveMode)
-                    startNewSession()
+                    startNewSession(rawCode)
                     setCustomerInfo({
                         customerName: ticket.customer_name || 'Khách Hàng CMS',
                         customerPhone: ticket.customer_phone || null,
@@ -196,6 +195,24 @@ export default function IdleScreen() {
         }
     }
 
+    if (eventConfig.captureMode !== 'selfbooth') return <>
+        <ConnectedReferenceView screen="welcome" onNavigate={() => handleOpenUnlockModal('photobooth')} />
+            <NumericKeypadModal
+                isOpen={showPinModal}
+                title="Mã lượt chụp"
+                placeholder="NHẬP MÃ SỐ..."
+                submitText="Mở khóa buồng chụp"
+                isLoading={isVerifying}
+                loadingText="Đang kiểm tra..."
+                errorMessage={pinError}
+                successMessage={welcomeGuest}
+                onClose={() => {
+                    if (!isVerifying) setShowPinModal(false)
+                }}
+                onSubmit={(code) => handleVerifyUnlock(code)}
+            />
+    </>
+
     return (
         <div className="idle-screen" id="idle-screen">
             {/* Top Header */}
@@ -221,8 +238,8 @@ export default function IdleScreen() {
                 <div className="idle-brand">
                     <img
                         src={eventConfig.eventLogo || BRAND_LOGO_SRC}
-                        alt="Fotolism"
-                        className="idle-logo-img"
+                        alt="fotolism"
+                        className={`idle-logo-img${eventConfig.eventLogo ? ' is-event-logo' : ''}`}
                     />
                 </div>
 
@@ -492,7 +509,7 @@ export default function IdleScreen() {
                 placeholder="NHẬP MÃ SỐ..."
                 submitText="Mở khóa buồng chụp"
                 isLoading={isVerifying}
-                loadingText="Đang kiểm tra mã..."
+                loadingText="Đang kiểm tra..."
                 errorMessage={pinError}
                 successMessage={welcomeGuest}
                 onClose={() => {

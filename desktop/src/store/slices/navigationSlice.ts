@@ -1,16 +1,14 @@
 import type { StateCreator } from 'zustand'
 
 export type AppScreen =
+    | 'welcome'
     | 'activate'
     | 'idle'
-    | 'select-size'
     | 'select-layout'
     | 'confirm'
     | 'payment'
     | 'capture'
     | 'select-theme'
-    | 'select-filter'
-    | 'select-sticker'
     | 'processing'
     | 'review'
     | 'admin'
@@ -35,7 +33,7 @@ export const createNavigationSlice: StateCreator<
     [],
     NavigationSlice
 > = (set) => ({
-    screen: 'idle',
+    screen: 'welcome',
     setScreen: (screen) => set({ screen }),
     isKioskLocked: false,
     setIsKioskLocked: (isKioskLocked) => set({ isKioskLocked }),

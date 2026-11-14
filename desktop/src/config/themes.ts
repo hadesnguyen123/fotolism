@@ -1,8 +1,5 @@
 import type { FrameSize } from './layouts'
 
-export type ThemeCategory =
-    'Một màu' | 'Khác' | 'Ngày lễ' | 'Thời trang' | 'Trào lưu'
-
 export interface ThemeSlot {
     x: number
     y: number
@@ -13,7 +10,6 @@ export interface ThemeSlot {
 export interface ThemeItem {
     id: string
     name: string
-    category: ThemeCategory
     bgColor: string
     bgGradient: string
     textColor: string
@@ -33,7 +29,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_black_film',
         name: 'Film Đen Cổ Điển',
-        category: 'Thời trang',
         bgColor: '#141414',
         bgGradient: '#141414',
         textColor: '#FFFFFF',
@@ -52,7 +47,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_blue_stars',
         name: 'Ngôi Sao Xanh',
-        category: 'Thời trang',
         bgColor: '#EEF5FC',
         bgGradient: '#EEF5FC',
         textColor: '#1E3A8A',
@@ -71,7 +65,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_brown_dot',
         name: 'Chấm Bi Nâu',
-        category: 'Khác',
         bgColor: '#FAF6F0',
         bgGradient: '#FAF6F0',
         textColor: '#502A1D',
@@ -90,7 +83,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_brown_ren',
         name: 'Ren Nâu Vintage',
-        category: 'Khác',
         bgColor: '#FAF6F0',
         bgGradient: '#FAF6F0',
         textColor: '#502A1D',
@@ -109,7 +101,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_creme',
         name: 'Kem Tối Giản',
-        category: 'Một màu',
         bgColor: '#FAF7F2',
         bgGradient: '#FAF7F2',
         textColor: '#502A1D',
@@ -128,7 +119,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_jean_stars',
         name: 'Jean Ngôi Sao',
-        category: 'Trào lưu',
         bgColor: '#2B4C7E',
         bgGradient: '#2B4C7E',
         textColor: '#FFFFFF',
@@ -147,51 +137,8 @@ export const THEME_OPTIONS: ThemeItem[] = [
 
     // ── KHUNG 4x6 (4 ảnh - layout 4_grid_2x2) ──────────────────────────────────
     {
-        id: 'theme_4x6_cream_1240x1844',
-        name: 'Kem Studio (1240×1844)',
-        category: 'Thời trang',
-        bgColor: '#FAF7F2',
-        bgGradient: '#FAF7F2',
-        textColor: '#502A1D',
-        borderColor: '#E5DDD5',
-        overlayUrl: './frames/4x6_4_Cream_1240x1844.png',
-        hideFooter: true,
-        layoutId: '4_grid_2x2',
-        frameSize: '4x6',
-        canvasWidth: 1240,
-        canvasHeight: 1844,
-        slots: [
-            { x: 68, y: 70, w: 534, h: 712 },
-            { x: 638, y: 70, w: 534, h: 712 },
-            { x: 68, y: 818, w: 534, h: 712 },
-            { x: 638, y: 818, w: 534, h: 712 },
-        ],
-    },
-    {
-        id: 'theme_4x6_blackfilm_1240x1844',
-        name: 'Film Đen (1240×1844)',
-        category: 'Thời trang',
-        bgColor: '#141414',
-        bgGradient: '#141414',
-        textColor: '#FFFFFF',
-        borderColor: '#2A2A2A',
-        overlayUrl: './frames/4x6_4_BlackFilm_1240x1844.png',
-        hideFooter: true,
-        layoutId: '4_grid_2x2',
-        frameSize: '4x6',
-        canvasWidth: 1240,
-        canvasHeight: 1844,
-        slots: [
-            { x: 68, y: 70, w: 534, h: 712 },
-            { x: 638, y: 70, w: 534, h: 712 },
-            { x: 68, y: 818, w: 534, h: 712 },
-            { x: 638, y: 818, w: 534, h: 712 },
-        ],
-    },
-    {
         id: 'theme_4x6_black_film',
         name: 'Film Đen Cổ Điển',
-        category: 'Thời trang',
         bgColor: '#141414',
         bgGradient: '#141414',
         textColor: '#FFFFFF',
@@ -210,7 +157,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_blue_star',
         name: 'Ngôi Sao Xanh',
-        category: 'Thời trang',
         bgColor: '#EEF5FC',
         bgGradient: '#EEF5FC',
         textColor: '#1E3A8A',
@@ -229,7 +175,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_brown_dots',
         name: 'Chấm Bi Nâu',
-        category: 'Khác',
         bgColor: '#FAF6F0',
         bgGradient: '#FAF6F0',
         textColor: '#502A1D',
@@ -248,7 +193,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_brown_ren',
         name: 'Ren Nâu Vintage',
-        category: 'Khác',
         bgColor: '#FAF6F0',
         bgGradient: '#FAF6F0',
         textColor: '#502A1D',
@@ -267,7 +211,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_creme',
         name: 'Kem Tối Giản',
-        category: 'Một màu',
         bgColor: '#FAF7F2',
         bgGradient: '#FAF7F2',
         textColor: '#502A1D',
@@ -286,7 +229,6 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_star_jeans',
         name: 'Jean Ngôi Sao',
-        category: 'Trào lưu',
         bgColor: '#2B4C7E',
         bgGradient: '#2B4C7E',
         textColor: '#FFFFFF',
@@ -307,59 +249,12 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_9_black',
         name: 'Đen Tối Giản (9 ô)',
-        category: 'Một màu',
         bgColor: '#18181B',
         bgGradient: '#18181B',
         textColor: '#FFFFFF',
         borderColor: '#27272A',
         overlayUrl: './frames/4x6_9_Black.png',
         hideFooter: true,
-        layoutId: '9_grid_3x3',
-        frameSize: '4x6',
-        slots: [
-            { x: 20, y: 20, w: 381, h: 581 },
-            { x: 410, y: 20, w: 381, h: 581 },
-            { x: 799, y: 20, w: 381, h: 581 },
-            { x: 20, y: 610, w: 381, h: 581 },
-            { x: 410, y: 610, w: 381, h: 581 },
-            { x: 799, y: 610, w: 381, h: 581 },
-            { x: 20, y: 1199, w: 381, h: 581 },
-            { x: 410, y: 1199, w: 381, h: 581 },
-            { x: 799, y: 1199, w: 381, h: 581 },
-        ],
-    },
-    {
-        id: 'theme_4x6_9_white',
-        name: 'Trắng Tối Giản (9 ô)',
-        category: 'Một màu',
-        bgColor: '#FFFFFF',
-        bgGradient: '#FFFFFF',
-        textColor: '#351C15',
-        borderColor: '#E5DDD5',
-        hideFooter: false,
-        layoutId: '9_grid_3x3',
-        frameSize: '4x6',
-        slots: [
-            { x: 20, y: 20, w: 381, h: 581 },
-            { x: 410, y: 20, w: 381, h: 581 },
-            { x: 799, y: 20, w: 381, h: 581 },
-            { x: 20, y: 610, w: 381, h: 581 },
-            { x: 410, y: 610, w: 381, h: 581 },
-            { x: 799, y: 610, w: 381, h: 581 },
-            { x: 20, y: 1199, w: 381, h: 581 },
-            { x: 410, y: 1199, w: 381, h: 581 },
-            { x: 799, y: 1199, w: 381, h: 581 },
-        ],
-    },
-    {
-        id: 'theme_4x6_9_espresso',
-        name: 'Nâu Cổ Điển (9 ô)',
-        category: 'Một màu',
-        bgColor: '#502A1D',
-        bgGradient: '#502A1D',
-        textColor: '#FFFFFF',
-        borderColor: '#3D1F15',
-        hideFooter: false,
         layoutId: '9_grid_3x3',
         frameSize: '4x6',
         slots: [

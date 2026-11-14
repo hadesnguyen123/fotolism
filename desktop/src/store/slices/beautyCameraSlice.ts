@@ -25,20 +25,24 @@ export function loadSavedBeautyConfig(): BeautyConfig {
             const parsed = JSON.parse(raw)
             return { ...DEFAULT_BEAUTY_CONFIG, ...parsed, mirror: true }
         }
-    } catch {}
+    } catch { }
     return DEFAULT_BEAUTY_CONFIG
 }
 
 export interface BeautyCameraSlice {
     // Beauty adjustments
+    beautyEnabled: boolean
+    setBeautyEnabled: (enabled: boolean) => void
     selectedBeautyPreset: string | null
     applyBeautyPreset: (presetId: string) => void
     slimFace: number
     vLine: number
     bigEyes: number
     skinSmoothing: number
+    skinToneEvenness: number
     whiteningTone: number
     rosyTone: number
+    blush: number
     glowClarity: number
     brightnessAdjust: number
     contrastAdjust: number
@@ -47,14 +51,18 @@ export interface BeautyCameraSlice {
     setVLine: (val: number) => void
     setBigEyes: (val: number) => void
     setSkinSmoothing: (val: number) => void
-    setWhiteningTone: (val: number) => void
+    setSkinToneEvenness: (val: number) => void
     setRosyTone: (val: number) => void
+    setBlush: (val: number) => void
+    setWhiteningTone: (val: number) => void
     setGlowClarity: (val: number) => void
     setBrightnessAdjust: (val: number) => void
     setContrastAdjust: (val: number) => void
     setSaturationAdjust: (val: number) => void
     saveBeautyConfig: (config?: Partial<BeautyConfig>) => void
     resetAdjustments: () => void
+    disableBeautyRollback: () => void
+    enableNaturalBeauty: () => void
     getBeautyFilterCss: () => string
     getCameraTransformCss: (mirror: boolean) => string
     getEffectiveFilterCss: () => string
@@ -94,58 +102,104 @@ export const createBeautyCameraSlice: StateCreator<
     const active = hasCustom
         ? saved
         : {
-              slimFace: naturalPreset?.slimFace ?? 18,
-              vLine: naturalPreset?.vLine ?? 16,
-              bigEyes: naturalPreset?.bigEyes ?? 12,
-              skinSmoothing: naturalPreset?.skinSmoothing ?? 45,
-              whiteningTone: 0,
-              rosyTone: 0,
-              glowClarity: 0,
-              brightnessAdjust: 100,
-              contrastAdjust: 100,
-              saturationAdjust: 100,
-          }
+            beautyEnabled: naturalPreset?.beautyEnabled ?? true,
+            slimFace: naturalPreset?.slimFace ?? 8,
+            vLine: naturalPreset?.vLine ?? 8,
+            bigEyes: naturalPreset?.bigEyes ?? 10,
+            skinSmoothing: naturalPreset?.skinSmoothing ?? 60,
+            skinToneEvenness: naturalPreset?.skinToneEvenness ?? 50,
+            rosyTone: naturalPreset?.rosyTone ?? 10,
+            blush: naturalPreset?.blush ?? 10,
+            whiteningTone: naturalPreset?.whiteningTone ?? 10,
+            glowClarity: 0,
+            brightnessAdjust: 100,
+            contrastAdjust: 100,
+            saturationAdjust: 100,
+        }
 
     return {
+        beautyEnabled: active.beautyEnabled !== false,
+        setBeautyEnabled: (beautyEnabled) => {
+            set({ beautyEnabled })
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({ ...parsed, beautyEnabled })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to persist beautyEnabled:', e)
+            }
+        },
         selectedBeautyPreset: 'natural',
-        slimFace: active.slimFace,
-        vLine: active.vLine ?? 16,
-        bigEyes: active.bigEyes ?? 12,
-        skinSmoothing: active.skinSmoothing,
-        whiteningTone: active.whiteningTone,
-        rosyTone: active.rosyTone,
-        glowClarity: active.glowClarity,
-        brightnessAdjust: active.brightnessAdjust,
-        contrastAdjust: active.contrastAdjust,
-        saturationAdjust: active.saturationAdjust,
+        slimFace: active.slimFace ?? 8,
+        vLine: active.vLine ?? 8,
+        bigEyes: active.bigEyes ?? 10,
+        skinSmoothing: active.skinSmoothing ?? 60,
+        skinToneEvenness: active.skinToneEvenness ?? 50,
+        whiteningTone: active.whiteningTone ?? 10,
+        rosyTone: active.rosyTone ?? 10,
+        blush: active.blush ?? active.rosyTone ?? 10,
+        glowClarity: active.glowClarity ?? 0,
+        brightnessAdjust: active.brightnessAdjust ?? 100,
+        contrastAdjust: active.contrastAdjust ?? 100,
+        saturationAdjust: active.saturationAdjust ?? 100,
 
         applyBeautyPreset: (presetId) => {
             const preset = BEAUTY_PRESETS.find((p) => p.id === presetId)
             if (!preset) return
             set({
                 selectedBeautyPreset: presetId,
+                beautyEnabled: preset.beautyEnabled !== false,
                 slimFace: preset.slimFace,
                 vLine: preset.vLine,
                 bigEyes: preset.bigEyes,
                 skinSmoothing: preset.skinSmoothing,
+                skinToneEvenness: preset.skinToneEvenness ?? 30,
                 whiteningTone: preset.whiteningTone,
-                rosyTone: preset.rosyTone,
+                rosyTone: preset.rosyTone ?? 10,
+                blush: preset.blush ?? preset.rosyTone ?? 10,
                 glowClarity: preset.glowClarity,
                 brightnessAdjust: preset.brightness,
                 contrastAdjust: preset.contrast,
             })
         },
 
-        setSlimFace: (slimFace) =>
-            set({ slimFace, selectedBeautyPreset: null }),
-        setVLine: (vLine) => set({ vLine, selectedBeautyPreset: null }),
-        setBigEyes: (bigEyes) => set({ bigEyes, selectedBeautyPreset: null }),
-        setSkinSmoothing: (skinSmoothing) =>
-            set({ skinSmoothing, selectedBeautyPreset: null }),
-        setWhiteningTone: (whiteningTone) =>
-            set({ whiteningTone, selectedBeautyPreset: null }),
-        setRosyTone: (rosyTone) =>
-            set({ rosyTone, selectedBeautyPreset: null }),
+        setSlimFace: (slimFace) => {
+            set({ slimFace, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ slimFace })
+        },
+        setVLine: (vLine) => {
+            set({ vLine, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ vLine })
+        },
+        setBigEyes: (bigEyes) => {
+            set({ bigEyes, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ bigEyes })
+        },
+        setSkinSmoothing: (skinSmoothing) => {
+            set({ skinSmoothing, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ skinSmoothing })
+        },
+        setSkinToneEvenness: (skinToneEvenness) => {
+            set({ skinToneEvenness, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ skinToneEvenness })
+        },
+        setWhiteningTone: (whiteningTone) => {
+            set({ whiteningTone, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ whiteningTone })
+        },
+        setRosyTone: (rosyTone) => {
+            set({ rosyTone, blush: rosyTone, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ rosyTone, blush: rosyTone })
+        },
+        setBlush: (blush) => {
+            set({ blush, rosyTone: blush, selectedBeautyPreset: null })
+            get().saveBeautyConfig({ blush, rosyTone: blush })
+        },
         setGlowClarity: (glowClarity) =>
             set({ glowClarity, selectedBeautyPreset: null }),
         setBrightnessAdjust: (brightnessAdjust) =>
@@ -158,12 +212,16 @@ export const createBeautyCameraSlice: StateCreator<
         saveBeautyConfig: (config) => {
             const current = get()
             const updated: BeautyConfig = {
+                beautyEnabled: config?.beautyEnabled ?? current.beautyEnabled,
                 slimFace: config?.slimFace ?? current.slimFace,
                 vLine: config?.vLine ?? current.vLine,
                 bigEyes: config?.bigEyes ?? current.bigEyes,
                 skinSmoothing: config?.skinSmoothing ?? current.skinSmoothing,
+                skinToneEvenness:
+                    config?.skinToneEvenness ?? current.skinToneEvenness,
                 whiteningTone: config?.whiteningTone ?? current.whiteningTone,
                 rosyTone: config?.rosyTone ?? current.rosyTone,
+                blush: config?.blush ?? current.blush,
                 glowClarity: config?.glowClarity ?? current.glowClarity,
                 brightnessAdjust:
                     config?.brightnessAdjust ?? current.brightnessAdjust,
@@ -188,10 +246,84 @@ export const createBeautyCameraSlice: StateCreator<
         resetAdjustments: () => {
             const def = DEFAULT_BEAUTY_CONFIG
             set({
-                selectedBeautyPreset: 'none',
+                selectedBeautyPreset: 'natural',
                 mirrorCamera: true,
                 ...def,
+                beautyEnabled: true,
+                skinSmoothing: 45,
+                skinToneEvenness: 30,
+                vLine: 4,
+                bigEyes: 5,
+                blush: 10,
+                rosyTone: 10,
+                slimFace: 4,
             })
+        },
+
+        disableBeautyRollback: () => {
+            get().applyBeautyPreset('none')
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({
+                            ...parsed,
+                            beautyEnabled: false,
+                            selectedBeautyPreset: 'none',
+                            skinSmoothing: 0,
+                            skinToneEvenness: 0,
+                            vLine: 0,
+                            bigEyes: 0,
+                            blush: 0,
+                            rosyTone: 0,
+                            slimFace: 0,
+                            whiteningTone: 0,
+                            glowClarity: 0,
+                            brightnessAdjust: 100,
+                            contrastAdjust: 100,
+                            saturationAdjust: 100,
+                            mirror: true,
+                        })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to save disabled beauty config:', e)
+            }
+        },
+
+        enableNaturalBeauty: () => {
+            get().applyBeautyPreset('natural')
+            try {
+                if (typeof window !== 'undefined') {
+                    const raw = localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
+                    const parsed = raw ? JSON.parse(raw) : {}
+                    localStorage.setItem(
+                        LS_BEAUTY_CONFIG_KEY,
+                        JSON.stringify({
+                            ...parsed,
+                            beautyEnabled: true,
+                            selectedBeautyPreset: 'natural',
+                            skinSmoothing: 60,
+                            skinToneEvenness: 50,
+                            vLine: 8,
+                            bigEyes: 10,
+                            blush: 10,
+                            rosyTone: 10,
+                            slimFace: 8,
+                            whiteningTone: 10,
+                            glowClarity: 0,
+                            brightnessAdjust: 100,
+                            contrastAdjust: 100,
+                            saturationAdjust: 100,
+                            mirror: true,
+                        })
+                    )
+                }
+            } catch (e) {
+                console.warn('Failed to save natural beauty config:', e)
+            }
         },
 
         getBeautyFilterCss: () => {
@@ -283,7 +415,7 @@ export const createBeautyCameraSlice: StateCreator<
                         String(ringLightEnabled)
                     )
                 }
-            } catch {}
+            } catch { }
             set({ ringLightEnabled })
         },
         setRingLightLevel: (ringLightLevel) => {
@@ -294,7 +426,7 @@ export const createBeautyCameraSlice: StateCreator<
                         String(ringLightLevel)
                     )
                 }
-            } catch {}
+            } catch { }
             set({ ringLightLevel })
         },
 
@@ -326,7 +458,7 @@ export const createBeautyCameraSlice: StateCreator<
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('fotolism_camera_type', type)
                 }
-            } catch {}
+            } catch { }
             set({
                 cameraType: type,
                 selectedCameraId: type === 'eos' ? 'canon-daemon-stream' : null,
@@ -340,7 +472,7 @@ export const createBeautyCameraSlice: StateCreator<
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('fotolism_mirror_camera', 'true')
                 }
-            } catch {}
+            } catch { }
             set({ mirrorCamera: true })
         },
     }

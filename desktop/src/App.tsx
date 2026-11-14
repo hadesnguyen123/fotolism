@@ -3,13 +3,11 @@ import { useAppStore } from './store/appStore'
 import { cloudSyncService } from './services/cloudSyncService'
 import DeviceActivationScreen from './screens/DeviceActivationScreen'
 import IdleScreen from './screens/IdleScreen'
-import SelectFrameSizeScreen from './screens/SelectFrameSizeScreen'
 import SelectLayoutScreen from './screens/SelectLayoutScreen'
 import CaptureScreen from './screens/CaptureScreen'
 import ConfirmScreen from './screens/ConfirmScreen'
 import PaymentScreen from './screens/PaymentScreen'
 import ThemeSelectScreen from './screens/ThemeSelectScreen'
-import FilterScreen from './screens/FilterScreen'
 import ReviewScreen from './screens/ReviewScreen'
 import AdminScreen from './screens/AdminScreen'
 import OverheadScreen from './screens/OverheadScreen'
@@ -68,7 +66,7 @@ export default function App() {
                 cloudSyncService.setDeviceConfig(config)
                 cloudSyncService.startWorker()
                 if (useAppStore.getState().screen === 'activate') {
-                    setScreen('idle')
+                    setScreen('welcome')
                 }
             } else {
                 const hasExplicitScreen =
@@ -99,8 +97,7 @@ export default function App() {
     return (
         <div className="app-root">
             {screen === 'activate' && <DeviceActivationScreen />}
-            {screen === 'idle' && <IdleScreen />}
-            {screen === 'select-size' && <SelectFrameSizeScreen />}
+            {(screen === 'idle' || screen === 'welcome') && <IdleScreen />}
             {screen === 'select-layout' && <SelectLayoutScreen />}
             {screen === 'confirm' && <ConfirmScreen />}
             {screen === 'selfbooth-setup' && <SelfboothSetupScreen />}
@@ -108,9 +105,6 @@ export default function App() {
             {screen === 'payment' && <PaymentScreen />}
             {screen === 'capture' && <CaptureScreen />}
             {screen === 'select-theme' && <ThemeSelectScreen />}
-            {(screen === 'select-filter' || screen === 'select-sticker') && (
-                <FilterScreen />
-            )}
             {screen === 'processing' && <ProcessingScreen />}
             {screen === 'review' && <ReviewScreen />}
             {screen === 'admin' && <AdminScreen />}

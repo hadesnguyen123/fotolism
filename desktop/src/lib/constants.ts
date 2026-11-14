@@ -58,8 +58,8 @@ export const LS_EVENT_CONFIG_KEY = 'fotolism_event_config'
 /** LocalStorage key cho cấu hình Print Scale (bù trừ xén lẹm mép in) */
 export const LS_PRINT_SCALE_KEY = 'fotolism_print_scale'
 
-/** Tỉ lệ co dãn in ấn mặc định (100.00%) */
-export const DEFAULT_PRINT_SCALE = 100.0
+/** Tỉ lệ co dãn in ấn mặc định (95.50% - Chuẩn tối ưu thực tế bù trừ dao xén máy in DNP DS-RX1) */
+export const DEFAULT_PRINT_SCALE = 95.5
 
 // ── 4. VietQR & Banking Defaults ──
 /** Mã BIN ngân hàng mặc định (970422 = MB Bank) */
@@ -233,18 +233,6 @@ export const SELFBOOTH_PACKAGES: SelfboothPackage[] = [
 
 /** Tốc độ tua video timelapse hậu trường (VD: 2.5x) */
 export const DEFAULT_TIMELAPSE_SPEED = 2.5
-
-// ── 7. Cloud Storage (Google Drive) ──
-/** Mã thư mục Google Drive mặc định */
-export const DEFAULT_GDRIVE_FOLDER_ID = '1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
-
-/** Đường dẫn thư mục Google Drive mặc định */
-export const DEFAULT_GDRIVE_FOLDER_URL =
-    'https://drive.google.com/drive/folders/1FcgyAe79bpnZnYgxR4i4b4qM_42oB5eU'
-
-/** Webhook Google Apps Script mặc định để tự động tạo subfolder */
-export const DEFAULT_GDRIVE_WEBHOOK_URL =
-    'https://script.google.com/macros/s/AKfycbw2koNyt_6qjUzZn9waLYL4eDv_YbRrp7PuZoPHgJoFZVETOKEnMdo_nbfyHm9BzvI1/exec'
 
 // ── 8. Hardware & Camera Specifications ──
 /** USB Vendor ID của Canon EOS */

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Move, Camera } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import type {
     ThemeItem,
     FrameSize,
@@ -25,6 +25,10 @@ export interface InteractiveStripPreviewProps {
     ) => void
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void
+    onWheel?: (
+        index: number,
+        e: React.WheelEvent<HTMLDivElement>
+    ) => void
 }
 
 export const InteractiveStripPreview: React.FC<
@@ -42,12 +46,12 @@ export const InteractiveStripPreview: React.FC<
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onWheel,
 }) => {
     return (
         <div className="interactive-strip-preview-wrapper animate-pop">
             <div className="strip-reposition-banner">
-                <Move size={15} />
-                <span>Chạm &amp; kéo ảnh trong từng ô để cân chỉnh vị trí</span>
+                <span>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</span>
             </div>
 
             <div
@@ -83,10 +87,8 @@ export const InteractiveStripPreview: React.FC<
                         photo?.enhancedPath ||
                         photo?.rawPath ||
                         ''
-                    const offset = slotOffsets[idx] || { x: 0, y: 0 }
-                    const hasOffset =
-                        Math.abs(offset.x || 0) > 0.01 ||
-                        Math.abs(offset.y || 0) > 0.01
+                    const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
+                    const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
 
                     return (
                         <div
@@ -108,6 +110,7 @@ export const InteractiveStripPreview: React.FC<
                             onPointerMove={onPointerMove}
                             onPointerUp={onPointerUp}
                             onPointerCancel={onPointerUp}
+                            onWheel={(e) => onWheel && onWheel(idx, e)}
                         >
                             {photoSrc ? (
                                 <>
@@ -127,9 +130,7 @@ export const InteractiveStripPreview: React.FC<
                                                 selectedFilter.cssFilter !== 'none'
                                                     ? selectedFilter.cssFilter
                                                     : undefined,
-                                            transform: hasOffset
-                                                ? `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(1.08)`
-                                                : 'none',
+                                            transform: `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(${scaleVal * 1.08})`,
                                             transformOrigin: 'center center',
                                             transition:
                                                 activeDragIndex === idx
@@ -156,10 +157,6 @@ export const InteractiveStripPreview: React.FC<
                                     <span>Ảnh {idx + 1}</span>
                                 </div>
                             )}
-
-                            <div className="slot-drag-handle-badge">
-                                <Move size={14} />
-                            </div>
                         </div>
                     )
                 })}

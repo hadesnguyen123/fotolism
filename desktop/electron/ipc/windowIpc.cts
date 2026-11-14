@@ -3,6 +3,8 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { spawn, exec, ChildProcess } from 'child_process'
 import { AI_SERVICE_PORT, AI_SERVICE_URL, getFotolismDir } from './common.cjs'
+import { AiEnhanceQueue } from '../aiEnhanceQueue.cjs'
+import { assertEnhancedFile } from '../enhanceIntegrity.cjs'
 
 const isDev = process.env.NODE_ENV === 'development'
 const VITE_DEV_SERVER_URL =
@@ -10,6 +12,7 @@ const VITE_DEV_SERVER_URL =
 
 let overheadWindow: BrowserWindow | null = null
 let aiServiceProc: ChildProcess | null = null
+const aiEnhanceQueue = new AiEnhanceQueue()
 
 export async function checkAiService(): Promise<boolean> {
     try {
@@ -45,6 +48,10 @@ export async function ensureAiService(): Promise<boolean> {
             detached: true,
             stdio: 'ignore',
             windowsHide: true,
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',
+            },
         })
         aiServiceProc.unref()
 
@@ -102,7 +109,7 @@ export function createOverheadWindow(displayId?: number) {
             preload: path.join(__dirname, '../preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            webSecurity: true,
+            webSecurity: !isDev,
         },
     })
 
@@ -280,7 +287,24 @@ export function registerWindowAndConfigIpc(): void {
             }
         ) => {
             try {
-                await ensureAiService()
+                // Natural capture preserves the original JPEG bytes and avoids Python startup/inference.
+                if ((payload.beautyLevel ?? 50) === 0 && (!payload.styleId || payload.styleId === 'natural')) {
+                    const source = path.resolve(payload.imagePath.replace(/^file:\/\//, ''))
+                    if (!fs.existsSync(source)) throw new Error('Không tìm thấy ảnh gốc')
+                    const target = payload.outputPath ? path.resolve(payload.outputPath) : source
+                    if (target !== source) {
+                        fs.mkdirSync(path.dirname(target), { recursive: true })
+                        await fs.promises.copyFile(source, target)
+                    }
+                    return { success: true, data: { enhancedPath: target } }
+                }
+                const key = JSON.stringify([
+                    path.resolve(payload.imagePath.replace(/^file:\/\//, '')),
+                    payload.outputPath, payload.beautyLevel ?? 50,
+                    payload.presetId || 'white_pink_v2', payload.styleId || 'natural',
+                ])
+                return await aiEnhanceQueue.run(key, async () => {
+                if (!(await ensureAiService())) throw new Error('AI Service chưa sẵn sàng')
                 const res = await fetch(`${AI_SERVICE_URL}/enhance`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -288,10 +312,11 @@ export function registerWindowAndConfigIpc(): void {
                         imagePath: payload.imagePath,
                         outputPath: payload.outputPath,
                         beautyLevel: payload.beautyLevel ?? 50,
-                        presetId: payload.presetId || 'korean_soft_beauty',
+                        presetId: payload.presetId || 'white_pink_v2',
                         styleId: payload.styleId || 'natural',
                     }),
-                    signal: AbortSignal.timeout(6000),
+                    // Starts only once this job reaches the front of the queue.
+                    signal: AbortSignal.timeout(180000),
                 })
                 if (!res.ok) {
                     return {
@@ -299,7 +324,20 @@ export function registerWindowAndConfigIpc(): void {
                         error: `AI Service HTTP ${res.status}`,
                     }
                 }
-                return await res.json()
+                const result = await res.json() as {
+                    success?: boolean
+                    error?: string
+                    data?: { status?: string; enhancedPath?: string; message?: string }
+                }
+                if (!result.success || result.data?.status !== 'processed' || !result.data?.enhancedPath) {
+                    return { success: false, error: result.error || result.data?.message || 'AI chưa xử lý ảnh thành công' }
+                }
+                if (!fs.existsSync(result.data.enhancedPath) || fs.statSync(result.data.enhancedPath).size === 0) {
+                    return { success: false, error: 'AI chưa lưu xong file ảnh' }
+                }
+                assertEnhancedFile(payload.imagePath.replace(/^file:\/+/, ''), result.data.enhancedPath)
+                return result
+                })
             } catch (err: any) {
                 return { success: false, error: err.message }
             }

@@ -213,7 +213,7 @@ export default function NumericKeypadModal({
                 </div>
 
                 {/* Thông báo trạng thái: Đang kiểm tra / Lỗi / Thành công */}
-                {isLoading && (
+                {isLoading && !successMessage && (
                     <div className="numeric-status-banner loading">
                         <Loader2 size={18} className="numeric-spin" />
                         <span>{loadingText}</span>

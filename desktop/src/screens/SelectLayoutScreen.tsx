@@ -1,3 +1,4 @@
+import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import {
     useAppStore,
     ALL_LAYOUTS,
@@ -174,6 +175,12 @@ export default function SelectLayoutScreen() {
             </div>
         )
     }
+
+    if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
+        screen="select-layout"
+        onNavigate={(target) => target === 'welcome' ? setScreen('welcome') : handleProceed()}
+        changes={{ selectedLayoutIdx: (value) => handleSelect(activeLayouts[Number(value)]) }}
+    />
 
     return (
         <div className="layout-poster-container" id="select-layout-screen">

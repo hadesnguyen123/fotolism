@@ -5,11 +5,16 @@ import type {
     ColorFilterItem,
     FrameSize,
 } from '../store/appStore'
-import { DEFAULT_EVENT_NAME, resolveAssetUrl } from './constants'
+import {
+    DEFAULT_EVENT_NAME,
+    DEFAULT_PRINT_SCALE,
+    resolveAssetUrl,
+} from './constants'
 
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
     y: number // -1.0 (lên) đến +1.0 (xuống)
+    scale?: number // Tỉ lệ phóng to (zoom): 1.0 (mặc định) đến 3.0x
 }
 
 export interface RenderOptions {
@@ -98,6 +103,8 @@ export async function cropImageToAspect(
     canvas.height = cropH
     const ctx = canvas.getContext('2d')
     if (!ctx) return sourceDataUrl
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
     return canvas.toDataURL('image/jpeg', 0.98)
@@ -189,6 +196,8 @@ export async function generateStripComposite(
     if (!ctx) {
         throw new Error('Could not get canvas context')
     }
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     // 1. Vẽ nền (Background Color / Gradient)
     if (opts.theme.overlayUrl) {
@@ -281,9 +290,17 @@ export async function generateStripComposite(
                 const offset =
                     opts.slotOffsets && opts.slotOffsets[i]
                         ? opts.slotOffsets[i]
-                        : { x: 0, y: 0 }
+                        : { x: 0, y: 0, scale: 1.0 }
                 const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
                 const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
+                const userScale = Math.max(
+                    1.0,
+                    Math.min(3.0, offset.scale || 1.0)
+                )
+                const hasTransform =
+                    Math.abs(clampedX) > 0.01 ||
+                    Math.abs(clampedY) > 0.01 ||
+                    userScale > 1.01
 
                 let finalSrcX = 0
                 let finalSrcY = 0
@@ -293,15 +310,23 @@ export async function generateStripComposite(
                 // Trường hợp 1: Ảnh đã có cùng tỉ lệ với ô slot (sai số < 0.03)
                 // (Ví dụ ảnh đã qua cropImageToAspect theo khung vàng, hoặc ảnh gốc 3:2 Canon vào ô 2x6 3:2)
                 if (Math.abs(imgAspect - slotAspect) < 0.03) {
-                    if (Math.abs(clampedX) > 0.01 || Math.abs(clampedY) > 0.01) {
-                        // Khách có kéo tay căn chỉnh vị trí ở màn hình review: zoom nhẹ 1.08x để có margin trượt mà không hở viền
-                        const zoom = 1.08
+                    if (hasTransform) {
+                        // Khách có kéo tay căn chỉnh hoặc zoom: áp dụng zoom * userScale
+                        const zoom = 1.08 * userScale
                         finalSrcW = Math.round(img.width / zoom)
                         finalSrcH = Math.round(img.height / zoom)
                         const slackX = (img.width - finalSrcW) / 2
                         const slackY = (img.height - finalSrcH) / 2
                         finalSrcX = Math.round(slackX - clampedX * slackX)
                         finalSrcY = Math.round(slackY - clampedY * slackY)
+                        finalSrcX = Math.max(
+                            0,
+                            Math.min(img.width - finalSrcW, finalSrcX)
+                        )
+                        finalSrcY = Math.max(
+                            0,
+                            Math.min(img.height - finalSrcH, finalSrcY)
+                        )
                     } else {
                         // Vị trí mặc định: Giữ nguyên 100% hình ảnh không cắt bất kỳ pixel nào
                         finalSrcW = img.width
@@ -331,19 +356,29 @@ export async function generateStripComposite(
                     const effectiveAspect = viewW / viewH
                     if (effectiveAspect > slotAspect) {
                         // Slot hẹp hơn Live View 16:9: Giữ chiều cao, co chiều rộng từ 2 bên vào giữa
-                        finalSrcH = viewH
-                        finalSrcW = Math.round(viewH * slotAspect)
+                        finalSrcH = Math.round(viewH / userScale)
+                        finalSrcW = Math.round((viewH * slotAspect) / userScale)
                         const slackX = (viewW - finalSrcW) / 2
+                        const slackY = (viewH - finalSrcH) / 2
                         finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
-                        finalSrcY = viewY
+                        finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     } else {
                         // Slot rộng hơn Live View 16:9: Giữ chiều rộng, co chiều cao
-                        finalSrcW = viewW
-                        finalSrcH = Math.round(viewW / slotAspect)
+                        finalSrcW = Math.round(viewW / userScale)
+                        finalSrcH = Math.round((viewW / slotAspect) / userScale)
+                        const slackX = (viewW - finalSrcW) / 2
                         const slackY = (viewH - finalSrcH) / 2
-                        finalSrcX = viewX
+                        finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
                         finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     }
+                    finalSrcX = Math.max(
+                        0,
+                        Math.min(img.width - finalSrcW, finalSrcX)
+                    )
+                    finalSrcY = Math.max(
+                        0,
+                        Math.min(img.height - finalSrcH, finalSrcY)
+                    )
                 }
 
                 ctx.drawImage(
@@ -415,8 +450,8 @@ export async function generateStripComposite(
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
 
-        // Tiêu đề sự kiện (Font Cute bo tròn)
-        ctx.font = '800 28px "Baloo 2", "Quicksand", sans-serif'
+        // Tiêu đề sự kiện
+        ctx.font = '800 28px "Google Sans Flex", "Inter", sans-serif'
         ctx.letterSpacing = '1px'
         ctx.fillText(
             opts.eventName || DEFAULT_EVENT_NAME,
@@ -425,7 +460,7 @@ export async function generateStripComposite(
         )
 
         // Ngày tháng & Bộ lọc
-        ctx.font = '700 16px "Quicksand", sans-serif'
+        ctx.font = '700 16px "Inter", sans-serif'
         ctx.letterSpacing = '0.5px'
         ctx.globalAlpha = 0.85
         ctx.fillText(
@@ -452,7 +487,17 @@ export function sampleImageEdgeColor(img: CanvasImageSource): string {
         sampleCanvas.height = 16
         const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true })
         if (!ctx) return '#FFFFFF'
-        ctx.drawImage(img, 0, 0, 16, 16)
+        const w = (img as any).naturalWidth || (img as any).width || 0
+        const h = (img as any).naturalHeight || (img as any).height || 0
+        if (w >= 32 && h >= 32) {
+            // Lấy đúng điểm ảnh ở sát 4 góc viền khung (cách mép 4px), tránh bị nội suy lẫn màu ảnh chân dung bên trong ô
+            ctx.drawImage(img, 4, 4, 1, 1, 0, 0, 1, 1)
+            ctx.drawImage(img, w - 5, 4, 1, 1, 15, 0, 1, 1)
+            ctx.drawImage(img, 4, h - 5, 1, 1, 0, 15, 1, 1)
+            ctx.drawImage(img, w - 5, h - 5, 1, 1, 15, 15, 1, 1)
+        } else {
+            ctx.drawImage(img, 0, 0, 16, 16)
+        }
 
         // 4 góc
         const corners = [
@@ -489,9 +534,11 @@ export async function preparePrintImageForDNP(
     const srcW = img.naturalWidth || img.width
     const srcH = img.naturalHeight || img.height
 
-    // Xác định tỉ lệ scale (mặc định 100% nếu không truyền hoặc đọc từ localStorage)
+    // Xác định tỉ lệ scale (mặc định DEFAULT_PRINT_SCALE = 95.50% nếu không truyền hoặc đọc từ localStorage)
     let effectiveScale =
-        typeof printScalePercent === 'number' ? printScalePercent : 100.0
+        typeof printScalePercent === 'number'
+            ? printScalePercent
+            : DEFAULT_PRINT_SCALE
     if (
         typeof printScalePercent !== 'number' &&
         typeof window !== 'undefined'
@@ -517,35 +564,49 @@ export async function preparePrintImageForDNP(
         canvas.height = 1800
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
 
         // Màu nền lấp viền lấy từ 4 góc ảnh
         const bgColor = sampleImageEdgeColor(img)
         ctx.fillStyle = bgColor
         ctx.fillRect(0, 0, 1200, 1800)
 
-        // Tính kích thước và vị trí căn giữa cho từng dải trong khổ 600x1800
+        // Ghép 2 dải 2x6 sát cạnh nhau tại trục cắt giữa x = 600 TRƯỚC thành khối 4x6 (1200x1800),
+        // RỒI mới scale đồng đều cả khối 1200x1800 theo scaleFactor (căn giữa tại tâm 600, 900).
+        // Cách này đảm bảo 2 mép ngoài cùng (trái/phải) có đủ lề bù ~27px (ở 95.5%) giống hệt khổ 4x6 để tránh dao xén ngoài của DNP cắt lẹm,
+        // đồng thời đường cắt 2-inch ở giữa (x = 600) không bị chừa rãnh viền thừa làm lệch tâm 2 dải.
         const targetStripW = Math.round(600 * scaleFactor)
         const targetStripH = Math.round(1800 * scaleFactor)
-        const leftColX = Math.round((600 - targetStripW) / 2)
-        const rightColX = 600 + Math.round((600 - targetStripW) / 2)
+        const offsetX = Math.round((1200 - targetStripW * 2) / 2)
         const offsetY = Math.round((1800 - targetStripH) / 2)
 
-        // Dải 1: Bên trái (căn giữa trong ô 0 -> 600 px)
-        ctx.drawImage(img, leftColX, offsetY, targetStripW, targetStripH)
+        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 600)
+        ctx.drawImage(img, offsetX, offsetY, targetStripW, targetStripH)
 
-        // Dải 2: Bên phải (căn giữa trong ô 600 -> 1200 px)
-        ctx.drawImage(img, rightColX, offsetY, targetStripW, targetStripH)
+        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 600)
+        ctx.drawImage(
+            img,
+            offsetX + targetStripW,
+            offsetY,
+            targetStripW,
+            targetStripH
+        )
 
-        // Đường chỉ dẫn cắt nhẹ ở giữa (đường chấm đứt rất mờ)
-        ctx.save()
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
-        ctx.lineWidth = 1
-        ctx.setLineDash([8, 8])
-        ctx.beginPath()
-        ctx.moveTo(600, 0)
-        ctx.lineTo(600, 1800)
-        ctx.stroke()
-        ctx.restore()
+        // Đường chỉ dẫn cắt nhẹ ở vùng lề trên & dưới (không vẽ đè lên thân khung ảnh tránh vết chấm mực dọc cạnh cắt)
+        if (offsetY > 2) {
+            ctx.save()
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)'
+            ctx.lineWidth = 1
+            ctx.setLineDash([4, 4])
+            ctx.beginPath()
+            ctx.moveTo(600, 0)
+            ctx.lineTo(600, offsetY)
+            ctx.moveTo(600, offsetY + targetStripH)
+            ctx.lineTo(600, 1800)
+            ctx.stroke()
+            ctx.restore()
+        }
 
         return canvas.toDataURL('image/jpeg', 0.98)
     }
@@ -562,6 +623,8 @@ export async function preparePrintImageForDNP(
     canvas.height = srcH
     const ctx = canvas.getContext('2d')
     if (!ctx) return sourceDataUrl
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
 
     const bgColor = sampleImageEdgeColor(img)
     ctx.fillStyle = bgColor

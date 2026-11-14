@@ -33,7 +33,7 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
                     strokeWidth={2.2}
                     color="var(--brand-primary, #502A1D)"
                 />
-                <span>In Ảnh</span>
+                <span>In ảnh</span>
             </div>
 
             <div className="print-copies-row">
@@ -58,6 +58,7 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                     <button
                         className="copies-btn-pastel"
+                        aria-label="Giảm số bản in"
                         onClick={() => {
                             const step = selectedFrameSize === '2x6' ? 2 : 1
                             const min = selectedFrameSize === '2x6' ? 2 : 1
@@ -83,6 +84,7 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
                     </span>
                     <button
                         className="copies-btn-pastel"
+                        aria-label="Tăng số bản in"
                         onClick={() => {
                             const step = selectedFrameSize === '2x6' ? 2 : 1
                             onSetPrintCopies((c) => Math.min(12, c + step))

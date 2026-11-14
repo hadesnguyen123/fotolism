@@ -3,7 +3,7 @@ import type { FrameSize, GridLayoutItem } from '../../config/layouts'
 import { ALL_LAYOUTS } from '../../config/layouts'
 import type { ThemeItem } from '../../config/themes'
 import { THEME_OPTIONS } from '../../config/themes'
-import type { PlacedSticker } from '../../config/stickers'
+import type { PlacedSticker } from './layoutThemeSlice'
 import type { ColorFilterItem } from '../../config/filters'
 import { COLOR_FILTERS } from '../../config/filters'
 import { BEAUTY_PRESETS } from '../../services/beautyEngine'
@@ -16,6 +16,7 @@ export interface CapturedPhoto {
     rawPath: string
     enhancedPath: string
     compositedPath: string
+    enhanceStatus?: 'pending' | 'processed' | 'failed'
     timestamp: number
 }
 
@@ -32,7 +33,6 @@ export interface SessionState {
     timelapseUrl: string | null
     timelapseDataUrl?: string | null
     compositeStripUrl?: string | null
-    gdriveUrl: string | null
     storageUrl?: string | null
     customerName?: string | null
     customerPhone?: string | null
@@ -52,7 +52,7 @@ export function generateSessionId(): string {
 
 export interface SessionSlice {
     session: SessionState | null
-    startNewSession: () => void
+    startNewSession: (customSessionId?: string) => void
     addPhoto: (photo: CapturedPhoto) => void
     setSessionPhotos: (photos: CapturedPhoto[]) => void
     setSelfboothLibrary: (photos: CapturedPhoto[]) => void
@@ -61,7 +61,6 @@ export interface SessionSlice {
     clearSession: () => void
     setQr: (url: string, imagePath: string) => void
     setTimelapseUrl: (url: string | null, dataUrl?: string | null) => void
-    setGdriveUrl: (url: string | null) => void
     setStorageUrl: (url: string | null) => void
     setCustomerInfo: (info: {
         customerName?: string | null
@@ -74,15 +73,15 @@ export interface SessionSlice {
     startPhotoboothSessionTimer: (seconds?: number) => void
     clearPhotoboothSessionTimer: () => void
 
-    // Google Drive session sync state
-    isSyncingDrive: boolean
-    driveSyncDone: boolean
-    driveSyncError: string | null
-    cloudFolderUrl: string | null
-    setIsSyncingDrive: (val: boolean) => void
-    setDriveSyncDone: (val: boolean) => void
-    setDriveSyncError: (err: string | null) => void
-    setCloudFolderUrl: (url: string | null) => void
+    // Cloud Gallery session sync state
+    isSyncingMedia: boolean
+    mediaSyncDone: boolean
+    mediaSyncError: string | null
+    galleryUrl: string | null
+    setIsSyncingMedia: (val: boolean) => void
+    setMediaSyncDone: (val: boolean) => void
+    setMediaSyncError: (err: string | null) => void
+    setGalleryUrl: (url: string | null) => void
     compositeStripUrl: string | null
     setCompositeStripUrl: (url: string | null) => void
     slotOffsets: SlotOffset[]
@@ -104,17 +103,17 @@ export const createSessionSlice: StateCreator<
 > = (set, get) => ({
     session: null,
     photoboothSessionEndTime: null,
-    isSyncingDrive: false,
-    driveSyncDone: false,
-    driveSyncError: null,
-    cloudFolderUrl: null,
+    isSyncingMedia: false,
+    mediaSyncDone: false,
+    mediaSyncError: null,
+    galleryUrl: null,
     compositeStripUrl: null,
     slotOffsets: [],
 
-    setIsSyncingDrive: (isSyncingDrive) => set({ isSyncingDrive }),
-    setDriveSyncDone: (driveSyncDone) => set({ driveSyncDone }),
-    setDriveSyncError: (driveSyncError) => set({ driveSyncError }),
-    setCloudFolderUrl: (cloudFolderUrl) => set({ cloudFolderUrl }),
+    setIsSyncingMedia: (isSyncingMedia) => set({ isSyncingMedia }),
+    setMediaSyncDone: (mediaSyncDone) => set({ mediaSyncDone }),
+    setMediaSyncError: (mediaSyncError) => set({ mediaSyncError }),
+    setGalleryUrl: (galleryUrl) => set({ galleryUrl }),
     setCompositeStripUrl: (compositeStripUrl) =>
         set((state: any) => ({
             compositeStripUrl,
@@ -130,12 +129,12 @@ export const createSessionSlice: StateCreator<
                 : state.session,
         })),
 
-    startPhotoboothSessionTimer: (seconds = 240) =>
+    startPhotoboothSessionTimer: (seconds = 150) =>
         set({ photoboothSessionEndTime: Date.now() + seconds * 1000 }),
     clearPhotoboothSessionTimer: () => set({ photoboothSessionEndTime: null }),
 
-    startNewSession: () => {
-        const sId = generateSessionId()
+    startNewSession: (customSessionId?: string) => {
+        const sId = customSessionId || generateSessionId()
         const defaultLayout = ALL_LAYOUTS[4][0]
         set({
             session: {
@@ -148,11 +147,10 @@ export const createSessionSlice: StateCreator<
                 qrUrl: null,
                 qrImagePath: null,
                 timelapseUrl: null,
-                gdriveUrl: null,
                 storageUrl: null,
                 customerName: null,
                 customerPhone: null,
-                pinCode: null,
+                pinCode: customSessionId || null,
                 paidAmount: 0,
                 paidCopies: 2,
                 paymentMethod: null,
@@ -161,10 +159,10 @@ export const createSessionSlice: StateCreator<
                 slotOffsets: [],
             },
             photoboothSessionEndTime: null,
-            isSyncingDrive: false,
-            driveSyncDone: false,
-            driveSyncError: null,
-            cloudFolderUrl: null,
+            isSyncingMedia: false,
+            mediaSyncDone: false,
+            mediaSyncError: null,
+            galleryUrl: null,
             compositeStripUrl: null,
             slotOffsets: [],
             ...(set as any)({
@@ -192,7 +190,6 @@ export const createSessionSlice: StateCreator<
                 qrUrl: null,
                 qrImagePath: null,
                 timelapseUrl: null,
-                gdriveUrl: null,
                 storageUrl: null,
                 customerName: null,
                 customerPhone: null,
@@ -224,7 +221,6 @@ export const createSessionSlice: StateCreator<
                 qrUrl: null,
                 qrImagePath: null,
                 timelapseUrl: null,
-                gdriveUrl: null,
                 storageUrl: null,
                 customerName: null,
                 customerPhone: null,
@@ -286,10 +282,10 @@ export const createSessionSlice: StateCreator<
         set({
             session: null,
             photoboothSessionEndTime: null,
-            isSyncingDrive: false,
-            driveSyncDone: false,
-            driveSyncError: null,
-            cloudFolderUrl: null,
+            isSyncingMedia: false,
+            mediaSyncDone: false,
+            mediaSyncError: null,
+            galleryUrl: null,
             compositeStripUrl: null,
             slotOffsets: [],
             ...(set as any)({
@@ -338,13 +334,6 @@ export const createSessionSlice: StateCreator<
                 : state.session,
         })),
 
-    setGdriveUrl: (url) =>
-        set((state) => ({
-            session: state.session
-                ? { ...state.session, gdriveUrl: url }
-                : state.session,
-        })),
-
     setStorageUrl: (url) =>
         set((state) => ({
             session: state.session
@@ -357,6 +346,10 @@ export const createSessionSlice: StateCreator<
             session: state.session
                 ? {
                       ...state.session,
+                      sessionId:
+                          info.pinCode && info.pinCode.trim().length > 0
+                              ? info.pinCode.trim()
+                              : state.session.sessionId,
                       customerName:
                           info.customerName !== undefined
                               ? info.customerName

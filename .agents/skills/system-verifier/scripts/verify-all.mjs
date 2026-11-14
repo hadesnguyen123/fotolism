@@ -20,9 +20,7 @@ function addResult(subsystem, testName, passed, details) {
 
 // Tìm đúng thư mục CMS (cms)
 function getCmsDir() {
-  if (fs.existsSync(path.join(ROOT_DIR, 'cms'))) return 'cms'
-  if (fs.existsSync(path.join(ROOT_DIR, 'fotolism'))) return 'fotolism'
-  return 'joybooth-cms'
+  return 'cms'
 }
 
 // 1. Kiểm tra cấu hình Cổng (Port Partitioning)
@@ -86,7 +84,7 @@ function checkReconciliationModule() {
   try {
     const cmsDir = getCmsDir()
     const enginePath = path.join(ROOT_DIR, `${cmsDir}/src/lib/reconciliation/engine.ts`)
-    const testPath = path.join(ROOT_DIR, `${cmsDir}/tests/reconciliation.test.ts`)
+    const testPath = path.join(ROOT_DIR, `${cmsDir}/tests/priority2-system.test.ts`)
 
     const hasEngine = fs.existsSync(enginePath)
     const hasTest = fs.existsSync(testPath)
@@ -96,10 +94,10 @@ function checkReconciliationModule() {
         'RECONCILIATION',
         'Module Đối soát 3 góc & Unit Tests',
         true,
-        'Engine pure TypeScript sẵn sàng kèm test suite Vitest (đối soát bill vs bank vs giấy in)'
+        'Engine pure TypeScript sẵn sàng kèm test suite Vitest (priority2-system.test.ts)'
       )
     } else {
-      addResult('RECONCILIATION', 'Module Đối soát', false, 'Thiếu engine.ts hoặc reconciliation.test.ts')
+      addResult('RECONCILIATION', 'Module Đối soát', false, 'Thiếu engine.ts hoặc priority2-system.test.ts')
     }
   } catch (err) {
     addResult('RECONCILIATION', 'Kiểm tra Đối soát', false, err.message)
@@ -170,18 +168,50 @@ function checkFotolism3Features() {
 
     if (hasDb && hasOverhead) {
       const dbCode = fs.readFileSync(dbPath, 'utf-8')
-      const hasTables = dbCode.includes('Sessions') && dbCode.includes('Captures') && dbCode.includes('PrintJobs')
+      const hasTables =
+        dbCode.includes('Sessions') &&
+        dbCode.includes('Captures') &&
+        dbCode.includes('MediaFiles') &&
+        dbCode.includes('PrintJobs') &&
+        dbCode.includes('UploadTasks')
       addResult(
         'FOTOLISM_3_CORE',
-        'SQLite Session DB & Overhead Multi-Monitor',
+        'SQLite Session DB (5 bảng) & Overhead Multi-Monitor',
         hasTables,
-        'Cơ sở dữ liệu SQLite Sessions/Captures/Prints và màn hình phụ Overhead sẵn sàng'
+        'Cơ sở dữ liệu SQLite Sessions/Captures/MediaFiles/PrintJobs/UploadTasks và Overhead sẵn sàng'
       )
     } else {
       addResult('FOTOLISM_3_CORE', 'Tính năng Fotolism 3.0', false, 'Thiếu sessionDatabase.cts hoặc OverheadScreen.tsx')
     }
   } catch (err) {
     addResult('FOTOLISM_3_CORE', 'Kiểm tra tính năng 3.0', false, err.message)
+  }
+}
+
+// 7. Kiểm tra AI Beauty Service & Cloudflare R2 Upload Worker
+function checkAiAndR2Pipeline() {
+  try {
+    const aiMain = path.join(ROOT_DIR, 'desktop/ai-service/main.py')
+    const beautyEngine = path.join(ROOT_DIR, 'desktop/ai-service/core/korean_beauty_engine.py')
+    const r2Worker = path.join(ROOT_DIR, 'desktop/electron/r2UploadWorker.cts')
+    const aiQueue = path.join(ROOT_DIR, 'desktop/electron/aiEnhanceQueue.cts')
+
+    const ok =
+      fs.existsSync(aiMain) &&
+      fs.existsSync(beautyEngine) &&
+      fs.existsSync(r2Worker) &&
+      fs.existsSync(aiQueue)
+
+    addResult(
+      'AI_AND_R2',
+      'AI Beauty Service (8000) & R2 Upload Worker',
+      ok,
+      ok
+        ? 'FastAPI Korean Beauty Engine, AiEnhanceQueue và R2UploadWorker sẵn sàng'
+        : 'Thiếu file cốt lõi trong desktop/ai-service hoặc r2UploadWorker/aiEnhanceQueue'
+    )
+  } catch (err) {
+    addResult('AI_AND_R2', 'Kiểm tra AI & R2', false, err.message)
   }
 }
 
@@ -192,11 +222,12 @@ checkReconciliationModule()
 checkDesktopKioskStructure()
 checkCanonDaemon()
 checkFotolism3Features()
+checkAiAndR2Pipeline()
 
 console.log('='.repeat(65))
 const passCount = results.filter((r) => r.passed).length
 const totalCount = results.length
-console.log(`📊 KẾT QUẢ TỔNG QUAN: ${passCount}/${totalCount} BÀI KIỂM TRA THÀNH CÔNG (${Math.round((passCount/totalCount)*100)}%)`)
+console.log(`📊 KẾT QUẢ TỔNG QUAN: ${passCount}/${totalCount} BÀI KIỂM TRA THÀNH CÔNG (${Math.round((passCount / totalCount) * 100)}%)`)
 console.log('='.repeat(65))
 
 if (passCount === totalCount) {

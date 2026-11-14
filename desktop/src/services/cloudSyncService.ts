@@ -24,7 +24,6 @@ export interface KioskOutboxSession {
     coupon_code?: string | null
     paper_consumed: number
     storage_url?: string | null
-    drive_url?: string | null
     status: 'completed' | 'cancelled'
     created_at: string
     sync_status: 'SYNCED' | 'PENDING_SYNC'
@@ -442,7 +441,7 @@ class CloudSyncService {
         const sessions = this.getOutboxSessions()
         const kept = sessions.filter((s) => {
             const time = new Date(s.created_at).getTime()
-            return isNaN(time) || time >= cutoff
+            return s.sync_status === 'PENDING_SYNC' || isNaN(time) || time >= cutoff
         })
         const removedCount = sessions.length - kept.length
         if (removedCount > 0) {
@@ -488,6 +487,7 @@ class CloudSyncService {
         syncedCount: number
         message: string
     }> {
+        if (this.status.isSyncing) return { success: false, syncedCount: 0, message: 'Đang đồng bộ' }
         const sessions = this.getOutboxSessions()
         const pending = sessions.filter((s) => s.sync_status === 'PENDING_SYNC')
 
@@ -530,8 +530,7 @@ class CloudSyncService {
                     payment_method: s.payment_method,
                     coupon_code: s.coupon_code || null,
                     paper_consumed: s.paper_consumed,
-                    storage_url: s.storage_url || s.drive_url || null,
-                    drive_url: s.storage_url || s.drive_url || null,
+                    storage_url: s.storage_url || null,
                     status: s.status || 'completed',
                     created_at: s.created_at,
                 })),
@@ -544,6 +543,7 @@ class CloudSyncService {
                     Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(15000),
             })
 
             if (res.status === 401) {
@@ -568,8 +568,10 @@ class CloudSyncService {
 
             // Đánh dấu các phiên đã gửi thành SYNCED
             const pendingIds = new Set(pending.map((p) => p.id))
-            const updatedSessions = sessions.map((s) => {
-                if (pendingIds.has(s.id)) {
+            if (body?.success !== true) throw new Error(body?.error || 'CMS chưa xác nhận đồng bộ')
+            const sent = new Map(pending.map((s) => [s.id, JSON.stringify(s)]))
+            const updatedSessions = this.getOutboxSessions().map((s) => {
+                if (pendingIds.has(s.id) && sent.get(s.id) === JSON.stringify(s)) {
                     return {
                         ...s,
                         sync_status: 'SYNCED' as const,
