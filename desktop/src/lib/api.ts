@@ -46,7 +46,8 @@ export interface FotolismAPI {
             beautyLevel?: number,
             presetId?: string,
             styleId?: string,
-            outputPath?: string
+            outputPath?: string,
+            cropAspect?: string
         ) => IpcResponse<{ enhancedPath: string }>
         composite: (
             imagePath: string,
@@ -231,7 +232,8 @@ const defaultMockApi: FotolismAPI = {
             level?: number,
             _presetId?: string,
             _styleId?: string,
-            outputPath?: string
+            outputPath?: string,
+            _cropAspect?: string
         ) => ({
             success: true,
             data: {

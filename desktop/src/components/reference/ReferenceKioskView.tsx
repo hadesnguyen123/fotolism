@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { DEFAULT_ACCOUNT_NUMBER, DEFAULT_BANK_BIN } from '../../lib/constants';
+import { generateVietQrSvgDataUrl } from '../../lib/vietqr';
 import './fonts.css';
 import './reference.css';
 
@@ -272,6 +274,7 @@ export interface ReferenceProps {
   onOffsets?: (offsets: { x: number; y: number }[]) => void;
   finishReady?: boolean;
   delivery?: React.ReactNode;
+  portrait?: boolean;
 }
 function useReferenceState<T>(props: ReferenceProps, name: string, initial: T | (() => T)): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [local, setLocal] = useState(initial);
@@ -314,6 +317,8 @@ export default function ReferenceKioskView(props: ReferenceProps) {
     null,
   ]);
   const [isFlashing] = useReferenceState<boolean>(props, "isFlashing", false);
+  const [remainingDeletes] = useReferenceState<number>(props, "remainingDeletes", 2);
+  const canDeletePhoto = remainingDeletes > 0;
 
   // Screen 6: Frame & Filter state
   const [selectedFrameIdx, setSelectedFrameIdx] = useReferenceState<number>(props, "selectedFrameIdx", 0);
@@ -342,6 +347,11 @@ export default function ReferenceKioskView(props: ReferenceProps) {
     const updateViewport = () => {
       const vw = Math.max(window.innerWidth, 320);
       const vh = Math.max(window.innerHeight, 240);
+      if (props.portrait) {
+        const scale = Math.min(vw / 1080, vh / 1920);
+        setViewport({ scale, stageW: 1080, stageH: 1920 });
+        return;
+      }
       const scale = Math.min(vw / 1920, vh / 1080);
       const stageW = Math.round(vw / scale);
       const stageH = Math.round(vh / scale);
@@ -350,7 +360,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
     updateViewport();
     window.addEventListener('resize', updateViewport);
     return () => window.removeEventListener('resize', updateViewport);
-  }, []);
+  }, [props.portrait]);
 
   const extraUnits = Math.max(
     0,
@@ -417,7 +427,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
 
   return (
     <div
-      className={`reference-kiosk fotolism-viewport ${isDarkScreen ? 'theme-dark' : 'theme-light'}`}
+      className={`reference-kiosk fotolism-viewport ${isDarkScreen ? 'theme-dark' : 'theme-light'} ${props.portrait ? 'portrait-916' : ''}`}
       onPointerMove={handleGlobalMouseMove}
       onPointerUp={handleGlobalMouseUp}
       onPointerCancel={handleGlobalMouseUp}
@@ -492,8 +502,10 @@ export default function ReferenceKioskView(props: ReferenceProps) {
               style={{
                 position: 'absolute',
                 left: '50%',
-                transform: 'translateX(-50%)',
-                top: 184.05,
+                transform: props.portrait
+                  ? 'translate(-50%, -50%) scale(0.76)'
+                  : 'translateX(-50%)',
+                top: props.portrait ? '50%' : 184.05,
                 width: 1311.126,
                 display: 'flex',
                 flexDirection: 'column',
@@ -1885,18 +1897,35 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   }}
                   data-node-id="13:1635"
                 >
-                  {props.qrUrl && (
-                    <img
-                      alt="Mã QR thanh toán"
-                      src={props.qrUrl}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        display: 'block',
-                      }}
-                    />
-                  )}
+                  {(() => {
+                    const fallbackQrDataUrl = generateVietQrSvgDataUrl(
+                      DEFAULT_BANK_BIN,
+                      props.bank?.account || DEFAULT_ACCOUNT_NUMBER,
+                      finalTotal,
+                      props.bank?.code ? `SEVQR TKPNVF ${props.bank.code}` : ''
+                    );
+                    const effectiveQrUrl = props.qrUrl || fallbackQrDataUrl;
+                    return effectiveQrUrl ? (
+                      <img
+                        alt="Mã QR thanh toán"
+                        src={effectiveQrUrl}
+                        onError={(e) => {
+                          if (
+                            fallbackQrDataUrl &&
+                            e.currentTarget.src !== fallbackQrDataUrl
+                          ) {
+                            e.currentTarget.src = fallbackQrDataUrl;
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          display: 'block',
+                        }}
+                      />
+                    ) : null;
+                  })()}
                 </div>
                 <p
                   style={{
@@ -1968,14 +1997,17 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 <p
                   style={{
                     position: 'absolute',
-                    left: 223.38,
-                    top: 99,
-                    width: 310,
+                    left: 205,
+                    top: 101,
+                    width: 345,
                     fontFamily: 'var(--font-sans)',
                     fontWeight: 600,
-                    fontSize: 25,
+                    fontSize: 22,
                     lineHeight: 1.4,
                     color: '#653125',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
                   data-node-id="13:1640"
                 >
@@ -2426,14 +2458,27 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                       return (
                         <div
                           key={slotIdx}
-                          onClick={() => triggerCaptureSlot(slotIdx)}
-                          title="Chạm để chụp / chụp lại ô này"
+                          onClick={() => {
+                            if (!isCaptured || canDeletePhoto) {
+                              triggerCaptureSlot(slotIdx);
+                            }
+                          }}
+                          title={
+                            isCaptured
+                              ? canDeletePhoto
+                                ? `Chạm để xóa và chụp lại ô này (còn ${remainingDeletes} lượt xóa)`
+                                : 'Chỉ được xóa tối đa 2 ảnh trong dải ảnh chụp'
+                              : 'Chạm để chụp / chụp lại ô này'
+                          }
                           style={{
                             width: '100%',
                             height: '100%',
                             background: '#fdf5ed',
                             overflow: 'hidden',
-                            cursor: 'pointer',
+                            cursor:
+                              isCaptured && !canDeletePhoto
+                                ? 'not-allowed'
+                                : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -2487,14 +2532,27 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                       return (
                         <div
                           key={slotIdx}
-                          onClick={() => triggerCaptureSlot(slotIdx)}
-                          title="Chạm để chụp / chụp lại ô này"
+                          onClick={() => {
+                            if (!isCaptured || canDeletePhoto) {
+                              triggerCaptureSlot(slotIdx);
+                            }
+                          }}
+                          title={
+                            isCaptured
+                              ? canDeletePhoto
+                                ? `Chạm để xóa và chụp lại ô này (còn ${remainingDeletes} lượt xóa)`
+                                : 'Chỉ được xóa tối đa 2 ảnh trong dải ảnh chụp'
+                              : 'Chạm để chụp / chụp lại ô này'
+                          }
                           style={{
                             width: '100%',
                             height: '100%',
                             background: '#fdf5ed',
                             overflow: 'hidden',
-                            cursor: 'pointer',
+                            cursor:
+                              isCaptured && !canDeletePhoto
+                                ? 'not-allowed'
+                                : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -2559,8 +2617,18 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                       return (
                         <div
                           key={slotIdx}
-                          onClick={() => triggerCaptureSlot(slotIdx)}
-                          title="Chạm để chụp / chụp lại ô này"
+                          onClick={() => {
+                            if (!isCaptured || canDeletePhoto) {
+                              triggerCaptureSlot(slotIdx);
+                            }
+                          }}
+                          title={
+                            isCaptured
+                              ? canDeletePhoto
+                                ? `Chạm để xóa và chụp lại ô này (còn ${remainingDeletes} lượt xóa)`
+                                : 'Chỉ được xóa tối đa 2 ảnh trong dải ảnh chụp'
+                              : 'Chạm để chụp / chụp lại ô này'
+                          }
                           style={{
                             position: 'absolute',
                             left: 68.5,
@@ -2569,7 +2637,10 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                             height: 95.5,
                             background: '#fdf5ed',
                             overflow: 'hidden',
-                            cursor: 'pointer',
+                            cursor:
+                              isCaptured && !canDeletePhoto
+                                ? 'not-allowed'
+                                : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

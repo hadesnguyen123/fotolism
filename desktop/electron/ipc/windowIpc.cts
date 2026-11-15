@@ -284,11 +284,25 @@ export function registerWindowAndConfigIpc(): void {
                 beautyLevel?: number
                 presetId?: string
                 styleId?: string
+                cropAspect?: string
             }
         ) => {
             try {
+                const effectiveCropAspect =
+                    payload.cropAspect ||
+                    (payload.outputPath &&
+                    path
+                        .basename(payload.outputPath)
+                        .startsWith('fotolism_enhanced_self_')
+                        ? '3:4'
+                        : undefined)
+
                 // Natural capture preserves the original JPEG bytes and avoids Python startup/inference.
-                if ((payload.beautyLevel ?? 50) === 0 && (!payload.styleId || payload.styleId === 'natural')) {
+                if (
+                    (payload.beautyLevel ?? 50) === 0 &&
+                    (!payload.styleId || payload.styleId === 'natural') &&
+                    !effectiveCropAspect
+                ) {
                     const source = path.resolve(payload.imagePath.replace(/^file:\/\//, ''))
                     if (!fs.existsSync(source)) throw new Error('Không tìm thấy ảnh gốc')
                     const target = payload.outputPath ? path.resolve(payload.outputPath) : source
@@ -302,6 +316,7 @@ export function registerWindowAndConfigIpc(): void {
                     path.resolve(payload.imagePath.replace(/^file:\/\//, '')),
                     payload.outputPath, payload.beautyLevel ?? 50,
                     payload.presetId || 'white_pink_v2', payload.styleId || 'natural',
+                    effectiveCropAspect || '',
                 ])
                 return await aiEnhanceQueue.run(key, async () => {
                 if (!(await ensureAiService())) throw new Error('AI Service chưa sẵn sàng')
@@ -314,6 +329,7 @@ export function registerWindowAndConfigIpc(): void {
                         beautyLevel: payload.beautyLevel ?? 50,
                         presetId: payload.presetId || 'white_pink_v2',
                         styleId: payload.styleId || 'natural',
+                        cropAspect: effectiveCropAspect,
                     }),
                     // Starts only once this job reaches the front of the queue.
                     signal: AbortSignal.timeout(180000),

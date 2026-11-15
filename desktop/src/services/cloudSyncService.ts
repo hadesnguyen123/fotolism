@@ -208,6 +208,38 @@ class CloudSyncService {
         this.listeners.forEach((l) => l(current))
     }
 
+    private remoteCommandListeners = new Set<(cmd: any) => void>()
+    private processedCommandIds = new Set<string>()
+    private processedTicketIds = new Set<string>()
+
+    public subscribeRemoteCommand(listener: (cmd: any) => void): () => void {
+        this.remoteCommandListeners.add(listener)
+        return () => this.remoteCommandListeners.delete(listener)
+    }
+
+    public async acknowledgeRemoteCommand(
+        commandId: string,
+        status: 'acknowledged' | 'failed',
+        errorMessage?: string
+    ): Promise<boolean> {
+        const token = this.getBearerToken()
+        if (!token) return false
+        const cmsUrl = this.getCmsUrl()
+        try {
+            const res = await fetch(`${cmsUrl}/api/kiosk/commands/ack`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ commandId, status, errorMessage }),
+            })
+            return res.ok
+        } catch {
+            return false
+        }
+    }
+
     private refreshPendingCount() {
         const sessions = this.getOutboxSessions()
         this.status.pendingCount = sessions.filter(
@@ -335,6 +367,34 @@ class CloudSyncService {
                 body.data.latest_config_version > this.status.configVersion
             ) {
                 await this.fetchAndApplyConfig(body.data.latest_config_version)
+            }
+
+            // Xử lý lệnh điều khiển từ xa (Mở máy Selfbooth từ CMS POS)
+            const commands = Array.isArray(body?.data?.commands)
+                ? body.data.commands
+                : []
+            for (const cmd of commands) {
+                if (cmd?.type !== 'START_SELFBOOTH_SESSION') continue
+                if (
+                    this.processedCommandIds.has(cmd.id) ||
+                    (cmd.ticket_id && this.processedTicketIds.has(cmd.ticket_id))
+                ) {
+                    // Idempotent: đã nhận trước đó -> xác nhận lại mà không kích hoạt trùng
+                    await this.acknowledgeRemoteCommand(cmd.id, 'acknowledged')
+                    continue
+                }
+                if (this.remoteCommandListeners.size === 0) {
+                    await this.acknowledgeRemoteCommand(
+                        cmd.id,
+                        'failed',
+                        'Máy Selfbooth đang có phiên chụp khác hoạt động'
+                    )
+                    continue
+                }
+                this.processedCommandIds.add(cmd.id)
+                if (cmd.ticket_id) this.processedTicketIds.add(cmd.ticket_id)
+                this.remoteCommandListeners.forEach((listener) => listener(cmd))
+                await this.acknowledgeRemoteCommand(cmd.id, 'acknowledged')
             }
 
             this.notify()

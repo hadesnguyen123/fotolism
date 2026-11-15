@@ -28,6 +28,7 @@ import {
 import { Camera, Palette, Loader2, Clock } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
+import { formatLocalSessionFolder } from '../lib/pinUtils'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
 function playCameraShutterSound() {
@@ -174,12 +175,9 @@ export default function CaptureScreen() {
         null
     )
 
-    // ── Session ID cho Fotolism 2.2 SQLite & Idempotency ──
-    const [sessionId] = useState<string>(
-        () =>
-            session?.pinCode ||
-            session?.sessionId ||
-            `session_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    // ── Session ID cho Fotolism 2.2 SQLite & Idempotency (session_<mã pin>) ──
+    const [sessionId] = useState<string>(() =>
+        formatLocalSessionFolder(session?.pinCode || session?.sessionId)
     )
 
     // ── Chế độ PHOTOBOOTH CỔ ĐIỂN (Có Retake / Xóa ô xấu) ──
@@ -189,10 +187,16 @@ export default function CaptureScreen() {
     const slotsRef = useRef<(CapturedPhoto | null)[]>(slots)
     slotsRef.current = slots
     const [retakeSlotIndex, setRetakeSlotIndex] = useState<number | null>(null)
-    // Số lần đã xóa chụp lại của từng ô (mỗi ô tối đa 2 lần xóa)
+    // Số lần đã xóa chụp lại trong dải ảnh (tối đa xóa 2 ảnh trong toàn bộ dải ảnh chụp)
     const [slotDeleteCounts, setSlotDeleteCounts] = useState<
         Record<number, number>
     >({})
+    const slotDeleteCountsRef = useRef<Record<number, number>>({})
+    slotDeleteCountsRef.current = slotDeleteCounts
+    const totalDeletedPhotos = Object.values(slotDeleteCounts).reduce(
+        (sum, count) => sum + count,
+        0
+    )
     // Giới hạn lượt chụp lại: chỉ chụp lại từ đầu tối đa 1 lần
     const [sessionResetCount, setSessionResetCount] = useState<number>(0)
     // Trạng thái chờ xử lý AI Enhance trước khi chuyển sang màn hình Chọn Theme/Frame
@@ -231,10 +235,26 @@ export default function CaptureScreen() {
     )
     const selfboothLibraryRef = useRef(selfboothLibrary)
     selfboothLibraryRef.current = selfboothLibrary
+    const activeSessionIdRef = useRef(sessionId)
+    activeSessionIdRef.current = sessionId
     const [isCanonDaemonActive, setIsCanonDaemonActive] =
         useState<boolean>(false)
     const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false)
     const [isFlashCoolingDown, setIsFlashCoolingDown] = useState<boolean>(false)
+    const [selectedSelfboothPreviewId, setSelectedSelfboothPreviewId] =
+        useState<string | null>(null)
+    const selfboothGalleryRef = useRef<HTMLDivElement | null>(null)
+
+    useEffect(() => {
+        if (!isSelfboothMode || selfboothLibrary.length === 0) return
+        setSelectedSelfboothPreviewId(null)
+        requestAnimationFrame(() => {
+            if (selfboothGalleryRef.current) {
+                selfboothGalleryRef.current.scrollLeft =
+                    selfboothGalleryRef.current.scrollWidth
+            }
+        })
+    }, [isSelfboothMode, selfboothLibrary.length])
 
     // Khởi động Camera thiết bị
     const startCamera = useCallback(
@@ -489,21 +509,35 @@ export default function CaptureScreen() {
 
     const finishSelfboothRef = useRef<() => void>(() => {})
 
-    // Tự động kích hoạt phiên Selfbooth khi vào màn hình (không giới hạn thời gian)
+    // Tự động kích hoạt phiên Selfbooth hoặc đồng hồ giới hạn thời gian theo gói mã PIN CMS (5p/7p/10p)
     useEffect(() => {
         if (isSelfboothMode) {
             setIsSelfboothRunning(true)
             setIsSessionActive(true)
+        } else {
+            const state = useAppStore.getState()
+            if (!state.photoboothSessionEndTime) {
+                state.startPhotoboothSessionTimer(
+                    session?.durationSeconds || undefined
+                )
+            }
         }
-    }, [isSelfboothMode])
+    }, [isSelfboothMode, session?.durationSeconds])
 
-    // Đồng hồ đếm ngược thời gian chụp Selfbooth (05:00 -> 00:00). Hết giờ tự động out ra review
+    // Đồng hồ đếm ngược thời gian chụp Selfbooth theo gói trên mã PIN CMS (5p / 7p / 10p -> 00:00). Hết giờ tự động out ra review
     const totalDuration =
+        (session?.durationSeconds && session.durationSeconds > 0
+            ? session.durationSeconds
+            : null) ||
         eventConfig.selfboothDurationSeconds ||
         DEFAULT_SELFBOOTH_DURATION_SECONDS
     const [selfboothSecondsLeft, setSelfboothSecondsLeft] =
         useState<number>(totalDuration)
     const isAutoFinishingRef = useRef<boolean>(false)
+
+    useEffect(() => {
+        setSelfboothSecondsLeft(totalDuration)
+    }, [totalDuration, session?.sessionId])
 
     useEffect(() => {
         if (!isSelfboothMode || !isSelfboothRunning) return
@@ -818,20 +852,28 @@ export default function CaptureScreen() {
         }
     }
 
-    // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (mỗi ô tối đa 2 lần xóa)
+    // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (chỉ được xóa tối đa 2 ảnh trong dải ảnh chụp)
     function handleDeleteSlot(indexToDelete: number) {
         if (isCapturingShot) return
+        if (!slotsRef.current[indexToDelete]) return
 
-        const currentCount = slotDeleteCounts[indexToDelete] || 0
-        if (currentCount >= 2) return
+        const totalUsed = Object.values(slotDeleteCountsRef.current).reduce(
+            (sum, count) => sum + count,
+            0
+        )
+        if (totalUsed >= 2) return
 
-        setSlotDeleteCounts((prev) => ({
-            ...prev,
+        const currentCount = slotDeleteCountsRef.current[indexToDelete] || 0
+        const nextCounts = {
+            ...slotDeleteCountsRef.current,
             [indexToDelete]: currentCount + 1,
-        }))
+        }
+        slotDeleteCountsRef.current = nextCounts
+        setSlotDeleteCounts(nextCounts)
 
-        const nextSlots = [...slots]
+        const nextSlots = [...slotsRef.current]
         nextSlots[indexToDelete] = null
+        slotsRef.current = nextSlots
         setSlots(nextSlots)
         setRetakeSlotIndex(indexToDelete)
     }
@@ -1051,12 +1093,13 @@ export default function CaptureScreen() {
         setIsFlashCoolingDown(true)
 
         try {
+            const capturedSessionId = sessionId
             const timestamp = Date.now()
             const photoNum = selfboothLibrary.length + 1
             const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
-            const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+            const rawSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\raw\\${rawFileName}`
             const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
-            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
+            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\final\\${enhancedFileName}`
             const selfApi = isBrowser ? mockApi : fotolismApi
 
             // ── BỎ HOÀN TOÀN COUNTDOWN: BẮT ẢNH TỨC THÌ (< 50ms) ──────────────
@@ -1082,11 +1125,23 @@ export default function CaptureScreen() {
             const photoPath =
                 photoDataUrl || `selfbooth_${timestamp}_${photoNum}.jpg`
 
+            // Giai đoạn 1 (< 1s): Tạo bản xem trước tỷ lệ dọc 3:4 (3 ngang, 4 dọc) ngay lập tức, không chờ AI
+            let fastPreviewUrl = photoPath
+            if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
+                try {
+                    fastPreviewUrl = await cropImageToAspect(photoDataUrl, 3, 4)
+                } catch {
+                    fastPreviewUrl = photoDataUrl
+                }
+            }
+
+            if (activeSessionIdRef.current !== capturedSessionId) return
+
             const newPhoto: CapturedPhoto = {
                 id: `selfbooth_${timestamp}_${photoNum}`,
                 rawPath: photoPath,
-                enhancedPath: photoPath,
-                compositedPath: photoPath,
+                enhancedPath: fastPreviewUrl,
+                compositedPath: fastPreviewUrl,
                 enhanceStatus: 'pending',
                 timestamp,
             }
@@ -1106,7 +1161,8 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 'natural',
-                                enhancedSavePath
+                                enhancedSavePath,
+                                '3:4'
                             )
                             .then((enhRes) => {
                                 if (
@@ -1116,7 +1172,11 @@ export default function CaptureScreen() {
                                     enhRes.data.enhancedPath
                                 ) {
                                     const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
-                                    setSelfboothLibrary((prev) => {
+                                    if (activeSessionIdRef.current !== capturedSessionId) {
+                                return
+                            }
+
+                            setSelfboothLibrary((prev) => {
                                         const next: CapturedPhoto[] = prev.map((p) =>
                                             p.id === newPhoto.id
                                                 ? {
@@ -1176,14 +1236,15 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── Chạy Python AI Service (White Pink) trên ảnh 24MP lưu vào final ──
+                            // ── Chạy Python AI Service (White Pink) trên ảnh 24MP lưu vào final (cắt tâm 3:4 khớp Live View) ──
                             try {
                                 const enhanceRes = await selfApi.ai.enhance(
                                     canonData.savedPath,
                                     50,
                                     'white_pink_v2',
                                     'natural',
-                                    enhancedSavePath
+                                    enhancedSavePath,
+                                    '3:4'
                                 )
                                 if (
                                     enhanceRes &&
@@ -1202,6 +1263,10 @@ export default function CaptureScreen() {
                                     '[Selfbooth AI] Python enhance fallback:',
                                     aiErr
                                 )
+                            }
+
+                            if (activeSessionIdRef.current !== capturedSessionId) {
+                                return
                             }
 
                             setSelfboothLibrary((prev) => {
@@ -1320,7 +1385,8 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 'natural',
-                                enhancedSavePath
+                                enhancedSavePath,
+                                '3:4'
                             )
                             if (enhRes?.success && enhRes?.data?.enhancedPath) {
                                 const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
@@ -1372,6 +1438,7 @@ export default function CaptureScreen() {
         setIsSelfboothRunning(false)
         setSlots(Array(totalShots).fill(null))
         setRetakeSlotIndex(null)
+        slotDeleteCountsRef.current = {}
         setSlotDeleteCounts({})
         setSelfboothLibrary([])
         setSelfboothSecondsLeft(totalDuration)
@@ -1380,11 +1447,15 @@ export default function CaptureScreen() {
 
     if (!isSelfboothMode) return <ConnectedReferenceView screen="camera-booth"
         onNavigate={() => {}}
-        values={{ capturedPhotos: slots.map(photo => photo?.compositedPath || photo?.enhancedPath || photo?.rawPath || null), countdownSetting: countdownSeconds, activeCountdown: isCapturingShot ? currentCountdown : null, isFlashing: showFlash, isProcessing: isAiProcessingBeforeTheme }}
+        values={{ capturedPhotos: slots.map(photo => photo?.compositedPath || photo?.enhancedPath || photo?.rawPath || null), countdownSetting: countdownSeconds, activeCountdown: isCapturingShot ? currentCountdown : null, isFlashing: showFlash, isProcessing: isAiProcessingBeforeTheme, remainingDeletes: Math.max(0, 2 - totalDeletedPhotos) }}
         changes={{ countdownSetting: (value) => { if (!isSessionActive && !slots.some(Boolean)) setCountdownSeconds(Number(value)); } }}
         onCapture={(index) => {
             if (isCapturingShot || isFlashCoolingDown || isAiProcessingBeforeTheme) return;
-            if (index !== undefined && slots[index]) { handleDeleteSlot(index); return; }
+            if (index !== undefined) {
+                if (slots[index]) handleDeleteSlot(index);
+                else setRetakeSlotIndex(index);
+                return;
+            }
             if (slots.every(Boolean)) void handleProceedPhotobooth();
             else void handleTakePhotoboothShot();
         }}
@@ -1437,8 +1508,24 @@ export default function CaptureScreen() {
         </> : null}
     />
 
+    const activeSelfboothPreviewPhoto =
+        (selectedSelfboothPreviewId
+            ? selfboothLibrary.find((p) => p.id === selectedSelfboothPreviewId)
+            : null) ||
+        (selfboothLibrary.length > 0
+            ? selfboothLibrary[selfboothLibrary.length - 1]
+            : null)
+    const activeSelfboothPreviewIndex = activeSelfboothPreviewPhoto
+        ? selfboothLibrary.findIndex(
+              (p) => p.id === activeSelfboothPreviewPhoto.id
+          )
+        : -1
+
     return (
-        <div className="capture-screen-pastel" id="capture-screen">
+        <div
+            className={`capture-screen-pastel ${isSelfboothMode ? 'selfbooth-mode-screen' : ''}`}
+            id="capture-screen"
+        >
             {/* Screen Flash Animation */}
             {showFlash && <div className="screen-flash" />}
 
@@ -1447,30 +1534,10 @@ export default function CaptureScreen() {
                 <div className="focus-dim-backdrop" />
             )}
 
-            {/* ── Top Bar: Timer / Countdown (Đã xóa hoàn toàn nút quay lại, x thoát và cài đặt) ── */}
-            <header className="capture-top-bar">
-                <div className="capture-top-left">
-                    {isSelfboothMode ? (
-                        /* Đồng hồ đếm ngược Selfbooth góc trái (05:00 -> 00:00) */
-                        <div
-                            className={`selfbooth-elapsed-timer-badge ${selfboothSecondsLeft < 30 ? 'warning' : ''}`}
-                        >
-                            <Clock
-                                size={18}
-                                className={
-                                    selfboothSecondsLeft < 30
-                                        ? 'pulse-warning'
-                                        : ''
-                                }
-                            />
-                            <span className="selfbooth-timer-label">
-                                Còn lại:
-                            </span>
-                            <span className="selfbooth-timer-digits">
-                                {formatElapsedTime(selfboothSecondsLeft)}
-                            </span>
-                        </div>
-                    ) : (
+            {/* ── Top Bar: Chỉ hiển thị riêng cho Photobooth (Selfbooth dùng HUD nổi trên góc Live View để tối ưu 100vh) ── */}
+            {!isSelfboothMode && (
+                <header className="capture-top-bar">
+                    <div className="capture-top-left">
                         <div className="countdown-capsule-group">
                             {[8, 5].map((sec) => {
                                 const isLocked =
@@ -1498,14 +1565,13 @@ export default function CaptureScreen() {
                                 )
                             })}
                         </div>
-                    )}
-                </div>
+                    </div>
 
-                {/* Right utility options: Trống hoàn toàn — một khi vào màn chụp chỉ có thể chụp và kết thúc */}
-                <div className="top-utility-actions" />
-            </header>
+                    <div className="top-utility-actions" />
+                </header>
+            )}
 
-            {/* ── Main Stage Area: 1/12 Dock + 9/12 Live View + 2/12 Vertical Slots (hoặc Full trong Selfbooth) ── */}
+            {/* ── Main Stage Area: 1/12 Dock + 9/12 Live View + 2/12 Vertical Slots (hoặc 3 tầng dọc trong Selfbooth) ── */}
             <div
                 className={`capture-main-stage ${isSelfboothMode ? 'selfbooth-stage' : ''}`}
             >
@@ -1598,14 +1664,49 @@ export default function CaptureScreen() {
                     </div>
                 )}
 
-                {/* ── CỘT LIVE VIEW: Chiếm 9/12 trong Photobooth hoặc Chiếm trọn màn hình trong Selfbooth ── */}
+                {/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 2:3 (1080x1620) TRONG SELFBOOTH HOẶC CỘT 9/12 PHOTOBOOTH ── */}
                 <div
                     className={
                         isSelfboothMode
-                            ? 'liveview-selfbooth-full'
+                            ? 'liveview-selfbooth-full selfbooth-liveview-section'
                             : 'liveview-grid-col-9'
                     }
                 >
+                    {isSelfboothMode && (
+                        <div className="selfbooth-floating-hud">
+                            <div
+                                className={`selfbooth-elapsed-timer-badge ${selfboothSecondsLeft < 30 ? 'warning' : ''}`}
+                            >
+                                <span className="selfbooth-timer-dot" />
+                                <Clock
+                                    size={15}
+                                    className={
+                                        selfboothSecondsLeft < 30
+                                            ? 'pulse-warning'
+                                            : ''
+                                    }
+                                />
+                                <span className="selfbooth-timer-digits">
+                                    {formatElapsedTime(selfboothSecondsLeft)}
+                                </span>
+                            </div>
+
+                            <button
+                                className={`btn-selfbooth-finish-main ${isCapturingShot || isFlashCoolingDown ? 'is-disabled' : ''}`}
+                                disabled={isCapturingShot || isFlashCoolingDown}
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (isCapturingShot || isFlashCoolingDown)
+                                        return
+                                    setShowFinishConfirm(true)
+                                }}
+                                id="selfbooth-finish-button"
+                            >
+                                <span>KẾT THÚC</span>
+                            </button>
+                        </div>
+                    )}
+
                     <div
                         className={`camera-viewfinder-wrapper ${isSessionActive && !isPhotoboothFull ? 'shooting-focus' : ''} ${
                             isSelfboothMode
@@ -1667,6 +1768,18 @@ export default function CaptureScreen() {
                                     }}
                                     className="camera-preview-element"
                                 />
+                                {/* Lưới 3x3 (Rule of Thirds) hỗ trợ căn khung trong Selfbooth */}
+                                {isSelfboothMode && (
+                                    <div
+                                        className="selfbooth-grid-3x3"
+                                        aria-hidden="true"
+                                    >
+                                        <span className="grid-line-v v1" />
+                                        <span className="grid-line-v v2" />
+                                        <span className="grid-line-h h1" />
+                                        <span className="grid-line-h h2" />
+                                    </div>
+                                )}
                                 {cameraFreezeFrame && (
                                     <img
                                         src={cameraFreezeFrame}
@@ -1756,7 +1869,7 @@ export default function CaptureScreen() {
                             )}
 
                         {/* Flying Snap Effect Animation */}
-                        {snapshotFlyer && (
+                        {!isSelfboothMode && snapshotFlyer && (
                             <div className="snapshot-flying-overlay">
                                 <div className="snapshot-card-animate">
                                     <img
@@ -1776,19 +1889,93 @@ export default function CaptureScreen() {
                                                 : undefined
                                         }
                                     >
-                                        {isSelfboothMode
-                                            ? snapshotFlyer.isEdsdk
-                                                ? `📸 Canon R100 (24MP) • Đã lưu ảnh ${selfboothLibrary.length}`
-                                                : `✨ Đã thêm vào bộ sưu tập (${selfboothLibrary.length} ảnh)`
-                                            : snapshotFlyer.isEdsdk
-                                              ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
-                                              : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
+                                        {snapshotFlyer.isEdsdk
+                                            ? `📸 Canon R100 (24MP) ➔ Ô ${snapshotFlyer.slotIndex + 1}`
+                                            : `✨ Đã lưu vào ô ${snapshotFlyer.slotIndex + 1}`}
                                     </div>
                                 </div>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* ── PHẦN 2 (GIỮA - PHẦN CÒN LẠI): HIỂN THỊ ẢNH ĐÃ CHỤP MỚI NHẤT (TỈ LỆ 2:3) ── */}
+                {isSelfboothMode && (
+                    <div className="selfbooth-lastshot-section">
+                        <div className="selfbooth-lastshot-frame">
+                            {activeSelfboothPreviewPhoto ? (
+                                <>
+                                    <img
+                                        src={
+                                            activeSelfboothPreviewPhoto.enhancedPath ||
+                                            activeSelfboothPreviewPhoto.compositedPath ||
+                                            activeSelfboothPreviewPhoto.rawPath
+                                        }
+                                        alt={`Ảnh vừa chụp #${activeSelfboothPreviewIndex + 1}`}
+                                        className="selfbooth-lastshot-img"
+                                    />
+                                    <span className="selfbooth-lastshot-badge">
+                                        #{activeSelfboothPreviewIndex + 1} /{' '}
+                                        {selfboothLibrary.length}
+                                        {activeSelfboothPreviewPhoto.enhanceStatus ===
+                                        'pending'
+                                            ? ' • Đang xử lý AI'
+                                            : ''}
+                                    </span>
+                                </>
+                            ) : (
+                                <div className="selfbooth-lastshot-empty">
+                                    <span>
+                                        Bấm remote để chụp — Ảnh vừa chụp sẽ hiển
+                                        thị tại đây
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── PHẦN 3 (ĐÁY ~5%): DẢI ẢNH NHỎ LỊCH SỬ CÁC ẢNH ĐÃ CHỤP ── */}
+                {isSelfboothMode && (
+                    <div
+                        className="selfbooth-bottom-gallery"
+                        ref={selfboothGalleryRef}
+                    >
+                        {selfboothLibrary.length === 0 ? (
+                            <div className="selfbooth-bottom-gallery-empty">
+                                Dải ảnh đã chụp (0 ảnh)
+                            </div>
+                        ) : (
+                            selfboothLibrary.map((photo, idx) => {
+                                const isPreviewing =
+                                    activeSelfboothPreviewPhoto?.id === photo.id
+                                return (
+                                    <div
+                                        key={photo.id}
+                                        className={`selfbooth-thumb-card ${isPreviewing ? 'active' : ''}`}
+                                        onClick={() =>
+                                            setSelectedSelfboothPreviewId(
+                                                photo.id
+                                            )
+                                        }
+                                    >
+                                        <img
+                                            src={
+                                                photo.enhancedPath ||
+                                                photo.compositedPath ||
+                                                photo.rawPath
+                                            }
+                                            alt={`Selfbooth ${idx + 1}`}
+                                        />
+                                        <span className="selfbooth-thumb-badge">
+                                            {idx + 1}
+                                        </span>
+                                    </div>
+                                )
+                            })
+                        )}
+                    </div>
+                )}
 
                 {/* ── CỘT DẢI Ô DỌC: Chỉ hiển thị trong Photobooth ── */}
                 {!isSelfboothMode && (
@@ -1809,10 +1996,10 @@ export default function CaptureScreen() {
                 )}
             </div>
 
-            {/* ── Bottom Deck: Shutter Action Control (Căn thẳng theo Live View 9/12) ── */}
-            <footer className="capture-bottom-deck">
-                {!isSelfboothMode ? (
-                    /* ── PHOTOBOOTH MODE CONTROLS ── */
+            {/* ── Bottom Deck: Chỉ hiển thị cho Photobooth ── */}
+            {!isSelfboothMode && (
+                <footer className="capture-bottom-deck">
+                    {/* ── PHOTOBOOTH MODE CONTROLS ── */}
                     <div className="bottom-deck-12col">
                         <div className="shutter-col-1" />
                         <div className="shutter-col-9">
@@ -1887,24 +2074,8 @@ export default function CaptureScreen() {
                         </div>
                         <div className="shutter-col-2" />
                     </div>
-                ) : (
-                    /* ── SELFBOOTH MODE CONTROLS: CHỈ DUY NHẤT 1 NÚT KẾT THÚC CÓ POPUP CONFIRM ── */
-                    <div className="selfbooth-bottom-single-deck">
-                        <button
-                            className={`btn-selfbooth-finish-main ${isCapturingShot || isFlashCoolingDown ? 'is-disabled' : ''}`}
-                            disabled={isCapturingShot || isFlashCoolingDown}
-                            onClick={() => {
-                                if (isCapturingShot || isFlashCoolingDown)
-                                    return
-                                setShowFinishConfirm(true)
-                            }}
-                            id="selfbooth-finish-button"
-                        >
-                            <span>KẾT THÚC</span>
-                        </button>
-                    </div>
-                )}
-            </footer>
+                </footer>
+            )}
 
             {/* ── POPUP CONFIRM KẾT THÚC BUỔI CHỤP SELFBOOTH ── */}
             {showFinishConfirm && (

@@ -51,6 +51,7 @@ class EnhanceRequest(BaseModel):
     sharpen: bool = Field(False, description="Bật/tắt sharpening bổ sung (mặc định False theo C1)")
     styleId: str = Field("natural", description="Mã Style LUT")
     presetId: Optional[str] = Field("white_pink_v2", description="Preset làm đẹp: 'white_pink_v2', 'white_pink' hoặc 'korean_soft_beauty'")
+    cropAspect: Optional[str] = Field(None, description="Tỉ lệ cắt khung tâm đầu ra (VD: '3:4' cho Selfbooth)")
     koreanConfig: Optional[KoreanBeautyConfig] = Field(None, description="Cấu hình tùy biến chuyên sâu cho Korean Soft Beauty")
 
 class EnhanceResponseData(BaseModel):
@@ -391,6 +392,34 @@ def apply_beauty_engine(
 
     return blended
 
+def crop_center_aspect(img_bgr: np.ndarray, aspect_str: str) -> np.ndarray:
+    """Cắt khung tâm ảnh theo tỉ lệ aspect_str (VD: '3:4') mà không làm biến dạng hay thay đổi file RAW gốc."""
+    parts = [p.strip() for p in aspect_str.split(":")]
+    if len(parts) != 2:
+        return img_bgr
+    try:
+        aspect_w = float(parts[0])
+        aspect_h = float(parts[1])
+    except ValueError:
+        return img_bgr
+    if aspect_w <= 0 or aspect_h <= 0:
+        return img_bgr
+
+    h, w = img_bgr.shape[:2]
+    target_ratio = aspect_w / aspect_h
+    current_ratio = w / float(h)
+    if abs(current_ratio - target_ratio) < 1e-3:
+        return img_bgr
+
+    if current_ratio > target_ratio:
+        new_w = max(1, int(round(h * target_ratio)))
+        x0 = max(0, (w - new_w) // 2)
+        return np.ascontiguousarray(img_bgr[:, x0:x0 + new_w])
+    else:
+        new_h = max(1, int(round(w / target_ratio)))
+        y0 = max(0, (h - new_h) // 2)
+        return np.ascontiguousarray(img_bgr[y0:y0 + new_h, :])
+
 @router.post("", response_model=EnhanceResponse)
 def enhance_image(req: EnhanceRequest):
     start_time = time.time()
@@ -414,6 +443,12 @@ def enhance_image(req: EnhanceRequest):
         img = cv2.imread(str(input_path))
         if img is None:
             raise ValueError(f"Không thể đọc file ảnh qua OpenCV: {input_path}")
+
+        effective_crop = req.cropAspect
+        if not effective_crop and out_path.name.startswith("fotolism_enhanced_self_"):
+            effective_crop = "3:4"
+        if effective_crop:
+            img = crop_center_aspect(img, effective_crop)
 
         # Calibrated correction precedes LUT/beauty; never estimate neutrality from a coloured background.
         if req.whiteBalanceStrength > 0 and req.neutralReferenceRgb is None:

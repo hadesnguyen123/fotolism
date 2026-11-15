@@ -30,6 +30,12 @@ export const LiveSlotsDock: React.FC<LiveSlotsDockProps> = ({
     onDeleteSlot,
     onSelectRetakeSlot,
 }) => {
+    const totalDeletedCount = Object.values(slotDeleteCounts).reduce(
+        (sum, count) => sum + count,
+        0
+    )
+    const remainingDeletes = Math.max(0, 2 - totalDeletedCount)
+
     return (
         <aside className="slots-grid-col-2 right-slots-dock">
             <div
@@ -46,8 +52,7 @@ export const LiveSlotsDock: React.FC<LiveSlotsDockProps> = ({
                         const isRetaking = retakeSlotIndex === index
                         const isJustCaptured = justCapturedSlot === index
                         const isCenteredLast = totalShots === 9 && index === 8
-                        const deleteCount = slotDeleteCounts[index] || 0
-                        const canDelete = deleteCount < 2
+                        const canDelete = remainingDeletes > 0
 
                         return (
                             <div
@@ -74,8 +79,8 @@ export const LiveSlotsDock: React.FC<LiveSlotsDockProps> = ({
                                 title={
                                     isFilled
                                         ? canDelete
-                                            ? `Bấm ✕ để xóa ảnh ô ${index + 1} và chụp lại ảnh khác (còn ${2 - deleteCount} lần)`
-                                            : `Ô ${index + 1} đã hết 2 lượt xóa chụp lại`
+                                            ? `Bấm ✕ để xóa ảnh ô ${index + 1} và chụp lại ảnh khác (còn ${remainingDeletes} lượt xóa trong dải ảnh)`
+                                            : `Đã dùng hết 2 lượt xóa ảnh trong dải ảnh`
                                         : `Ô ${index + 1} đang chờ chụp`
                                 }
                             >
@@ -98,7 +103,7 @@ export const LiveSlotsDock: React.FC<LiveSlotsDockProps> = ({
                                                     e.stopPropagation()
                                                     onDeleteSlot(index)
                                                 }}
-                                                title={`Xóa ảnh ô ${index + 1} để chụp lại (còn ${2 - deleteCount} lần)`}
+                                                title={`Xóa ảnh ô ${index + 1} để chụp lại (còn ${remainingDeletes} lượt xóa)`}
                                                 aria-label={`Xóa ảnh ô ${index + 1}`}
                                             >
                                                 ✕

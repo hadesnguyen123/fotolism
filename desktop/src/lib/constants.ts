@@ -47,7 +47,7 @@ export const FILE_PREFIX_TIMELAPSE = 'fotolism_timelapse'
 export const FILE_PREFIX_SELF = 'fotolism_self'
 
 /** Tiền tố tên thư mục phiên chụp (session subfolder) */
-export const SESSION_FOLDER_PREFIX = 'fotolism'
+export const SESSION_FOLDER_PREFIX = 'session'
 
 /** LocalStorage key cho beauty config */
 export const LS_BEAUTY_CONFIG_KEY = 'fotolism_beauty_config'
@@ -62,17 +62,17 @@ export const LS_PRINT_SCALE_KEY = 'fotolism_print_scale'
 export const DEFAULT_PRINT_SCALE = 95.5
 
 // ── 4. VietQR & Banking Defaults ──
-/** Mã BIN ngân hàng mặc định (970422 = MB Bank) */
-export const DEFAULT_BANK_BIN = '970422'
+/** Mã BIN ngân hàng mặc định (970415 = VietinBank) */
+export const DEFAULT_BANK_BIN = '970415'
 
 /** Tên ngân hàng mặc định */
-export const DEFAULT_BANK_NAME = 'MBBank (Ngân hàng Quân Đội)'
+export const DEFAULT_BANK_NAME = 'VietinBank'
 
-/** Số tài khoản mặc định */
-export const DEFAULT_ACCOUNT_NUMBER = '03609032002'
+/** Số tài khoản / VA SePay mặc định */
+export const DEFAULT_ACCOUNT_NUMBER = '100888802595'
 
 /** Tên chủ tài khoản mặc định */
-export const DEFAULT_ACCOUNT_HOLDER = 'NGUYEN HOANG'
+export const DEFAULT_ACCOUNT_HOLDER = 'HO KINH DOANH FOTOLISM'
 
 /** Mã giảm giá mẫu mặc định */
 export const DEFAULT_COUPON_CODE = 'fotolism10'

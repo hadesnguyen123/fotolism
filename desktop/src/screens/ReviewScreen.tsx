@@ -19,6 +19,11 @@ import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import '../components/reference/fonts.css'
 import './ReviewScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
+import {
+    buildGalleryUrl,
+    extractRawPin,
+    formatLocalSessionFolder,
+} from '../lib/pinUtils'
 
 export default function ReviewScreen() {
     const {
@@ -73,11 +78,14 @@ export default function ReviewScreen() {
 
     const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
 
-    // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS
-    const cmsBaseUrl = cloudSyncService.getCmsUrl()
-    const galleryIdentifier =
+    // Link đích của mã QR: Customer Gallery trên Cloudflare R2 / CMS (https://fotolism-cms.vercel.app/gallery/<10 chữ số>)
+    const localSessionFolder = formatLocalSessionFolder(
         session?.pinCode || session?.sessionId || subfolderName
-    const webGalleryUrl = `${cmsBaseUrl}/gallery/${galleryIdentifier}`
+    )
+    const rawPin = extractRawPin(
+        session?.pinCode || session?.sessionId || subfolderName
+    )
+    const webGalleryUrl = buildGalleryUrl(rawPin)
     const targetCloudUrl = webGalleryUrl
 
     // Tạo mã QR Code cho Cloud Gallery
@@ -147,7 +155,7 @@ export default function ReviewScreen() {
                 setIsGeneratingComposite(false)
 
                 // Đảm bảo dải ảnh thành phẩm & bản in ghép 4x6 luôn được lưu vào session disk
-                const sId = session?.pinCode || session?.sessionId
+                const sId = localSessionFolder
                 if (sId && stripUrl) {
                     try {
                         const pairedUrl = await preparePrintImageForDNP(
@@ -273,9 +281,9 @@ export default function ReviewScreen() {
             const storageUrl = webGalleryUrl
 
             cloudSyncService.queueSession({
-                id: session.sessionId || `ses_${Date.now()}`,
+                id: localSessionFolder,
                 session_code: `JB${Date.now().toString().slice(-6)}`,
-                pin_code: session.pinCode || null,
+                pin_code: rawPin || null,
                 customer_name: session.customerName || null,
                 customer_phone: session.customerPhone || null,
                 kiosk_id: kioskId,
@@ -382,7 +390,7 @@ export default function ReviewScreen() {
                 )
 
                 // Đảm bảo bản in ghép đôi 4x6 (cho 2x6) hoặc bản scale chuẩn luôn được lưu vào thư mục final/ để kiểm tra
-                const sId = session?.pinCode || session?.sessionId
+                const sId = localSessionFolder
                 if (sId && pathToPrint.startsWith('data:')) {
                     const printTargetFileName =
                         selectedFrameSize === '2x6'

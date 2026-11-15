@@ -22,6 +22,11 @@ import {
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ProcessingScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
+import {
+    buildGalleryUrl,
+    extractRawPin,
+    formatLocalSessionFolder,
+} from '../lib/pinUtils'
 
 export default function ProcessingScreen() {
     const {
@@ -116,15 +121,17 @@ export default function ProcessingScreen() {
 
             // ── BƯỚC 2: TỔ CHỨC LƯU ẢNH SESSION (RAW & FINAL) VÀ KÍCH HOẠT ĐẨY LÊN CLOUDFLARE R2 ──
             const api = isBrowser ? mockApi : fotolismApi
-            const sessionId =
-                session?.pinCode || session?.sessionId || `ses_${Date.now()}`
+            const sessionId = formatLocalSessionFolder(
+                session?.pinCode || session?.sessionId
+            )
+            const rawPin = extractRawPin(session?.pinCode || sessionId)
             const cmsUrl = cloudSyncService.getCmsUrl()
             const finalCompositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
             const pairedPrintFileName =
                 selectedFrameSize === '2x6'
                     ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
                     : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
-            const galleryTargetUrl = `${cmsUrl}/gallery/${sessionId}`
+            const galleryTargetUrl = buildGalleryUrl(rawPin)
 
             const sourcePhotos =
                 session?.selfboothLibrary &&
@@ -175,7 +182,7 @@ export default function ProcessingScreen() {
             cloudSyncService.queueSession({
                 id: sessionId,
                 session_code: `JB${Date.now().toString().slice(-6)}`,
-                pin_code: session?.pinCode || null,
+                pin_code: rawPin || null,
                 customer_name: session?.customerName || null,
                 customer_phone: session?.customerPhone || null,
                 kiosk_id: kioskId,

@@ -395,7 +395,10 @@ export function registerStorageIpc(): void {
 
                 const baseDir = getFotolismDir()
                 const sessionsDir = path.join(baseDir, 'sessions')
-                const sessionDir = path.join(sessionsDir, sessionId)
+                const localFolderName = sessionId.startsWith('session_')
+                    ? sessionId
+                    : `session_${sessionId}`
+                const sessionDir = path.join(sessionsDir, localFolderName)
                 const rawDir = path.join(sessionDir, 'raw')
                 const finalDir = path.join(sessionDir, 'final')
 

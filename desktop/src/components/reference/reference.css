@@ -1,5 +1,13 @@
 /* Fotolism UI Design — Adaptive Full-Viewport 1920x1080 Kiosk Styles */
 
+.reference-kiosk.portrait-916 {
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
 .reference-kiosk {
   --bg-espresso: #522c1f;
   --bg-espresso-alt: #653125;
@@ -34,6 +42,14 @@
 
 .reference-kiosk,
 .reference-kiosk,
+.reference-kiosk.portrait-916 {
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
 .reference-kiosk {
   width: 100%;
   height: 100%;
@@ -558,10 +574,26 @@
   font-weight: 600;
 }
 
+.reference-kiosk.portrait-916 {
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
 .reference-kiosk { font-family: var(--font-sans); }
 .reference-kiosk * { font-family: inherit; }
 .reference-kiosk .reference-operation-status { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); z-index:30; padding:8px 16px; border-radius:20px; background:#fdf5ed; color:#653125; }
 .reference-kiosk video,.reference-kiosk .camera-preview-element { width:100%; height:100%; object-fit:cover; }
+
+.reference-kiosk.portrait-916 {
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
 
 .reference-kiosk { --font-body: var(--font-sans); }
 .reference-kiosk button, .reference-kiosk input { font-family: var(--font-sans) !important; }

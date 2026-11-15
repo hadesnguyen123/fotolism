@@ -137,12 +137,12 @@ function getFilmGrainPattern(
                 data[i] = 255
                 data[i + 1] = 255
                 data[i + 2] = 255
-                data[i + 3] = Math.min(255, Math.floor(noise * 0.32))
+                data[i + 3] = Math.min(255, Math.floor(noise * 0.05))
             } else {
                 data[i] = 0
                 data[i + 1] = 0
                 data[i + 2] = 0
-                data[i + 3] = Math.min(255, Math.floor(-noise * 0.32))
+                data[i + 3] = Math.min(255, Math.floor(-noise * 0.05))
             }
         }
         gCtx.putImageData(imgData, 0, 0)
@@ -175,6 +175,105 @@ function applyFilmGrainToSlot(
     } catch (err) {
         console.warn('Could not apply film grain to slot:', err)
     }
+}
+
+/**
+ * Hiệu ứng Retro 90s: tông đào-hổ phách ấm, halation glow mềm, nâng shadow nâu gụ,
+ * vignette ấm và hạt phim mịn.
+ */
+function applyRetroFilmLookToSlot(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    drawX: number,
+    drawY: number,
+    drawW: number,
+    drawH: number,
+    cssFilter?: string
+) {
+    try {
+        // 1. Làm ấm vùng sáng (70% warm peach-rose multiply tint)
+        ctx.save()
+        ctx.globalCompositeOperation = 'multiply'
+        ctx.fillStyle = 'rgba(255, 209, 191, 0.22)'
+        ctx.fillRect(drawX, drawY, drawW, drawH)
+        ctx.restore()
+
+        // 2. Soft Pro-Mist halation / bloom trên canvas thu nhỏ
+        if (typeof document !== 'undefined' && drawW > 0 && drawH > 0) {
+            const bloomW = Math.max(32, Math.round(drawW / 8))
+            const bloomH = Math.max(32, Math.round(drawH / 8))
+            const bloomCanvas = document.createElement('canvas')
+            bloomCanvas.width = bloomW
+            bloomCanvas.height = bloomH
+            const bCtx = bloomCanvas.getContext('2d')
+            if (bCtx) {
+                const baseFilter =
+                    cssFilter && cssFilter !== 'none' ? cssFilter : ''
+                bCtx.filter = `${baseFilter} blur(3px)`.trim()
+                bCtx.drawImage(
+                    img,
+                    srcX,
+                    srcY,
+                    srcW,
+                    srcH,
+                    0,
+                    0,
+                    bloomW,
+                    bloomH
+                )
+                bCtx.filter = 'none'
+                bCtx.globalCompositeOperation = 'multiply'
+                bCtx.fillStyle = 'rgb(255, 199, 173)'
+                bCtx.fillRect(0, 0, bloomW, bloomH)
+
+                ctx.save()
+                ctx.globalCompositeOperation = 'screen'
+                ctx.globalAlpha = 0.16
+                ctx.drawImage(bloomCanvas, drawX, drawY, drawW, drawH)
+                ctx.restore()
+            }
+        }
+
+        // 3. Nâng vùng tối sang nâu gụ ấm (70% mahogany shadow lift)
+        ctx.save()
+        ctx.globalCompositeOperation = 'screen'
+        ctx.fillStyle = 'rgba(23, 6, 6, 0.7)'
+        ctx.fillRect(drawX, drawY, drawW, drawH)
+        ctx.restore()
+
+        // 4. Vignette ấm nhẹ ở 4 góc
+        if (typeof ctx.createRadialGradient === 'function') {
+            ctx.save()
+            const cx = drawX + drawW / 2
+            const cy = drawY + drawH / 2
+            const innerR = Math.min(drawW, drawH) * 0.28
+            const outerR = Math.hypot(drawW / 2, drawH / 2) * 1.05
+            const grad = ctx.createRadialGradient(
+                cx,
+                cy,
+                innerR,
+                cx,
+                cy,
+                outerR
+            )
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
+            grad.addColorStop(0.55, 'rgba(248, 234, 229, 0.96)')
+            grad.addColorStop(1, 'rgba(173, 154, 148, 1)')
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.fillStyle = grad
+            ctx.fillRect(drawX, drawY, drawW, drawH)
+            ctx.restore()
+        }
+    } catch (err) {
+        console.warn('Could not apply retro look to slot:', err)
+    }
+
+    // 5. Hạt phim mịn
+    applyFilmGrainToSlot(ctx, drawX, drawY, drawW, drawH)
 }
 
 /**
@@ -393,12 +492,24 @@ export async function generateStripComposite(
                     drawH
                 )
 
-                // Phủ lớp hạt phim cổ điển (Film grain noise) cho màu Retro 90s
+                // Phủ hiệu ứng phim cổ điển Retro (tông đào-nâu gụ ấm, halation, vignette, hạt mịn)
                 if (
                     opts.filter &&
                     (opts.filter.id === 'retro_90s' || opts.filter.hasGrain)
                 ) {
-                    applyFilmGrainToSlot(ctx, drawX, drawY, drawW, drawH)
+                    applyRetroFilmLookToSlot(
+                        ctx,
+                        img,
+                        finalSrcX,
+                        finalSrcY,
+                        finalSrcW,
+                        finalSrcH,
+                        drawX,
+                        drawY,
+                        drawW,
+                        drawH,
+                        opts.filter.cssFilter
+                    )
                 }
             } catch (err) {
                 console.warn(`Could not load photo ${i + 1}:`, err)

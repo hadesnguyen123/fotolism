@@ -9,6 +9,8 @@
   "description": "Fotolism Photobooth Software Suite",
   "scripts": {
     "dev": "npm --prefix desktop run dev",
+    "dev:photobooth": "npm --prefix desktop run dev:photobooth",
+    "dev:selfbooth": "npm --prefix desktop run dev:selfbooth",
     "build": "npm --prefix desktop run build",
     "build:mac": "npm --prefix desktop run build:mac",
     "build:win": "npm --prefix desktop run build:win",
