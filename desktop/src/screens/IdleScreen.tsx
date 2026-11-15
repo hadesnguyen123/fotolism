@@ -6,6 +6,7 @@ import { Settings, Check } from 'lucide-react'
 import NumericKeypadModal from '../components/NumericKeypadModal'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { cloudSyncService } from '../services/cloudSyncService'
+import { resolveTicketDurationSeconds } from '../lib/pinUtils'
 import './IdleScreen.css'
 
 export default function IdleScreen() {
@@ -22,6 +23,33 @@ export default function IdleScreen() {
     useEffect(() => {
         clearSession()
     }, [clearSession])
+
+    // Lắng nghe lệnh mở phiên Selfbooth từ xa qua CMS POS (chỉ áp dụng cho máy đang ở chế độ Selfbooth)
+    useEffect(() => {
+        if (eventConfig.captureMode !== 'selfbooth') return
+        const unsubscribe = cloudSyncService.subscribeRemoteCommand((cmd: any) => {
+            if (cmd?.type !== 'START_SELFBOOTH_SESSION') return
+            const durationSeconds = resolveTicketDurationSeconds(cmd)
+            setShowPinModal(false)
+            setCaptureMode('selfbooth')
+            startNewSession(cmd.pin_code || undefined)
+            setCustomerInfo({
+                customerName: 'Khách Selfbooth',
+                customerPhone: null,
+                pinCode: cmd.pin_code || null,
+                durationSeconds,
+                packageName: cmd.package_name || null,
+            })
+            setScreen('capture')
+        })
+        return unsubscribe
+    }, [
+        eventConfig.captureMode,
+        setCaptureMode,
+        startNewSession,
+        setCustomerInfo,
+        setScreen,
+    ])
 
     // Chế độ chụp đang được lựa chọn (mặc định là photobooth)
     const [selectedMode, setSelectedMode] = useState<CaptureMode>('photobooth')
@@ -69,7 +97,7 @@ export default function IdleScreen() {
                     pinCode: '1234',
                 })
                 if (pendingMode === 'selfbooth') {
-                    setScreen('selfbooth-setup')
+                    setScreen('capture')
                 } else {
                     setScreen('select-layout')
                 }
@@ -95,7 +123,7 @@ export default function IdleScreen() {
                     pinCode: rawCode,
                 })
                 if (pendingMode === 'selfbooth') {
-                    setScreen('selfbooth-setup')
+                    setScreen('capture')
                 } else {
                     setScreen('select-layout')
                 }
@@ -104,10 +132,13 @@ export default function IdleScreen() {
         }
 
         // ── ƯU TIÊN 2: XÁC THỰC MÃ VÉ ĐƯỢC CẤP TỪ CLOUD CMS ──
+        const targetMode: CaptureMode =
+            eventConfig.captureMode === 'selfbooth' ? 'selfbooth' : pendingMode
+
         try {
             const cmsUrl = cloudSyncService.getCmsUrl()
             const res = await fetch(
-                `${cmsUrl}/api/kiosk/tickets?pin=${encodeURIComponent(rawCode)}`,
+                `${cmsUrl}/api/kiosk/tickets?pin=${encodeURIComponent(rawCode)}&service_type=${encodeURIComponent(targetMode)}`,
                 {
                     headers: { 'Content-Type': 'application/json' },
                 }
@@ -126,15 +157,26 @@ export default function IdleScreen() {
                     return
                 }
 
+                // Rule: Mã của Selfbooth không thể nhập cho Photobooth và ngược lại
+                const ticketServiceType: CaptureMode =
+                    ticket.service_type === 'selfbooth' ||
+                    ticket.kiosk_id === 'kiosk_02'
+                        ? 'selfbooth'
+                        : 'photobooth'
+
+                if (ticketServiceType !== targetMode) {
+                    setPinError(
+                        ticketServiceType === 'selfbooth'
+                            ? 'Mã PIN này thuộc gói Selfbooth, không thể nhập cho Photobooth.'
+                            : 'Mã PIN này thuộc gói Photobooth, không thể nhập cho Selfbooth.'
+                    )
+                    setIsVerifying(false)
+                    return
+                }
+
                 setWelcomeGuest('Thành công')
 
-                // Tự động phân luồng theo gói dịch vụ đã đăng ký tại quầy CMS (nếu có)
-                const effectiveMode: CaptureMode =
-                    ticket.service_type === 'selfbooth'
-                        ? 'selfbooth'
-                        : ticket.service_type === 'photobooth'
-                          ? 'photobooth'
-                          : pendingMode
+                const effectiveMode: CaptureMode = targetMode
 
                 // Cập nhật trạng thái vé thành IN_BOOTH trên CMS để đánh dấu đang chụp
                 fetch(`${cmsUrl}/api/kiosk/tickets`, {
@@ -163,6 +205,8 @@ export default function IdleScreen() {
                         )
                     )
 
+                const durationSeconds = resolveTicketDurationSeconds(ticket)
+
                 setTimeout(() => {
                     setShowPinModal(false)
                     setCaptureMode(effectiveMode)
@@ -171,10 +215,12 @@ export default function IdleScreen() {
                         customerName: ticket.customer_name || 'Khách Hàng CMS',
                         customerPhone: ticket.customer_phone || null,
                         pinCode: rawCode,
+                        durationSeconds,
+                        packageName: ticket.package_name || null,
                     })
 
                     if (effectiveMode === 'selfbooth') {
-                        setScreen('selfbooth-setup')
+                        setScreen('capture')
                     } else {
                         setScreen('select-layout')
                     }
@@ -195,7 +241,63 @@ export default function IdleScreen() {
         }
     }
 
-    if (eventConfig.captureMode !== 'selfbooth') return <>
+    if (eventConfig.captureMode === 'selfbooth') {
+        return (
+            <div
+                style={{
+                    width: '100vw',
+                    height: '100vh',
+                    background: '#121110',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}
+            >
+                <ConnectedReferenceView
+                    screen="welcome"
+                    portrait
+                    onNavigate={() => handleOpenUnlockModal('selfbooth')}
+                />
+                <NumericKeypadModal
+                    isOpen={showPinModal}
+                    title="Mã lượt chụp"
+                    placeholder="NHẬP MÃ SỐ..."
+                    submitText="Mở khóa buồng chụp"
+                    isLoading={isVerifying}
+                    loadingText="Đang kiểm tra..."
+                    errorMessage={pinError}
+                    successMessage={welcomeGuest}
+                    onClose={() => {
+                        if (!isVerifying) setShowPinModal(false)
+                    }}
+                    onSubmit={(code) => handleVerifyUnlock(code)}
+                />
+                <button
+                    className="idle-admin-btn"
+                    id="idle-admin-btn"
+                    style={{
+                        position: 'fixed',
+                        top: 16,
+                        right: 16,
+                        zIndex: 50,
+                        color: 'rgba(246, 243, 232, 0.55)',
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        setScreen('admin')
+                    }}
+                    title="Cài đặt hệ thống"
+                    aria-label="Cài đặt hệ thống"
+                >
+                    <Settings size={22} strokeWidth={1.8} />
+                </button>
+            </div>
+        )
+    }
+
+    return <>
         <ConnectedReferenceView screen="welcome" onNavigate={() => handleOpenUnlockModal('photobooth')} />
             <NumericKeypadModal
                 isOpen={showPinModal}

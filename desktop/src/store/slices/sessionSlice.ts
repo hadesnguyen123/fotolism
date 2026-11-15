@@ -10,6 +10,7 @@ import { BEAUTY_PRESETS } from '../../services/beautyEngine'
 import { loadSavedBeautyConfig } from './beautyCameraSlice'
 import { LS_BEAUTY_CONFIG_KEY } from '../../lib/constants'
 import type { SlotOffset } from '../../lib/canvasCompositor'
+import { extractRawPin, formatLocalSessionFolder } from '../../lib/pinUtils'
 
 export interface CapturedPhoto {
     id: string
@@ -37,6 +38,8 @@ export interface SessionState {
     customerName?: string | null
     customerPhone?: string | null
     pinCode?: string | null
+    durationSeconds?: number | null
+    packageName?: string | null
     paidAmount: number
     paidCopies: number
     paymentMethod: 'vietqr' | 'cash' | 'free' | null
@@ -66,9 +69,11 @@ export interface SessionSlice {
         customerName?: string | null
         customerPhone?: string | null
         pinCode?: string | null
+        durationSeconds?: number | null
+        packageName?: string | null
     }) => void
 
-    // Photobooth Session Timer (4 phút từ sau thanh toán tới màn review)
+    // Photobooth Session Timer (tự động giới hạn theo gói mã PIN 5p/7p/10p hoặc mặc định)
     photoboothSessionEndTime: number | null
     startPhotoboothSessionTimer: (seconds?: number) => void
     clearPhotoboothSessionTimer: () => void
@@ -129,12 +134,24 @@ export const createSessionSlice: StateCreator<
                 : state.session,
         })),
 
-    startPhotoboothSessionTimer: (seconds = 150) =>
-        set({ photoboothSessionEndTime: Date.now() + seconds * 1000 }),
+    startPhotoboothSessionTimer: (seconds) =>
+        set((state: any) => {
+            const limitSec =
+                typeof seconds === 'number' && seconds > 0
+                    ? seconds
+                    : state.session?.durationSeconds &&
+                        state.session.durationSeconds > 0
+                      ? state.session.durationSeconds
+                      : 150
+            return { photoboothSessionEndTime: Date.now() + limitSec * 1000 }
+        }),
     clearPhotoboothSessionTimer: () => set({ photoboothSessionEndTime: null }),
 
     startNewSession: (customSessionId?: string) => {
-        const sId = customSessionId || generateSessionId()
+        const sId = customSessionId
+            ? formatLocalSessionFolder(customSessionId)
+            : generateSessionId()
+        const rawPin = customSessionId ? extractRawPin(customSessionId) : null
         const defaultLayout = ALL_LAYOUTS[4][0]
         set({
             session: {
@@ -150,7 +167,7 @@ export const createSessionSlice: StateCreator<
                 storageUrl: null,
                 customerName: null,
                 customerPhone: null,
-                pinCode: customSessionId || null,
+                pinCode: rawPin,
                 paidAmount: 0,
                 paidCopies: 2,
                 paymentMethod: null,
@@ -348,7 +365,7 @@ export const createSessionSlice: StateCreator<
                       ...state.session,
                       sessionId:
                           info.pinCode && info.pinCode.trim().length > 0
-                              ? info.pinCode.trim()
+                              ? formatLocalSessionFolder(info.pinCode)
                               : state.session.sessionId,
                       customerName:
                           info.customerName !== undefined
@@ -361,7 +378,17 @@ export const createSessionSlice: StateCreator<
                       pinCode:
                           info.pinCode !== undefined
                               ? info.pinCode
+                                  ? extractRawPin(info.pinCode)
+                                  : null
                               : state.session.pinCode,
+                      durationSeconds:
+                          info.durationSeconds !== undefined
+                              ? info.durationSeconds
+                              : state.session.durationSeconds,
+                      packageName:
+                          info.packageName !== undefined
+                              ? info.packageName
+                              : state.session.packageName,
                   }
                 : null,
         })),

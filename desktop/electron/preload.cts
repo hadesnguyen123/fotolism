@@ -25,7 +25,8 @@ const api = {
             beautyLevel?: number,
             presetId?: string,
             styleId?: string,
-            outputPath?: string
+            outputPath?: string,
+            cropAspect?: string
         ): IpcResponse =>
             ipcRenderer.invoke('ai:enhance', {
                 imagePath,
@@ -33,6 +34,7 @@ const api = {
                 presetId,
                 styleId,
                 outputPath,
+                cropAspect,
             }),
 
         composite: (imagePath: string, framePath: string): IpcResponse =>

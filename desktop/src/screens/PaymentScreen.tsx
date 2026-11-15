@@ -4,6 +4,7 @@ import { useAppStore, ALL_LAYOUTS } from '../store/appStore'
 import {
     DEFAULT_ACCOUNT_HOLDER,
     DEFAULT_BANK_BIN,
+    DEFAULT_BANK_NAME,
     DEFAULT_ACCOUNT_NUMBER,
     DEFAULT_PRICE_2X6,
     DEFAULT_PRICE_4X6,
@@ -12,6 +13,7 @@ import {
 } from '../lib/constants'
 import { Clock, CheckCircle2 } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
+import { generateVietQrSvgDataUrl } from '../lib/vietqr'
 import PhotoboothHeader from '../components/PhotoboothHeader'
 import NumericKeypadModal from '../components/NumericKeypadModal'
 import './PaymentScreen.css'
@@ -124,33 +126,62 @@ export default function PaymentScreen() {
     const formatVND = (num: number) =>
         new Intl.NumberFormat('vi-VN').format(num) + 'đ'
 
-    // Thông tin tài khoản MBBank thực tế
+    // Thông tin tài khoản VietinBank / SePay thực tế
     const activeBankBin =
-        eventConfig.bankBin && eventConfig.bankBin !== '970407'
+        eventConfig.bankBin &&
+        eventConfig.bankBin !== '970407' &&
+        eventConfig.bankBin !== '970422'
             ? eventConfig.bankBin
             : DEFAULT_BANK_BIN
     const activeAccountNumber =
         eventConfig.accountNumber &&
         eventConfig.accountNumber !== '0388889999' &&
-        eventConfig.accountNumber !== '190388889999'
+        eventConfig.accountNumber !== '190388889999' &&
+        eventConfig.accountNumber !== '03609032002'
             ? eventConfig.accountNumber
             : DEFAULT_ACCOUNT_NUMBER
     const activeAccountHolder =
         eventConfig.accountHolder &&
         eventConfig.accountHolder !== 'FOTOLISM VIETNAM' &&
         eventConfig.accountHolder !== 'fotolism vietnam' &&
-        eventConfig.accountHolder !== 'Fotolism Vietnam'
+        eventConfig.accountHolder !== 'Fotolism Vietnam' &&
+        eventConfig.accountHolder !== 'NGUYEN HOANG'
             ? eventConfig.accountHolder
             : DEFAULT_ACCOUNT_HOLDER
 
-    // SePay VietQR URL chuẩn ("QR chỉ hiển thị mình ảnh" khớp Panel 3)
-    const sepayQrUrl = `https://qr.sepay.vn/img?acc=${activeAccountNumber}&bank=MBBank&amount=${finalAmount}&des=${orderCode}`
-    const fallbackVietQrUrl = `https://img.vietqr.io/image/${activeBankBin}-${activeAccountNumber}-compact2.png?amount=${finalAmount}&addInfo=${orderCode}&accountName=${encodeURIComponent(activeAccountHolder)}`
-    const [currentQrUrl, setCurrentQrUrl] = useState(sepayQrUrl)
+    const activeBankName =
+        eventConfig.bankName &&
+        eventConfig.bankName !== 'MBBank' &&
+        eventConfig.bankName !== 'MBBank (Ngân hàng Quân Đội)'
+            ? eventConfig.bankName
+            : DEFAULT_BANK_NAME
+
+    const sepayBankCode =
+        activeBankBin === '970422'
+            ? 'MBBank'
+            : activeBankBin === '970415'
+              ? 'VietinBank'
+              : 'VietinBank'
+    const sepayTransferDesc = `SEVQR TKPNVF ${orderCode}`
+
+    // SePay VietQR chuẩn EMVCo Napas247 (sinh đồng bộ local 0ms + fallback trực tuyến)
+    const localVietQrUrl = generateVietQrSvgDataUrl(
+        activeBankBin,
+        activeAccountNumber,
+        finalAmount,
+        sepayTransferDesc
+    )
+    const sepayQrUrl = `https://qr.sepay.vn/img?acc=${activeAccountNumber}&bank=${sepayBankCode}&amount=${finalAmount}&des=${encodeURIComponent(sepayTransferDesc)}`
+    const fallbackVietQrUrl =
+        localVietQrUrl ||
+        `https://img.vietqr.io/image/${activeBankBin}-${activeAccountNumber}-compact2.png?amount=${finalAmount}&addInfo=${encodeURIComponent(sepayTransferDesc)}&accountName=${encodeURIComponent(activeAccountHolder)}`
+    const [currentQrUrl, setCurrentQrUrl] = useState(
+        localVietQrUrl || sepayQrUrl
+    )
 
     useEffect(() => {
-        setCurrentQrUrl(sepayQrUrl)
-    }, [sepayQrUrl])
+        setCurrentQrUrl(localVietQrUrl || sepayQrUrl)
+    }, [localVietQrUrl, sepayQrUrl])
 
     // Đếm ngược phiên thanh toán
     useEffect(() => {
@@ -282,7 +313,7 @@ export default function PaymentScreen() {
 
     if (eventConfig.captureMode !== 'selfbooth') return <>
         <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}
-            bank={{ name: eventConfig.bankName || 'MBBank', holder: activeAccountHolder, account: activeAccountNumber, code: orderCode }}
+            bank={{ name: activeBankName, holder: activeAccountHolder, account: activeAccountNumber, code: orderCode }}
             onNavigate={(target) => { if (target === 'confirm-info') setScreen('confirm'); else if (target === 'welcome') setScreen('welcome'); }}
             values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess }}
             changes={{ paymentConfirmed: () => setShowStaffPinModal(true) }}

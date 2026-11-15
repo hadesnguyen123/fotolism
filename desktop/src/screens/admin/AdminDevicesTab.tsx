@@ -213,7 +213,7 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                         <span
                                             className={
                                                 isCameraOnline ||
-                                                cameraType === 'laptop'
+                                                    cameraType === 'laptop'
                                                     ? 'badge-dot-green'
                                                     : 'badge-dot-amber'
                                             }

@@ -26,9 +26,10 @@ export const COLOR_FILTERS: ColorFilterItem[] = [
     {
         id: 'retro_90s',
         name: 'Retro 90s',
-        cssFilter: 'sepia(0.28) contrast(1.14) brightness(1.02) saturate(1.28)',
+        cssFilter:
+            'sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)',
         tag: '',
-        previewColor: '#96532B',
+        previewColor: '#8B4A39',
         hasGrain: true,
     },
 ]

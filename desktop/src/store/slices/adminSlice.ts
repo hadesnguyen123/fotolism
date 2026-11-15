@@ -64,7 +64,10 @@ export const DEFAULT_EVENT_CONFIG: EventConfig = {
     printEnabled: true,
     printCopies: 2,
     qrEnabled: true,
-    captureMode: 'photobooth',
+    captureMode:
+        import.meta.env.VITE_KIOSK_MODE === 'selfbooth'
+            ? 'selfbooth'
+            : 'photobooth',
     selfboothDurationSeconds: DEFAULT_SELFBOOTH_DURATION_SECONDS,
     paymentQrEnabled: true,
     paymentRequiredForPhotobooth: true,
@@ -93,6 +96,10 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
                 : null
         if (raw) {
             const parsed = JSON.parse(raw)
+            const envMode = import.meta.env.VITE_KIOSK_MODE
+            if (envMode === 'photobooth' || envMode === 'selfbooth') {
+                parsed.captureMode = envMode
+            }
             // Remove retired provider settings without changing other saved options.
             const retiredKeys = Object.keys(parsed).filter((key) => key.startsWith('gdrive'))
             for (const key of retiredKeys) delete parsed[key]
@@ -119,8 +126,11 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
                 !parsed.accountNumber ||
                 parsed.accountNumber === '0388889999' ||
                 parsed.accountNumber === '190388889999' ||
+                parsed.accountNumber === '03609032002' ||
+                parsed.bankBin === '970422' ||
                 parsed.accountHolder === 'FOTOLISM VIETNAM' ||
-                parsed.accountHolder === 'Fotolism Vietnam'
+                parsed.accountHolder === 'Fotolism Vietnam' ||
+                parsed.accountHolder === 'NGUYEN HOANG'
             ) {
                 parsed.accountNumber = DEFAULT_ACCOUNT_NUMBER
                 parsed.bankBin = DEFAULT_BANK_BIN
