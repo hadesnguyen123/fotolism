@@ -73,9 +73,9 @@ export interface SessionSlice {
         packageName?: string | null
     }) => void
 
-    // Photobooth Session Timer (tự động giới hạn theo gói mã PIN 5p/7p/10p hoặc mặc định)
+    // Photobooth Session Timer (luôn cố định 2 phút 30 giây = 150s)
     photoboothSessionEndTime: number | null
-    startPhotoboothSessionTimer: (seconds?: number) => void
+    startPhotoboothSessionTimer: () => void
     clearPhotoboothSessionTimer: () => void
 
     // Cloud Gallery session sync state
@@ -134,17 +134,8 @@ export const createSessionSlice: StateCreator<
                 : state.session,
         })),
 
-    startPhotoboothSessionTimer: (seconds) =>
-        set((state: any) => {
-            const limitSec =
-                typeof seconds === 'number' && seconds > 0
-                    ? seconds
-                    : state.session?.durationSeconds &&
-                        state.session.durationSeconds > 0
-                      ? state.session.durationSeconds
-                      : 150
-            return { photoboothSessionEndTime: Date.now() + limitSec * 1000 }
-        }),
+    startPhotoboothSessionTimer: () =>
+        set({ photoboothSessionEndTime: Date.now() + 150 * 1000 }),
     clearPhotoboothSessionTimer: () => set({ photoboothSessionEndTime: null }),
 
     startNewSession: (customSessionId?: string) => {

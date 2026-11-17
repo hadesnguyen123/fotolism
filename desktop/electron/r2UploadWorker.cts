@@ -145,6 +145,10 @@ export class R2UploadWorker {
         }
     }
 
+    private isTestSession1234(sessionId?: string): boolean {
+        return (sessionId || '').replace(/^session_/i, '').trim() === '1234'
+    }
+
     private async processNextBatch(): Promise<void> {
         if (!this.isRunning) return
 
@@ -161,6 +165,14 @@ export class R2UploadWorker {
         }
 
         for (const task of tasks) {
+            if (this.isTestSession1234(task.session_id)) {
+                SessionDB.updateUploadTaskStatus(
+                    task.id,
+                    'FAILED_PERMANENT',
+                    'Phiên test 1234 — không đẩy lên R2'
+                )
+                continue
+            }
             if (this.activeUploads.size >= this.concurrency) break
             if (this.activeUploads.has(task.id)) continue
 
@@ -189,6 +201,14 @@ export class R2UploadWorker {
      * Không nạp toàn bộ 10MB vào RAM
      */
     private async executeUpload(task: UploadTaskRecord): Promise<void> {
+        if (this.isTestSession1234(task.session_id)) {
+            SessionDB.updateUploadTaskStatus(
+                task.id,
+                'FAILED_PERMANENT',
+                'Phiên test 1234 — không đẩy lên R2'
+            )
+            return
+        }
         const fileName = task.file_path.split(/[\\/]/).pop() || task.image_id
 
         // 1. Kiểm tra file trên Local SSD
@@ -371,8 +391,16 @@ export class R2UploadWorker {
 
         const item = data.urls[0]
         const expiresAt = Date.now() + (item.expiresInSec || 900) * 1000
+        if (item.objectKey) {
+            task.object_key = item.objectKey
+        }
 
-        SessionDB.setUploadTaskPresignedUrl(task.id, item.putUrl, expiresAt)
+        SessionDB.setUploadTaskPresignedUrl(
+            task.id,
+            item.putUrl,
+            expiresAt,
+            item.objectKey
+        )
         return item.putUrl
     }
 

@@ -12,7 +12,7 @@ const VITE_DEV_SERVER_URL =
 
 let overheadWindow: BrowserWindow | null = null
 let aiServiceProc: ChildProcess | null = null
-const aiEnhanceQueue = new AiEnhanceQueue()
+const aiEnhanceQueue = new AiEnhanceQueue(2)
 
 export async function checkAiService(): Promise<boolean> {
     try {

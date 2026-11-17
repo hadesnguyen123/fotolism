@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DEFAULT_ACCOUNT_NUMBER, DEFAULT_BANK_BIN } from '../../lib/constants';
 import { generateVietQrSvgDataUrl } from '../../lib/vietqr';
+import { BRAND_LOGO_SRC } from '../../lib/brandLogo';
 import './fonts.css';
 import './reference.css';
 
@@ -209,7 +210,7 @@ export interface FilterOption {
 export const FILTER_OPTIONS: FilterOption[] = [
   {
     id: 'natural',
-    name: 'Neutral F400',
+    name: 'Natural',
     nodeId: '13:1734',
     labelNodeId: '0:370',
     swatchColor: '#e5d1bd',
@@ -220,7 +221,7 @@ export const FILTER_OPTIONS: FilterOption[] = [
   },
   {
     id: 'monochrome',
-    name: 'Monochrome F',
+    name: 'B&W',
     nodeId: '13:1730',
     labelNodeId: '0:373',
     swatchColor: '#262626',
@@ -231,7 +232,7 @@ export const FILTER_OPTIONS: FilterOption[] = [
   },
   {
     id: 'warm-brown',
-    name: 'Browny F300',
+    name: 'Vintage',
     nodeId: '13:1726',
     labelNodeId: '0:376',
     swatchColor: '#96522b',
@@ -767,10 +768,15 @@ export default function ReferenceKioskView(props: ReferenceProps) {
             <div className="header-bar-adaptive" data-node-id="0:237">
               <div
                 className="brand-logo"
+                style={{ marginTop: -14 }}
                 onClick={() => setScreen('welcome')}
                 data-node-id="0:238"
               >
-                <img alt="Fotolism" src={`${REFERENCE_ASSET_BASE}l_group1.svg`} />
+                <img
+                  alt="Fotolism"
+                  src={BRAND_LOGO_SRC}
+                  style={{ filter: 'brightness(0) invert(0.95)', objectFit: 'contain' }}
+                />
               </div>
 
               <div
@@ -814,18 +820,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 </p>
               </div>
 
-              <div className="timer-shell" data-node-id="0:250">
-                <div className="timer-oval-img" data-node-id="0:251">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}l_ellipse4.svg`} />
-                </div>
-                <p
-                  className="timer-text"
-                  style={{ color: '#f6f3e8' }}
-                  data-node-id="0:252"
-                >
-                  {formattedTimer}
-                </p>
-              </div>
+              <div
+                className="timer-shell"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+                data-node-id="0:250"
+              />
             </div>
 
             {/* Centered 1920x1080 Design Canvas */}
@@ -925,6 +925,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   justifyContent: 'center',
                   transition: 'left 0.24s cubic-bezier(0.22, 1, 0.36, 1)',
                   pointerEvents: 'none',
+                  zIndex: 20,
                 }}
                 data-node-id="0:253"
               >
@@ -1191,7 +1192,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 onClick={() => setScreen('welcome')}
                 data-node-id="0:150"
               >
-                <img alt="Fotolism" src={`${REFERENCE_ASSET_BASE}c_group1.svg`} />
+                <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
               </div>
 
               <div
@@ -1235,18 +1236,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 </p>
               </div>
 
-              <div className="timer-shell" data-node-id="0:162">
-                <div className="timer-oval-img" data-node-id="0:163">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}c_ellipse4.svg`} />
-                </div>
-                <p
-                  className="timer-text"
-                  style={{ color: '#653125' }}
-                  data-node-id="0:164"
-                >
-                  {formattedTimer}
-                </p>
-              </div>
+              <div
+                className="timer-shell"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+                data-node-id="0:162"
+              />
             </div>
 
             <div
@@ -1807,7 +1802,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 onClick={() => setScreen('welcome')}
                 data-node-id="0:316"
               >
-                <img alt="Fotolism" src={`${REFERENCE_ASSET_BASE}p_group1.svg`} />
+                <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
               </div>
 
               <div
@@ -2158,23 +2153,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
             </div>
 
             <div className="bottom-bar-adaptive">
-              <button
-                type="button"
-                className="nav-pill-btn interactive-btn"
-                onClick={() => setScreen('confirm-info')}
+              <div
+                className="nav-pill-btn"
+                style={{ visibility: 'hidden', pointerEvents: 'none' }}
+                aria-hidden="true"
                 data-node-id="0:309"
-              >
-                <div className="nav-pill-oval" data-node-id="0:310">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}p_ellipse2.svg`} />
-                </div>
-                <span
-                  className="nav-pill-label"
-                  style={{ color: '#653125' }}
-                  data-node-id="0:311"
-                >
-                  quay lại
-                </span>
-              </button>
+              />
 
               <button
                 type="button"
@@ -2202,22 +2186,36 @@ export default function ReferenceKioskView(props: ReferenceProps) {
         ============================================================ */}
         {screen === 'camera-booth' && (
           <>
-            {/* Adaptive Top Header Bar: 8s/5s selector (left) + Countdown Timer (right) */}
+            {/* Adaptive Top Header Bar: Brand Logo (left) + 8s/5s selector + Countdown Timer (right) */}
             <div className="header-bar-adaptive" data-node-id="0:268-header">
               <div
                 style={{
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: 5,
-                  borderRadius: 999,
-                  background: '#fdf5ed',
-                  border: '1.5px solid #e5d9cf',
-                  boxShadow: '0 4px 12px rgba(64, 33, 20, 0.08)',
-                  opacity: capturedCount > 0 || activeCountdown !== null ? 0.55 : 1,
+                  gap: 28,
                 }}
-                aria-label="Chọn thời gian đếm ngược chụp ảnh"
               >
+                <div
+                  className="brand-logo"
+                  onClick={() => setScreen('welcome')}
+                >
+                  <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
+                </div>
+
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: 5,
+                    borderRadius: 999,
+                    background: '#fdf5ed',
+                    border: '1.5px solid #e5d9cf',
+                    boxShadow: '0 4px 12px rgba(64, 33, 20, 0.08)',
+                    opacity: capturedCount > 0 || activeCountdown !== null ? 0.55 : 1,
+                  }}
+                  aria-label="Chọn thời gian đếm ngược chụp ảnh"
+                >
                 {[8, 5].map((sec) => {
                   const isActive = countdownSetting === sec;
                   const isLocked = capturedCount > 0 || activeCountdown !== null;
@@ -2246,6 +2244,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                     </button>
                   );
                 })}
+                </div>
               </div>
 
               <div className="timer-shell" data-node-id="0:269">
@@ -2406,7 +2405,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 left: 1552.28,
                 top: 206.12,
                 width: 281,
-                height: 600,
+                height: 750,
               }}
               data-node-id="0:280"
             >
@@ -2414,7 +2413,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 style={{
                   position: 'relative',
                   width: 281,
-                  height: 600,
+                  height: 750,
                 }}
                 data-node-id="0:290"
               >
@@ -2440,17 +2439,17 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   <div
                     style={{
                       position: 'absolute',
-                      left: 16,
+                      left: -15.125,
                       top: 76,
-                      width: 249,
-                      height: 374,
-                      padding: 12,
-                      borderRadius: 12,
+                      width: 311.25,
+                      height: 467.5,
+                      padding: 15,
+                      borderRadius: 15,
                       background: '#653125',
                       display: 'grid',
                       gridTemplateColumns: 'repeat(3, 1fr)',
                       gridTemplateRows: 'repeat(3, 1fr)',
-                      gap: 8,
+                      gap: 10,
                     }}
                   >
                     {Array.from({ length: 9 }, (_, slotIdx) => {
@@ -2499,7 +2498,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                             <p
                               style={{
                                 fontFamily: 'var(--font-serif)',
-                                fontSize: 22,
+                                fontSize: 27.5,
                                 color: '#653125',
                               }}
                             >
@@ -2514,17 +2513,17 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   <div
                     style={{
                       position: 'absolute',
-                      left: 16,
+                      left: -15.125,
                       top: 76,
-                      width: 249,
-                      height: 374,
-                      padding: '14px 14px 66px 14px',
-                      borderRadius: 12,
+                      width: 311.25,
+                      height: 467.5,
+                      padding: '17.5px 17.5px 82.5px 17.5px',
+                      borderRadius: 15,
                       background: '#653125',
                       display: 'grid',
                       gridTemplateColumns: 'repeat(2, 1fr)',
                       gridTemplateRows: 'repeat(2, 1fr)',
-                      gap: 8,
+                      gap: 10,
                     }}
                   >
                     {Array.from({ length: 4 }, (_, slotIdx) => {
@@ -2573,7 +2572,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                             <p
                               style={{
                                 fontFamily: 'var(--font-serif)',
-                                fontSize: 26,
+                                fontSize: 32.5,
                                 color: '#653125',
                               }}
                             >
@@ -2589,10 +2588,10 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                     <div
                       style={{
                         position: 'absolute',
-                        left: 60,
+                        left: 40.132,
                         top: 60,
-                        width: 159.149,
-                        height: 477.457,
+                        width: 198.936,
+                        height: 596.821,
                         zIndex: 2,
                         pointerEvents: 'none',
                       }}
@@ -2612,7 +2611,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                     </div>
 
                     {[0, 1, 2, 3].map((slotIdx) => {
-                      const topPositions = [81, 179, 278.5, 378];
+                      const topPositions = [86.25, 208.75, 333.125, 457.5];
                       const isCaptured = Boolean(capturedPhotos[slotIdx]);
                       return (
                         <div
@@ -2631,10 +2630,10 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                           }
                           style={{
                             position: 'absolute',
-                            left: 68.5,
+                            left: 50.757,
                             top: topPositions[slotIdx],
-                            width: 143,
-                            height: 95.5,
+                            width: 178.75,
+                            height: 119.375,
                             background: '#fdf5ed',
                             overflow: 'hidden',
                             cursor:
@@ -2662,8 +2661,8 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                             <p
                               style={{
                                 fontFamily: 'var(--font-serif)',
-                                fontSize: 30,
-                                letterSpacing: '-2.1px',
+                                fontSize: 37.5,
+                                letterSpacing: '-2.625px',
                                 color: '#653125',
                               }}
                             >
@@ -2680,7 +2679,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   style={{
                     position: 'absolute',
                     left: 140,
-                    top: 559,
+                    top: totalCaptureSlots === 9 || selectedLayoutIdx === 1 ? 565 : 675,
                     transform: 'translateX(-50%)',
                     width: 200,
                     fontFamily: 'var(--font-sans)',
@@ -2710,7 +2709,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 onClick={() => setScreen('welcome')}
                 data-node-id="0:385"
               >
-                <img alt="Fotolism" src={`${REFERENCE_ASSET_BASE}f_group1.svg`} />
+                <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
               </div>
 
               <div
@@ -2740,18 +2739,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 </p>
               </div>
 
-              <div className="timer-shell" data-node-id="0:396">
-                <div className="timer-oval-img" data-node-id="0:397">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}f_ellipse4.svg`} />
-                </div>
-                <p
-                  className="timer-text"
-                  style={{ color: '#653125' }}
-                  data-node-id="0:398"
-                >
-                  {formattedTimer}
-                </p>
-              </div>
+              <div
+                className="timer-shell"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+                data-node-id="0:396"
+              />
             </div>
 
             <div
@@ -2921,36 +2914,6 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   Chọn frame
                 </p>
 
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 794.28,
-                    top: 22.16,
-                    width: 172,
-                    height: 38,
-                    background: '#fdf5ed',
-                    borderRadius: 19,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  data-node-id="0:341"
-                >
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-sans)',
-                      fontSize: 20,
-                      lineHeight: 1.4,
-                      color: '#653125',
-                      textAlign: 'center',
-                      whiteSpace: 'nowrap',
-                    }}
-                    data-node-id="0:342"
-                  >
-                    {selectedLayout.badgeText}
-                  </p>
-                </div>
-
                 {props.themes && props.themes.length > 0 ? (() => {
                   const total = props.themes.length;
                   const visibleCount = Math.min(6, total);
@@ -3053,6 +3016,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                           height: 32,
                           transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
                           pointerEvents: 'none',
+                          zIndex: 20,
                         }}
                         data-node-id="0:345"
                       >
@@ -3200,6 +3164,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                     height: 32,
                     transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
                     pointerEvents: 'none',
+                    zIndex: 20,
                   }}
                   data-node-id="0:345"
                 >
@@ -3431,23 +3396,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
             </div>
 
             <div className="bottom-bar-adaptive">
-              <button
-                type="button"
-                className="nav-pill-btn interactive-btn"
-                onClick={() => setScreen('camera-booth')}
+              <div
+                className="nav-pill-btn"
+                style={{ visibility: 'hidden', pointerEvents: 'none' }}
+                aria-hidden="true"
                 data-node-id="0:378"
-              >
-                <div className="nav-pill-oval" data-node-id="0:379">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}f_ellipse2.svg`} />
-                </div>
-                <span
-                  className="nav-pill-label"
-                  style={{ color: '#653125' }}
-                  data-node-id="0:380"
-                >
-                  quay lại
-                </span>
-              </button>
+              />
 
               <button
                 type="button"

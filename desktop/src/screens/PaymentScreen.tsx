@@ -91,8 +91,8 @@ export default function PaymentScreen() {
     const [orderCode] = useState(
         () => `FTL${Math.floor(100000 + Math.random() * 900000)}`
     )
-    // Đếm ngược phiên thanh toán đúng 1:28s - 1:30s (90 giây)
-    const [secondsLeft, setSecondsLeft] = useState(88)
+    // Đếm ngược phiên thanh toán đúng 1:30s (90 giây)
+    const [secondsLeft, setSecondsLeft] = useState(90)
     const [paymentSuccess, setPaymentSuccess] = useState(false)
     const [showStaffPinModal, setShowStaffPinModal] = useState(false)
     const [staffPinError, setStaffPinError] = useState(false)
@@ -183,15 +183,19 @@ export default function PaymentScreen() {
         setCurrentQrUrl(localVietQrUrl || sepayQrUrl)
     }, [localVietQrUrl, sepayQrUrl])
 
-    // Đếm ngược phiên thanh toán
+    // Đếm ngược phiên thanh toán (1p30s) — hết giờ tự động quay lại màn chờ
     useEffect(() => {
-        if (secondsLeft <= 0) return
+        if (paymentSuccess) return
+        if (secondsLeft <= 0) {
+            setScreen('welcome')
+            return
+        }
         const timer = setInterval(() => {
-            setSecondsLeft((prev) => prev - 1)
+            setSecondsLeft((prev) => Math.max(0, prev - 1))
         }, 1000)
 
         return () => clearInterval(timer)
-    }, [secondsLeft])
+    }, [secondsLeft, paymentSuccess, setScreen])
 
     function formatCountdown(sec: number): string {
         const mins = Math.floor(sec / 60)
@@ -314,8 +318,8 @@ export default function PaymentScreen() {
     if (eventConfig.captureMode !== 'selfbooth') return <>
         <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}
             bank={{ name: activeBankName, holder: activeAccountHolder, account: activeAccountNumber, code: orderCode }}
-            onNavigate={(target) => { if (target === 'confirm-info') setScreen('confirm'); else if (target === 'welcome') setScreen('welcome'); }}
-            values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess }}
+            onNavigate={(target) => { if (target === 'welcome') setScreen('welcome'); }}
+            values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess, remainingSeconds: secondsLeft }}
             changes={{ paymentConfirmed: () => setShowStaffPinModal(true) }}
             status={paymentSuccess ? 'Thanh toán thành công' : undefined}
         />

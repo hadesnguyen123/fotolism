@@ -6,6 +6,7 @@ import {
     type CapturedPhoto,
 } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
+import { cloudSyncService } from '../services/cloudSyncService'
 import {
     FILE_PREFIX_SHOT,
     FILE_PREFIX_SELF,
@@ -25,10 +26,10 @@ import {
     generateStripComposite,
     preparePrintImageForDNP,
 } from '../lib/canvasCompositor'
-import { Camera, Palette, Loader2, Clock } from 'lucide-react'
+import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
-import { formatLocalSessionFolder } from '../lib/pinUtils'
+import { formatLocalSessionFolder, isTestSessionPin } from '../lib/pinUtils'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
 function playCameraShutterSound() {
@@ -73,6 +74,7 @@ export default function CaptureScreen() {
         selectFilter,
         ringLightEnabled,
         ringLightLevel,
+        setRingLightEnabled,
         mirrorCamera,
         setCameras,
         selectCamera,
@@ -126,13 +128,13 @@ export default function CaptureScreen() {
     // Xác định tỉ lệ và kích thước ô chuẩn theo Single Source of Truth:
     // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 3:2 = 1.5)
     // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 272:363 ≈ 0.7493)
-    // - Khung 9 ảnh 4x6: 281 x 580 (tỉ lệ 281:580 ≈ 0.4845)
+    // - Khung 9 ảnh 4x6: 381 x 581 (tỉ lệ 381:581 ≈ 0.6558)
     const is2x6 = selectedFrameSize === '2x6'
     const is9Grid = selectedLayout.photosCount === 9
     const targetSlotDimensions = is2x6
         ? { w: 528, h: 352, label: '528×352' }
         : is9Grid
-          ? { w: 281, h: 580, label: '281×580' }
+          ? { w: 381, h: 581, label: '381×581' }
           : { w: 544, h: 726, label: '544×726' }
 
     // ── Tính toán khung vàng (Safe Area Viewfinder Guide) trong vùng Live View 3:2 ──
@@ -243,6 +245,7 @@ export default function CaptureScreen() {
     const [isFlashCoolingDown, setIsFlashCoolingDown] = useState<boolean>(false)
     const [selectedSelfboothPreviewId, setSelectedSelfboothPreviewId] =
         useState<string | null>(null)
+    const [showSelfboothGrid, setShowSelfboothGrid] = useState<boolean>(true)
     const selfboothGalleryRef = useRef<HTMLDivElement | null>(null)
 
     useEffect(() => {
@@ -509,20 +512,19 @@ export default function CaptureScreen() {
 
     const finishSelfboothRef = useRef<() => void>(() => {})
 
-    // Tự động kích hoạt phiên Selfbooth hoặc đồng hồ giới hạn thời gian theo gói mã PIN CMS (5p/7p/10p)
+    // Tự động kích hoạt phiên Selfbooth (theo gói 5p/7p/10p) hoặc đồng hồ Photobooth (cố định 2p30s)
     useEffect(() => {
         if (isSelfboothMode) {
             setIsSelfboothRunning(true)
             setIsSessionActive(true)
         } else {
             const state = useAppStore.getState()
-            if (!state.photoboothSessionEndTime) {
-                state.startPhotoboothSessionTimer(
-                    session?.durationSeconds || undefined
-                )
+            state.startPhotoboothSessionTimer()
+            return () => {
+                useAppStore.getState().clearPhotoboothSessionTimer()
             }
         }
-    }, [isSelfboothMode, session?.durationSeconds])
+    }, [isSelfboothMode])
 
     // Đồng hồ đếm ngược thời gian chụp Selfbooth theo gói trên mã PIN CMS (5p / 7p / 10p -> 00:00). Hết giờ tự động out ra review
     const totalDuration =
@@ -891,7 +893,7 @@ export default function CaptureScreen() {
 
         isProceedingRef.current = true
         setIsAiProcessingBeforeTheme(true)
-        setAiProgressText('Đang xử lý ảnh AI...')
+        setAiProgressText('Đang xử lý ảnh')
         setAiProcessingError(null)
 
         try {
@@ -1021,9 +1023,17 @@ export default function CaptureScreen() {
                                 ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
                                 : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
 
+                        const targetSessionId = formatLocalSessionFolder(
+                            session?.pinCode || sessionId
+                        )
                         const finalized = await api.storage.finalizeSessionMedia({
-                            sessionId,
+                            sessionId: targetSessionId,
+                            customerName: session?.customerName || undefined,
                             sessionType: 'photobooth',
+                            cmsUrl: cloudSyncService.getCmsUrl(),
+                            skipCloudUpload: isTestSessionPin(
+                                session?.pinCode || targetSessionId
+                            ),
                             compositeDataUrl: initialStrip,
                             compositeFileName,
                             pairedPrintDataUrl: paired4x6 || undefined,
@@ -1445,68 +1455,146 @@ export default function CaptureScreen() {
         setShowFinishConfirm(false)
     }
 
-    if (!isSelfboothMode) return <ConnectedReferenceView screen="camera-booth"
-        onNavigate={() => {}}
-        values={{ capturedPhotos: slots.map(photo => photo?.compositedPath || photo?.enhancedPath || photo?.rawPath || null), countdownSetting: countdownSeconds, activeCountdown: isCapturingShot ? currentCountdown : null, isFlashing: showFlash, isProcessing: isAiProcessingBeforeTheme, remainingDeletes: Math.max(0, 2 - totalDeletedPhotos) }}
-        changes={{ countdownSetting: (value) => { if (!isSessionActive && !slots.some(Boolean)) setCountdownSeconds(Number(value)); } }}
-        onCapture={(index) => {
-            if (isCapturingShot || isFlashCoolingDown || isAiProcessingBeforeTheme) return;
-            if (index !== undefined) {
-                if (slots[index]) handleDeleteSlot(index);
-                else setRetakeSlotIndex(index);
-                return;
-            }
-            if (slots.every(Boolean)) void handleProceedPhotobooth();
-            else void handleTakePhotoboothShot();
-        }}
-        status={aiProcessingError || (isAiProcessingBeforeTheme ? aiProgressText : !hasCamera ? 'Đang kết nối máy ảnh…' : undefined)}
-        camera={hasCamera ? <>
-                                <BeautyCameraView
-                                    ref={beautyCameraRef}
-                                    stream={
-                                        isCanonDaemonActive
-                                            ? null
-                                            : activeMediaStream
-                                    }
-                                    mjpegUrl={
-                                        isCanonDaemonActive &&
-                                        !(
-                                            typeof window !== 'undefined' &&
-                                            window.location.search.includes(
-                                                'noLiveStream=1'
-                                            )
-                                        )
-                                            ? 'http://127.0.0.1:8899/liveview'
-                                            : undefined
-                                    }
-                                    mirrorCamera={mirrorCamera}
-                                    beautyEnabled={beautyEnabled}
-                                    skinSmoothing={skinSmoothing}
-                                    skinToneEvenness={skinToneEvenness}
-                                    vLine={vLine}
-                                    bigEyes={bigEyes}
-                                    blush={blush}
-                                    slimFace={slimFace}
-                                    whiteningTone={whiteningTone}
-                                    rosyTone={rosyTone}
-                                    glowClarity={glowClarity}
-                                    brightnessAdjust={brightnessAdjust}
-                                    contrastAdjust={contrastAdjust}
-                                    saturationAdjust={saturationAdjust}
-                                    style={{
-                                        filter:
-                                            selectedFilter?.cssFilter &&
-                                            selectedFilter.cssFilter !== 'none'
-                                                ? selectedFilter.cssFilter
-                                                : undefined,
-                                    }}
-                                    className="camera-preview-element"
-                                />
-                                <CaptureAspectGuide
-                                    guideBoxStyle={guideBoxStyle}
-                                />
-        </> : null}
-    />
+    const aiProcessingModal = (isAiProcessingBeforeTheme || aiProcessingError) ? (
+        <div
+            className="ai-enhance-processing-modal-overlay animate-fade-in"
+            style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(21, 19, 18, 0.72)',
+                backdropFilter: 'blur(8px)',
+                zIndex: 99999,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fdf5ed',
+            }}
+        >
+            <div
+                style={{
+                    background:
+                        'linear-gradient(145deg, #fdf5ed 0%, #f6ece0 55%, #efe0d0 100%)',
+                    padding: '44px 56px',
+                    borderRadius: '28px',
+                    border: '2px solid rgba(101, 49, 37, 0.28)',
+                    boxShadow:
+                        '0 25px 60px -10px rgba(64, 33, 20, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.75) inset',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: '380px',
+                    maxWidth: '460px',
+                    textAlign: 'center',
+                }}
+            >
+                <div
+                    className="selfbooth-spinner-ring"
+                    style={{
+                        width: '64px',
+                        height: '64px',
+                        borderWidth: '5px',
+                        borderColor: 'rgba(101, 49, 37, 0.18)',
+                        borderTopColor: '#653125',
+                        borderRightColor: '#8b5a42',
+                        marginBottom: '24px',
+                    }}
+                />
+                <h2
+                    style={{
+                        fontSize: '26px',
+                        fontWeight: 700,
+                        margin: 0,
+                        color: '#653125',
+                        letterSpacing: '-0.01em',
+                    }}
+                >
+                    {aiProcessingError || aiProgressText || 'Đang xử lý ảnh'}
+                </h2>
+                {aiProcessingError && (
+                    <button
+                        className="btn-primary"
+                        onClick={() =>
+                            void (isSelfboothMode
+                                ? handleFinishSelfboothToReview()
+                                : handleProceedPhotobooth())
+                        }
+                        style={{ marginTop: 24 }}
+                    >
+                        Thử lại
+                    </button>
+                )}
+            </div>
+        </div>
+    ) : null
+
+    if (!isSelfboothMode) return (
+        <>
+            <ConnectedReferenceView screen="camera-booth"
+                onNavigate={() => {}}
+                values={{ capturedPhotos: slots.map(photo => photo?.compositedPath || photo?.enhancedPath || photo?.rawPath || null), countdownSetting: countdownSeconds, activeCountdown: isCapturingShot ? currentCountdown : null, isFlashing: showFlash, isProcessing: isAiProcessingBeforeTheme, remainingDeletes: Math.max(0, 2 - totalDeletedPhotos) }}
+                changes={{ countdownSetting: (value) => { if (!isSessionActive && !slots.some(Boolean)) setCountdownSeconds(Number(value)); } }}
+                onCapture={(index) => {
+                    if (isCapturingShot || isFlashCoolingDown || isAiProcessingBeforeTheme) return;
+                    if (index !== undefined) {
+                        if (slots[index]) handleDeleteSlot(index);
+                        else setRetakeSlotIndex(index);
+                        return;
+                    }
+                    if (slots.every(Boolean)) void handleProceedPhotobooth();
+                    else void handleTakePhotoboothShot();
+                }}
+                status={!hasCamera && !isAiProcessingBeforeTheme && !aiProcessingError ? 'Đang kết nối máy ảnh…' : undefined}
+                camera={hasCamera ? <>
+                                        <BeautyCameraView
+                                            ref={beautyCameraRef}
+                                            stream={
+                                                isCanonDaemonActive
+                                                    ? null
+                                                    : activeMediaStream
+                                            }
+                                            mjpegUrl={
+                                                isCanonDaemonActive &&
+                                                !(
+                                                    typeof window !== 'undefined' &&
+                                                    window.location.search.includes(
+                                                        'noLiveStream=1'
+                                                    )
+                                                )
+                                                    ? 'http://127.0.0.1:8899/liveview'
+                                                    : undefined
+                                            }
+                                            mirrorCamera={mirrorCamera}
+                                            beautyEnabled={beautyEnabled}
+                                            skinSmoothing={skinSmoothing}
+                                            skinToneEvenness={skinToneEvenness}
+                                            vLine={vLine}
+                                            bigEyes={bigEyes}
+                                            blush={blush}
+                                            slimFace={slimFace}
+                                            whiteningTone={whiteningTone}
+                                            rosyTone={rosyTone}
+                                            glowClarity={glowClarity}
+                                            brightnessAdjust={brightnessAdjust}
+                                            contrastAdjust={contrastAdjust}
+                                            saturationAdjust={saturationAdjust}
+                                            style={{
+                                                filter:
+                                                    selectedFilter?.cssFilter &&
+                                                    selectedFilter.cssFilter !== 'none'
+                                                        ? selectedFilter.cssFilter
+                                                        : undefined,
+                                            }}
+                                            className="camera-preview-element"
+                                        />
+                                        <CaptureAspectGuide
+                                            guideBoxStyle={guideBoxStyle}
+                                        />
+                </> : null}
+            />
+            {aiProcessingModal}
+        </>
+    )
 
     const activeSelfboothPreviewPhoto =
         (selectedSelfboothPreviewId
@@ -1520,6 +1608,26 @@ export default function CaptureScreen() {
               (p) => p.id === activeSelfboothPreviewPhoto.id
           )
         : -1
+    const selfboothStudioToggles = (
+        <div className="selfbooth-studio-toggles">
+            <button
+                type="button"
+                className={`selfbooth-tool-pill ${showSelfboothGrid ? 'active' : ''}`}
+                onClick={() => setShowSelfboothGrid((prev) => !prev)}
+            >
+                <Grid3x3 size={18} strokeWidth={2} />
+                <span>Lưới 3×3</span>
+            </button>
+            <button
+                type="button"
+                className={`selfbooth-tool-pill ${ringLightEnabled ? 'active' : ''}`}
+                onClick={() => setRingLightEnabled(!ringLightEnabled)}
+            >
+                <Sun size={18} strokeWidth={2} />
+                <span>Đèn viền</span>
+            </button>
+        </div>
+    )
 
     return (
         <div
@@ -1677,9 +1785,8 @@ export default function CaptureScreen() {
                             <div
                                 className={`selfbooth-elapsed-timer-badge ${selfboothSecondsLeft < 30 ? 'warning' : ''}`}
                             >
-                                <span className="selfbooth-timer-dot" />
                                 <Clock
-                                    size={15}
+                                    size={17}
                                     className={
                                         selfboothSecondsLeft < 30
                                             ? 'pulse-warning'
@@ -1702,7 +1809,11 @@ export default function CaptureScreen() {
                                 }}
                                 id="selfbooth-finish-button"
                             >
-                                <span>KẾT THÚC</span>
+                                <span>
+                                    {selfboothLibrary.length > 0
+                                        ? `Kết thúc (${selfboothLibrary.length})`
+                                        : 'Kết thúc'}
+                                </span>
                             </button>
                         </div>
                     )}
@@ -1769,7 +1880,7 @@ export default function CaptureScreen() {
                                     className="camera-preview-element"
                                 />
                                 {/* Lưới 3x3 (Rule of Thirds) hỗ trợ căn khung trong Selfbooth */}
-                                {isSelfboothMode && (
+                                {isSelfboothMode && showSelfboothGrid && (
                                     <div
                                         className="selfbooth-grid-3x3"
                                         aria-hidden="true"
@@ -1899,12 +2010,12 @@ export default function CaptureScreen() {
                     </div>
                 </div>
 
-                {/* ── PHẦN 2 (GIỮA - PHẦN CÒN LẠI): HIỂN THỊ ẢNH ĐÃ CHỤP MỚI NHẤT (TỈ LỆ 2:3) ── */}
+                {/* ── PHẦN 2 (GIỮA): REVIEW ẢNH VỪA CHỤP & CÔNG CỤ STUDIO WARM MINIMALIST ── */}
                 {isSelfboothMode && (
                     <div className="selfbooth-lastshot-section">
-                        <div className="selfbooth-lastshot-frame">
-                            {activeSelfboothPreviewPhoto ? (
-                                <>
+                        {activeSelfboothPreviewPhoto ? (
+                            <div className="selfbooth-review-deck">
+                                <div className="selfbooth-lastshot-frame">
                                     <img
                                         src={
                                             activeSelfboothPreviewPhoto.enhancedPath ||
@@ -1917,25 +2028,43 @@ export default function CaptureScreen() {
                                     <span className="selfbooth-lastshot-badge">
                                         #{activeSelfboothPreviewIndex + 1} /{' '}
                                         {selfboothLibrary.length}
-                                        {activeSelfboothPreviewPhoto.enhanceStatus ===
-                                        'pending'
-                                            ? ' • Đang xử lý AI'
-                                            : ''}
-                                    </span>
-                                </>
-                            ) : (
-                                <div className="selfbooth-lastshot-empty">
-                                    <span>
-                                        Bấm remote để chụp — Ảnh vừa chụp sẽ hiển
-                                        thị tại đây
                                     </span>
                                 </div>
-                            )}
-                        </div>
+
+                                <div className="selfbooth-studio-info-card">
+                                    <div className="selfbooth-studio-copy">
+                                        <span className="selfbooth-studio-title">
+                                            Ảnh #{activeSelfboothPreviewIndex + 1} đã lưu
+                                        </span>
+                                        <span className="selfbooth-studio-hint">
+                                            Nhấn remote hoặc chạm khung hình để chụp tiếp
+                                        </span>
+                                    </div>
+                                    {selfboothStudioToggles}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="selfbooth-empty-banner">
+                                <div className="selfbooth-empty-banner-left">
+                                    <div className="selfbooth-empty-icon-box">
+                                        <Camera size={24} strokeWidth={2} />
+                                    </div>
+                                    <div className="selfbooth-studio-copy">
+                                        <span className="selfbooth-studio-title">
+                                            Sẵn sàng chụp
+                                        </span>
+                                        <span className="selfbooth-studio-hint">
+                                            Nhấn remote hoặc chạm vào khung hình để bắt đầu
+                                        </span>
+                                    </div>
+                                </div>
+                                {selfboothStudioToggles}
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {/* ── PHẦN 3 (ĐÁY ~5%): DẢI ẢNH NHỎ LỊCH SỬ CÁC ẢNH ĐÃ CHỤP ── */}
+                {/* ── PHẦN 3 (ĐÁY): DẢI ẢNH LỊCH SỬ TOUCH-FIRST ── */}
                 {isSelfboothMode && (
                     <div
                         className="selfbooth-bottom-gallery"
@@ -1943,7 +2072,7 @@ export default function CaptureScreen() {
                     >
                         {selfboothLibrary.length === 0 ? (
                             <div className="selfbooth-bottom-gallery-empty">
-                                Dải ảnh đã chụp (0 ảnh)
+                                Ảnh đã chụp sẽ xuất hiện tại đây
                             </div>
                         ) : (
                             selfboothLibrary.map((photo, idx) => {
@@ -2111,71 +2240,7 @@ export default function CaptureScreen() {
                 </div>
             )}
             {/* ── MÀN HÌNH CHỜ XỬ LÝ LÀM ĐẸP AI TRƯỚC KHI VÀO MÀN HÌNH CHỌN FRAME / REVIEW ── */}
-            {(isAiProcessingBeforeTheme || aiProcessingError) && (
-                <div
-                    className="ai-enhance-processing-modal-overlay animate-fade-in"
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.88)',
-                        backdropFilter: 'blur(8px)',
-                        zIndex: 99999,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                    }}
-                >
-                    <div
-                        style={{
-                            background:
-                                'linear-gradient(145deg, #FFF5F7 0%, #FFE4E9 50%, #FFDCE2 100%)',
-                            padding: '44px 56px',
-                            borderRadius: '28px',
-                            border: '2px solid rgba(255, 141, 161, 0.65)',
-                            boxShadow:
-                                '0 25px 60px -10px rgba(255, 75, 114, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.8) inset',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            minWidth: '380px',
-                            maxWidth: '460px',
-                            textAlign: 'center',
-                        }}
-                    >
-                        {/* Dấu quay tròn màu hồng */}
-                        <div
-                            className="selfbooth-spinner-ring"
-                            style={{
-                                width: '64px',
-                                height: '64px',
-                                borderWidth: '5px',
-                                borderColor: 'rgba(255, 75, 114, 0.2)',
-                                borderTopColor: '#FF4B72',
-                                borderRightColor: '#FF758F',
-                                marginBottom: '24px',
-                            }}
-                        />
-                        <h2
-                            style={{
-                                fontSize: '26px',
-                                fontWeight: 700,
-                                margin: 0,
-                                color: '#9F1239',
-                                letterSpacing: '-0.01em',
-                            }}
-                        >
-                            {aiProcessingError || aiProgressText || 'Đang xử lý ảnh'}
-                        </h2>
-                        {aiProcessingError && (
-                            <button className="btn-primary" onClick={() => void (isSelfboothMode ? handleFinishSelfboothToReview() : handleProceedPhotobooth())} style={{ marginTop: 24 }}>
-                                Thử lại
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
+            {aiProcessingModal}
         </div>
     )
 }

@@ -13,8 +13,10 @@ Dedicated pipeline for Korean Studio Soft Portrait Beauty:
 7. Selective Eye, Lash & Eyebrow Sharpening (Zero sharpening on smoothed skin)
 """
 import logging
+import os
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -74,9 +76,9 @@ class KoreanBeautyConfig(BaseModel):
                    skinEvening=.60, skinTextureRetention=.90, skinBrightening=.50,
                    rosyTone=.925, rosyBlush=.60, blushSpread=1.30,
                    blushAdaptation=.85, softGlow=.13,
-                   lipEnhancement=.47, lipGloss=.90, eyeSharpening=.32,
-                   slimFace=.10, bigEyes=.10, slimNose=.20, upperLipStrength=.445,
-                   darkCirclesReduction=.70, skinYellowReduction=0.,
+                   lipEnhancement=0., lipGloss=0., eyeSharpening=0.,
+                   slimFace=.10, bigEyes=.06, slimNose=.06, upperLipStrength=.445,
+                   darkCirclesReduction=0., skinYellowReduction=0.,
                    upperLipPasses=1, protectGlasses=True, selectiveBlemish=True, selectiveSpotCorrection=True,
                    globalSharpening=0., foundationCoverage=0.)
 
@@ -96,6 +98,7 @@ class KoreanBeautyEngine:
     def __init__(self, model_path: Optional[Path] = None):
         self.model_path = model_path or MODEL_PATH
         self._detector_cache = threading.local()
+        self._dense_cache = threading.local()
         self.last_timings = {}
 
     def detect_faces(self, img_bgr: np.ndarray) -> List[Dict[str, Any]]:
@@ -132,54 +135,51 @@ class KoreanBeautyEngine:
         return faces
 
     def detect_dense_landmarks(self, img_bgr: np.ndarray, max_faces: int = 8, faces=None):
-        """Run checked-in MediaPipe locally; use YuNet face crops for small/group faces."""
-        global _dense_landmarker, _dense_model_mtime
+        """Run checked-in MediaPipe locally; thread-local instance avoids locking across workers."""
         if not DENSE_MODEL_PATH.is_file():
             logger.warning("Dense Face Landmarker unavailable: local task model missing; using YuNet 5-point fallback")
             return None
         try:
             import mediapipe as mp
             mtime = DENSE_MODEL_PATH.stat().st_mtime_ns
-            with _dense_lock:
-                if _dense_landmarker is None or _dense_model_mtime != mtime:
-                    if _dense_landmarker is not None:
-                        _dense_landmarker.close()
+            landmarker = getattr(self._dense_cache, 'landmarker', None)
+            if landmarker is None or getattr(self._dense_cache, 'mtime', None) != mtime:
+                with _dense_lock:
                     options = mp.tasks.vision.FaceLandmarkerOptions(
                         base_options=mp.tasks.BaseOptions(model_asset_path=str(DENSE_MODEL_PATH)),
                         running_mode=mp.tasks.vision.RunningMode.IMAGE,
                         num_faces=max_faces,
                         output_face_blendshapes=False,
                         output_facial_transformation_matrixes=False)
-                    _dense_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
-                    _dense_model_mtime = mtime
-                # Run per YuNet face ROI so distant faces in a 24MP/group photo
-                # are not lost when the whole frame is reduced to thumbnail size.
-                # If YuNet gave no candidate, try the complete image once.
-                h,w=img_bgr.shape[:2]
-                regions=[]
-                if faces:
-                    for f in faces[:max_faces]:
-                        x,y,bw,bh=map(int,f['box']);pad=int(max(bw,bh)*.25)
-                        x0=max(0,x-pad);y0=max(0,y-pad);x1=min(w,x+bw+pad);y1=min(h,y+bh+pad)
-                        if x1>x0 and y1>y0:
-                            regions.append((img_bgr[y0:y1,x0:x1],x0,y0))
-                if not regions:
-                    scale=min(1.,1280./max(h,w))
-                    small=cv2.resize(img_bgr,None,fx=scale,fy=scale,interpolation=cv2.INTER_AREA) if scale<1 else img_bgr
-                    regions=[(small,0,0)]
-                dense=[]
-                for region,x0,y0 in regions:
-                    rh,rw=region.shape[:2]
-                    scale=min(1.,1280./max(rh,rw))
-                    small=cv2.resize(region,None,fx=scale,fy=scale,interpolation=cv2.INTER_AREA) if scale<1 else region
-                    rgb=cv2.cvtColor(small,cv2.COLOR_BGR2RGB)
-                    mp_image=mp.Image(image_format=mp.ImageFormat.SRGB,data=rgb)
-                    result=_dense_landmarker.detect(mp_image)
-                    sh,sw=small.shape[:2]
-                    for detected in result.face_landmarks:
-                        pts=np.asarray([[p.x*sw/scale+x0,p.y*sh/scale+y0] for p in detected],dtype=np.float32)
-                        if len(pts)>=468 and np.all(np.isfinite(pts)):
-                            dense.append(pts)
+                    landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
+                self._dense_cache.landmarker = landmarker
+                self._dense_cache.mtime = mtime
+
+            h, w = img_bgr.shape[:2]
+            regions = []
+            if faces:
+                for f in faces[:max_faces]:
+                    x, y, bw, bh = map(int, f['box']); pad = int(max(bw, bh) * .25)
+                    x0 = max(0, x - pad); y0 = max(0, y - pad); x1 = min(w, x + bw + pad); y1 = min(h, y + bh + pad)
+                    if x1 > x0 and y1 > y0:
+                        regions.append((img_bgr[y0:y1, x0:x1], x0, y0))
+            if not regions:
+                scale = min(1., 1280. / max(h, w))
+                small = cv2.resize(img_bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img_bgr
+                regions = [(small, 0, 0)]
+            dense = []
+            for region, x0, y0 in regions:
+                rh, rw = region.shape[:2]
+                scale = min(1., 1280. / max(rh, rw))
+                small = cv2.resize(region, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else region
+                rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                result = landmarker.detect(mp_image)
+                sh, sw = small.shape[:2]
+                for detected in result.face_landmarks:
+                    pts = np.asarray([[p.x * sw / scale + x0, p.y * sh / scale + y0] for p in detected], dtype=np.float32)
+                    if len(pts) >= 468 and np.all(np.isfinite(pts)):
+                        dense.append(pts)
             return dense
         except Exception as exc:
             logger.warning("Dense Face Landmarker failed; using YuNet 5-point fallback: %s", type(exc).__name__)
@@ -498,9 +498,10 @@ class KoreanBeautyEngine:
                     region *= np.clip((radius-.18)/.12, 0.0, 1.0)
                 belt[y1:y2, x1:x2] = np.maximum(belt[y1:y2, x1:x2], region)
             guard = cv2.GaussianBlur(edge * belt, (7, 7), 1.5)
-            identity_x, identity_y = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
-            map_x = identity_x + (map_x-identity_x) * (1.0-guard)
-            map_y = identity_y + (map_y-identity_y) * (1.0-guard)
+            id_x = np.arange(w, dtype=np.float32)[None, :]
+            id_y = np.arange(h, dtype=np.float32)[:, None]
+            map_x = id_x + (map_x - id_x) * (1.0 - guard)
+            map_y = id_y + (map_y - id_y) * (1.0 - guard)
 
         warped = cv2.remap(img_bgr, map_x, map_y, cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
         reshape_mask = cv2.GaussianBlur(reshape_mask, (15, 15), 5.0)
@@ -774,7 +775,7 @@ class KoreanBeautyEngine:
                 lip_protection=np.clip(refined,0.,1.)
                 lip_mask[y1:y2,x1:x2]=np.maximum(lip_mask[y1:y2,x1:x2],lip_protection)
             # Feather inward: Gaussian tails must not tint adjacent hair/background.
-            distance = cv2.distanceTransform(colour_roi, cv2.DIST_L2, 5)
+            distance = cv2.distanceTransform(colour_roi, cv2.DIST_L2, 3)
             colour_soft = np.clip(distance / max(2.0, bw * .025), 0., 1.)
             colour_soft = colour_soft * colour_soft * (3. - 2. * colour_soft)
             colour_soft *= 1. - lip_protection
@@ -789,7 +790,7 @@ class KoreanBeautyEngine:
                 if protect_glasses:
                     dense_skin[glasses_roi>0]=0
                 geom=(dense_skin>0).astype(np.uint8)
-                geom_dist=cv2.distanceTransform(geom,cv2.DIST_L2,5)
+                geom_dist=cv2.distanceTransform(geom,cv2.DIST_L2,3)
                 edge_alpha=np.clip(geom_dist/max(2.,bw*.025),0.,1.)
                 edge_alpha=edge_alpha*edge_alpha*(3.-2.*edge_alpha)
                 chroma_conf=np.clip((38.-chroma_distance)/22.,0.,1.)
@@ -911,6 +912,27 @@ class KoreanBeautyEngine:
             "cheeks": blush_mask
         }
 
+    @staticmethod
+    def _fast_gaussian_blur(src: np.ndarray, sigma: float) -> np.ndarray:
+        """Pyramid Gaussian blur for smooth low-frequency fields (sigma >= 5px)."""
+        if sigma <= 0:
+            return src
+        h, w = src.shape[:2]
+        scale = 1.0
+        if sigma >= 10.0 and min(h, w) >= 256:
+            scale = 0.25
+        elif sigma >= 5.0 and min(h, w) >= 128:
+            scale = 0.50
+        if scale >= 1.0:
+            return cv2.GaussianBlur(src, (0, 0), sigma)
+        small = cv2.resize(
+            src,
+            (max(8, int(round(w * scale))), max(8, int(round(h * scale)))),
+            interpolation=cv2.INTER_AREA,
+        )
+        blurred = cv2.GaussianBlur(small, (0, 0), max(0.5, sigma * scale))
+        return cv2.resize(blurred, (w, h), interpolation=cv2.INTER_LINEAR)
+
     def process_image(
         self,
         img_bgr: np.ndarray,
@@ -953,51 +975,89 @@ class KoreanBeautyEngine:
             self.last_timings['dense_face_count']=sum('reshape_landmarks' in f for f in faces)
             logger.info('V2 MediaPipe reshape: %s/%s faces; YuNet geometry fallback for unmatched faces',self.last_timings['dense_face_count'],len(faces))
 
-        # Tăng tốc độ đột phá (15x) cho ảnh độ phân giải cao (24MP 6000x4000):
-        # Chỉ xử lý vùng ROI bao quanh các khuôn mặt thay vì tính toán 24 triệu điểm ảnh toàn phông nền
-        if (w > 1800 or h > 1800) and len(faces) > 0:
-            min_x = min(f["box"][0] for f in faces)
-            min_y = min(f["box"][1] for f in faces)
-            max_x = max(f["box"][0] + f["box"][2] for f in faces)
-            max_y = max(f["box"][1] + f["box"][3] for f in faces)
-
+        # Xử lý theo cụm ROI quanh khuôn mặt ở mọi độ phân giải để loại bỏ phông nền thừa
+        if len(faces) > 0:
             avg_bw = float(np.mean([f["box"][2] for f in faces]))
             avg_bh = float(np.mean([f["box"][3] for f in faces]))
-            pad_x = int(avg_bw * 0.45)
-            pad_y = int(avg_bh * 0.45)
+            pad_x = max(16, int(avg_bw * 0.45))
+            pad_top = max(16, int(avg_bh * 0.45))
+            pad_bot = max(16, int(avg_bh * 0.45))
 
-            rx1 = max(0, min_x - pad_x)
-            ry1 = max(0, min_y - pad_y)
-            rx2 = min(w, max_x + pad_x)
-            ry2 = min(h, max_y + pad_y)
+            raw_boxes = []
+            for idx, f in enumerate(faces):
+                fx, fy, fw, fh = map(int, f["box"])
+                raw_boxes.append((
+                    max(0, fx - pad_x),
+                    max(0, fy - pad_top),
+                    min(w, fx + fw + pad_x),
+                    min(h, fy + max(fh + pad_bot, int(fh * 1.40))),
+                    idx,
+                ))
 
-            roi_img = img_bgr[ry1:ry2, rx1:rx2].copy()
-            roi_clean = clean_bg[ry1:ry2, rx1:rx2].copy()
-
-            roi_faces = []
-            for f in faces:
+            def _make_roi_face(f: Dict[str, Any], rx1: int, ry1: int) -> Dict[str, Any]:
                 r_box = f["box"].copy()
                 r_box[0] -= rx1
                 r_box[1] -= ry1
                 r_lm = f["landmarks"].copy()
                 r_lm[:, 0] -= rx1
                 r_lm[:, 1] -= ry1
-                copied={"box": r_box, "landmarks": r_lm, "conf": f["conf"]}
+                copied = {"box": r_box, "landmarks": r_lm, "conf": f["conf"]}
                 if f.get('dense_landmarks') is not None:
-                    dense=f['dense_landmarks'].copy();dense[:,0]-=rx1;dense[:,1]-=ry1
-                    copied['dense_landmarks']=dense
+                    dense = f['dense_landmarks'].copy(); dense[:, 0] -= rx1; dense[:, 1] -= ry1
+                    copied['dense_landmarks'] = dense
                 if f.get('reshape_landmarks') is not None:
-                    dense=f['reshape_landmarks'].copy();dense[:,0]-=rx1;dense[:,1]-=ry1
-                    copied['reshape_landmarks']=dense
-                roi_faces.append(copied)
+                    dense = f['reshape_landmarks'].copy(); dense[:, 0] -= rx1; dense[:, 1] -= ry1
+                    copied['reshape_landmarks'] = dense
+                return copied
 
-            proc_roi = self._process_core(roi_img, roi_faces, cfg, roi_clean)
+            if len(faces) > 1:
+                def _run_face_roi(item: Tuple[int, int, int, int, int]):
+                    rx1, ry1, rx2, ry2, idx = item
+                    roi_img = img_bgr[ry1:ry2, rx1:rx2]
+                    roi_clean = clean_bg[ry1:ry2, rx1:rx2]
+                    r_face = _make_roi_face(faces[idx], rx1, ry1)
+                    proc_roi, mask_roi = self._process_core(roi_img, [r_face], cfg, roi_clean, return_mask=True)
+                    return rx1, ry1, rx2, ry2, proc_roi, mask_roi
 
-            out_img = clean_bg.copy()
-            out_img[ry1:ry2, rx1:rx2] = proc_roi
-            self.last_timings['total_ms']=(time.perf_counter()-t0)*1000.
-            logger.info(f"Hoàn tất Korean Soft Beauty ROI ({rx2-rx1}x{ry2-ry1}) trong {self.last_timings['total_ms']:.1f}ms.")
-            return out_img
+                ux1 = min(b[0] for b in raw_boxes)
+                uy1 = min(b[1] for b in raw_boxes)
+                ux2 = max(b[2] for b in raw_boxes)
+                uy2 = max(b[3] for b in raw_boxes)
+                uw, uh = ux2 - ux1, uy2 - uy1
+
+                max_workers = min(len(raw_boxes), os.cpu_count() or 4, 4)
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    roi_results = list(pool.map(_run_face_roi, raw_boxes))
+
+                out_img = clean_bg.copy()
+                num_acc = np.zeros((uh, uw, 3), dtype=np.float32)
+                den_acc = np.zeros((uh, uw), dtype=np.float32)
+                for rx1, ry1, rx2, ry2, proc_roi, mask_roi in roi_results:
+                    dx1, dy1 = rx1 - ux1, ry1 - uy1
+                    dx2, dy2 = rx2 - ux1, ry2 - uy1
+                    delta_roi = proc_roi.astype(np.float32) - clean_bg[ry1:ry2, rx1:rx2].astype(np.float32)
+                    num_acc[dy1:dy2, dx1:dx2] += delta_roi * mask_roi[..., np.newaxis]
+                    den_acc[dy1:dy2, dx1:dx2] += mask_roi
+
+                active = den_acc > 1e-4
+                if np.any(active):
+                    blended_union = clean_bg[uy1:uy2, ux1:ux2].astype(np.float32)
+                    blended_union[active] += num_acc[active] / den_acc[active, np.newaxis]
+                    out_img[uy1:uy2, ux1:ux2] = np.clip(np.round(blended_union), 0, 255).astype(np.uint8)
+
+                self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
+                logger.info(f"Hoàn tất Korean Soft Beauty ({len(faces)} faces parallel) trong {self.last_timings['total_ms']:.1f}ms.")
+                return out_img
+
+            rx1, ry1, rx2, ry2, idx = raw_boxes[0]
+            if (rx2 - rx1) * (ry2 - ry1) < w * h * 0.90:
+                out_img = clean_bg.copy()
+                roi_img = img_bgr[ry1:ry2, rx1:rx2]
+                roi_clean = clean_bg[ry1:ry2, rx1:rx2]
+                out_img[ry1:ry2, rx1:rx2] = self._process_core(roi_img, [_make_roi_face(faces[idx], rx1, ry1)], cfg, roi_clean)
+                self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
+                logger.info(f"Hoàn tất Korean Soft Beauty (1 ROI) trong {self.last_timings['total_ms']:.1f}ms.")
+                return out_img
 
         result=self._process_core(img_bgr, faces, cfg, clean_bg)
         self.last_timings['total_ms']=(time.perf_counter()-t0)*1000.
@@ -1152,14 +1212,25 @@ class KoreanBeautyEngine:
         edge_x=np.exp(-np.abs(np.diff(guide,axis=1))/8.)*np.minimum(confidence[:,1:],confidence[:,:-1])
         edge_y=np.exp(-np.abs(np.diff(guide,axis=0))/8.)*np.minimum(confidence[1:],confidence[:-1])
         data=np.maximum(support,.15)
+        degree=np.zeros_like(guide)
+        degree[:,1:]+=edge_x
+        degree[:,:-1]+=edge_x
+        degree[1:]+=edge_y
+        degree[:-1]+=edge_y
+        inv_denom=(1.0/(data+.7*degree))[...,None]
+        rhs=desired*data[...,None]
+        ex3=edge_x[...,None]
+        ey3=edge_y[...,None]
+        total=np.empty_like(result)
+        inactive=~active
         for _ in range(12):
-            total=np.zeros_like(result); degree=np.zeros_like(guide)
-            total[:,1:]+=result[:,:-1]*edge_x[...,None]; degree[:,1:]+=edge_x
-            total[:,:-1]+=result[:,1:]*edge_x[...,None]; degree[:,:-1]+=edge_x
-            total[1:]+=result[:-1]*edge_y[...,None]; degree[1:]+=edge_y
-            total[:-1]+=result[1:]*edge_y[...,None]; degree[:-1]+=edge_y
-            result=(desired*data[...,None]+.7*total)/(data+.7*degree)[...,None]
-            result[~active]=0.
+            total.fill(0.)
+            total[:,1:]+=result[:,:-1]*ex3
+            total[:,:-1]+=result[:,1:]*ex3
+            total[1:]+=result[:-1]*ey3
+            total[:-1]+=result[1:]*ey3
+            result=(rhs+.7*total)*inv_denom
+            result[inactive]=0.
         return result
 
     def harmonize_connected_skin(self, lab, faces, skin, lips):
@@ -1303,48 +1374,52 @@ class KoreanBeautyEngine:
             y0=max(0,by); y1=min(h,by+bh)
             patch=lab[y0:y1,x0:x1]
             safe=skin[y0:y1,x0:x1]*(1.-np.clip(lips[y0:y1,x0:x1],0.,1.))
-            base=self.skin_guided_base(patch,safe,max(2,int(bw*.025)))
-            yy,xx=np.mgrid[y0:y1,x0:x1]
-            local=np.zeros_like(patch)
-            support=np.zeros_like(safe)
-            numerator=np.zeros_like(patch)
-            eye_center=eyes.mean(axis=0)
-            # Lateral cheeks now belong to the connected chroma field. Keep
-            # this bounded luminance cleanup only for the philtrum.
-            regions=[]
+            ph, pw = patch.shape[:2]
+            if ph < 8 or pw < 8: continue
             height=float(np.dot(mouth-nose,down))
             width=float(np.linalg.norm(points[4]-points[3]))
-            if height>width*.2:
-                center=mouth-down*(height*.22)
-                # Both sides of philtrum, outside lip pigment and nose wings.
-                refs=[]
-                for side in (-1.,1.):
-                    ref=mouth+axis*(side*width*.75)-down*(height*.40)
-                    refs.append(ref)
-                regions.append((center,refs,width*.68,height*.30,True))
-            for center,reference,rx,ry,is_philtrum in regions:
-                refs=reference if is_philtrum else [reference]
-                samples=[]
-                for ref in refs:
-                    dx=(xx-ref[0])*axis[0]+(yy-ref[1])*axis[1]
-                    dy=(xx-ref[0])*down[0]+(yy-ref[1])*down[1]
-                    pick=(dx/(bw*.065))**2+(dy/(bh*.035))**2<1.
-                    pick &= safe>.85
-                    if np.count_nonzero(pick)>=16: samples.append(np.median(base[pick],axis=0))
-                if not samples or (is_philtrum and len(samples)<2): continue
-                target=np.mean(samples,axis=0)
-                dx=(xx-center[0])*axis[0]+(yy-center[1])*axis[1]
-                dy=(xx-center[0])*down[0]+(yy-center[1])*down[1]
-                zone=np.clip(1.-(dx/max(rx,1.))**2-(dy/max(ry,1.))**2,0.,1.)
-                zone=zone*zone*(3.-2.*zone)*safe
-                delta=np.zeros_like(patch)
-                # Partial lift keeps natural shading; pigment correction is symmetric.
-                delta[...,0]=np.clip((target[0]-base[...,0])*.45,0.,5.)
-                delta[...,1:]=np.clip((target[1:]-base[...,1:])*.65,-3.,3.)
-                numerator+=delta*zone[...,None]
-                support+=zone
-            local=numerator/np.maximum(support,1.)[...,None]
-            local=self.smooth_skin_correction(local,base[...,0],safe,np.clip(support,0.,1.))
+            if height<=width*.2: continue
+            center=mouth-down*(height*.22)
+            refs=[mouth+axis*(side*width*.75)-down*(height*.40) for side in (-1.,1.)]
+            # Tính trường màu tần số thấp ở kích thước tối đa 128px (trường nhân trung rất mượt)
+            scale=min(1.,128./max(ph,pw))
+            if scale<1.:
+                sw,sh=max(8,int(round(pw*scale))),max(8,int(round(ph*scale)))
+                patch_s=cv2.resize(patch,(sw,sh),interpolation=cv2.INTER_AREA)
+                safe_s=cv2.resize(safe,(sw,sh),interpolation=cv2.INTER_AREA)
+            else:
+                sw,sh=pw,ph
+                patch_s=patch
+                safe_s=safe
+            rad_s=max(2,int(bw*scale*.025))
+            base=self.skin_guided_base(patch_s,safe_s,rad_s)
+            yy,xx=np.mgrid[:sh,:sw]
+            rx=width*.68*scale; ry=height*.30*scale
+            cx=(center[0]-x0)*scale; cy=(center[1]-y0)*scale
+            samples=[]
+            for ref in refs:
+                ref_x=(ref[0]-x0)*scale; ref_y=(ref[1]-y0)*scale
+                dx=(xx-ref_x)*axis[0]+(yy-ref_y)*axis[1]
+                dy=(xx-ref_x)*down[0]+(yy-ref_y)*down[1]
+                pick=(dx/max(1.,bw*scale*.065))**2+(dy/max(1.,bh*scale*.035))**2<1.
+                pick &= safe_s>.85
+                if np.count_nonzero(pick)>=max(6,int(16*scale*scale)):
+                    samples.append(np.median(base[pick],axis=0))
+            if len(samples)<2: continue
+            target=np.mean(samples,axis=0)
+            dx=(xx-cx)*axis[0]+(yy-cy)*axis[1]
+            dy=(xx-cx)*down[0]+(yy-cy)*down[1]
+            zone=np.clip(1.-(dx/max(rx,1.))**2-(dy/max(ry,1.))**2,0.,1.)
+            zone=zone*zone*(3.-2.*zone)*safe_s
+            delta=np.zeros_like(patch_s)
+            delta[...,0]=np.clip((target[0]-base[...,0])*.45,0.,5.)
+            delta[...,1:]=np.clip((target[1:]-base[...,1:])*.65,-3.,3.)
+            local_s=delta*(zone/np.maximum(zone,1.))[...,None]
+            local_s=self.smooth_skin_correction(local_s,base[...,0],safe_s,np.clip(zone,0.,1.))
+            if scale<1.:
+                local=cv2.resize(local_s,(pw,ph),interpolation=cv2.INTER_LINEAR)*(safe>1e-4)[...,None]
+            else:
+                local=local_s
             region=correction[y0:y1,x0:x1]
             take=np.abs(local)>np.abs(region)
             region[take]=local[take]
@@ -1470,8 +1545,9 @@ class KoreanBeautyEngine:
         img_bgr: np.ndarray,
         faces: List[Dict[str, Any]],
         cfg: KoreanBeautyConfig,
-        clean_bg: np.ndarray
-    ) -> np.ndarray:
+        clean_bg: np.ndarray,
+        return_mask: bool = False
+    ):
         t0 = time.time()
         h, w, _ = img_bgr.shape
 
@@ -1503,13 +1579,17 @@ class KoreanBeautyEngine:
         low_freq = cv2.GaussianBlur(proc_img, (k_small, k_small), avg_bw * 0.008)
         high_freq = proc_img.astype(np.float32) - low_freq.astype(np.float32)
 
-        smooth_surface = cv2.GaussianBlur(proc_img, (k_large, k_large), avg_bw * 0.035)
+        smooth_surface = self._fast_gaussian_blur(proc_img, avg_bw * 0.035)
         mid_freq = low_freq.astype(np.float32) - smooth_surface.astype(np.float32)
 
         # Đo độ thô nhám cục bộ: vùng da đã phẳng mịn -> giảm smoothing để bảo toàn khối 3D tự nhiên
         gray_f = gray.astype(np.float32)
-        local_base = cv2.GaussianBlur(gray_f, (k_med, k_med), 0)
-        local_var = cv2.GaussianBlur((gray_f - local_base)**2, (k_med, k_med), 0)
+        if k_med >= 15 and min(h, w) >= 128:
+            local_base = self._fast_gaussian_blur(gray_f, max(1.0, 0.15 * (k_med - 1) + 0.5))
+            local_var = self._fast_gaussian_blur((gray_f - local_base)**2, max(1.0, 0.15 * (k_med - 1) + 0.5))
+        else:
+            local_base = cv2.GaussianBlur(gray_f, (k_med, k_med), 0)
+            local_var = cv2.GaussianBlur((gray_f - local_base)**2, (k_med, k_med), 0)
         smooth_adaptive = np.clip(local_var / 35.0, 0.35, 1.0)[..., np.newaxis]
 
         # Skin Evening & Blemish Compression
@@ -1547,26 +1627,34 @@ class KoreanBeautyEngine:
         jaw_mask = masks["jaw"]
 
         # 5. Hòa trộn vùng da mịn vào nền gốc (Bảo toàn 100% tóc, trang phục, phông nền)
-        mask_3c = skin_mask[..., np.newaxis]
-        blended = retouched_face * mask_3c + proc_img.astype(np.float32) * (1.0 - mask_3c)
-        blended = np.clip(blended, 0, 255).astype(np.uint8)
         if cfg.presetId == 'white_pink_v2':
             # Smooth luminance detail only. A shared integer RGB offset preserves
             # colour differences exactly; remove the broad illumination change.
             raw_luma=cv2.cvtColor(retouched_face.astype(np.float32),cv2.COLOR_BGR2GRAY)-gray.astype(np.float32)
             support=skin_mask*(1.-wire_prot)
             sigma=max(2.,avg_bw*.06)
-            broad=cv2.GaussianBlur(raw_luma*support,(0,0),sigma)
-            norm=cv2.GaussianBlur(support,(0,0),sigma)
+            broad=self._fast_gaussian_blur(raw_luma*support,sigma)
+            norm=self._fast_gaussian_blur(support,sigma)
             detail=np.clip(raw_luma-broad/np.maximum(norm,1e-5),-6.,6.)*support
             offset=np.rint(detail).astype(np.int16)
             offset=np.maximum(offset,-proc_img.min(axis=2).astype(np.int16))
             offset=np.minimum(offset,255-proc_img.max(axis=2).astype(np.int16))
             blended=(proc_img.astype(np.int16)+offset[...,None]).astype(np.uint8)
+        else:
+            mask_3c = skin_mask[..., np.newaxis]
+            blended = retouched_face * mask_3c + proc_img.astype(np.float32) * (1.0 - mask_3c)
+            blended = np.clip(blended, 0, 255).astype(np.uint8)
 
         # 6. Multi-scale Blemish Removal (Khử sạch khuyết điểm còn sót trên trán, má, cằm)
         gray_bl = cv2.cvtColor(blended, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        clean_base = cv2.medianBlur(gray_bl.astype(np.uint8), k_med).astype(np.float32)
+        if k_med >= 15 and min(h, w) >= 256:
+            # Khi kernel lớn ở ảnh 16-24MP, tính nền median ở 0.5x rồi nội suy lên nhanh hơn ~6-8x
+            g_small = cv2.resize(gray_bl.astype(np.uint8), (w // 2, h // 2), interpolation=cv2.INTER_AREA)
+            k_s = max(5, (k_med // 2) | 1)
+            clean_s = cv2.medianBlur(g_small, k_s)
+            clean_base = cv2.resize(clean_s.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+        else:
+            clean_base = cv2.medianBlur(gray_bl.astype(np.uint8), k_med).astype(np.float32)
         dark_deficit = np.maximum(0.0, clean_base - gray_bl)
 
         # Brightness-based candidates; this is not a semantic mole/acne classifier.
@@ -1593,8 +1681,10 @@ class KoreanBeautyEngine:
         # 7. Selective under-eye correction. Dense V2 uses its dedicated lower-lid
         # skin mask and local cheek reference; V1/landmark fallback retain the
         # existing path unchanged. No image blur is used to conceal texture.
-        dense_under_eye = cfg.presetId == "white_pink_v2" and np.any(masks["under_eye"])
-        if dense_under_eye:
+        dense_under_eye = cfg.darkCirclesReduction > 0 and cfg.presetId == "white_pink_v2" and np.any(masks["under_eye"])
+        if cfg.darkCirclesReduction <= 0:
+            pass
+        elif dense_under_eye:
             ue_lab = cv2.cvtColor(blended, cv2.COLOR_BGR2LAB).astype(np.float32)
             ue_l, ue_a, ue_b = cv2.split(ue_lab)
             for f in faces:
@@ -1733,7 +1823,7 @@ class KoreanBeautyEngine:
             # Even chroma without filtering luminance/skin texture.
             # Normalize by skin coverage so a red backdrop/hair cannot colour the face.
             field = np.dstack((lab[...,1:]*skin_mask[...,None],skin_mask))
-            field = cv2.GaussianBlur(field,(0,0),max(2.,avg_bw*.06))
+            field = self._fast_gaussian_blur(field,max(2.,avg_bw*.06))
             chroma_base = field[...,:2]/np.maximum(field[...,2:],1e-5)
             lab[...,1:] += np.clip(chroma_base-lab[...,1:],-6.,6.) * (cfg.skinEvening*skin_mask[...,None])
 
@@ -1741,12 +1831,12 @@ class KoreanBeautyEngine:
         bright_curve = np.clip(1.0 - np.abs(L - 170.0) / 75.0, 0.0, 1.0)
         if harmonized_tone:
             # Preserve broad facial shading instead of lifting shadows equally.
-            broad_light = cv2.GaussianBlur(tone_before[..., 0], (0, 0), max(2., avg_bw * .09))
+            broad_light = self._fast_gaussian_blur(tone_before[..., 0], max(2., avg_bw * .09))
             depth_weight = .70 + .30 * np.clip((broad_light - 130.) / 70., 0., 1.)
             bright_curve = np.clip(1.0 - np.abs(broad_light - 170.0) / 75.0, 0., 1.) * depth_weight
         L += bright_curve * (cfg.skinBrightening * 36.0) * skin_mask * (1.0 - high_mask[..., 0])
         if cfg.skinDiffuseLight > 0:
-            local_light = cv2.GaussianBlur(L, (k_large, k_large), 0)
+            local_light = self._fast_gaussian_blur(L, max(2., 0.15 * (k_large - 1) + 0.5))
             shadow_lift = np.clip(local_light - L, 0.0, 8.0)
             L += shadow_lift * cfg.skinDiffuseLight * skin_mask * (1.0 - wire_prot)
 
@@ -1758,9 +1848,9 @@ class KoreanBeautyEngine:
             B -= np.clip(B - 140.0, 0.0, 12.0) * cfg.skinYellowReduction * skin_mask
 
         # C. Khử sắc đỏ mụn/viêm cục bộ (Inflammatory Redness Neutralization):
-        A_surround = cv2.GaussianBlur(A, (k_large, k_large), 0)
-        red_excess = np.maximum(0.0, A - A_surround)
+        A_surround = self._fast_gaussian_blur(A, max(2., 0.15 * (k_large - 1) + 0.5))
         if cfg.presetId != 'white_pink_v2':
+            red_excess = np.maximum(0.0, A - A_surround)
             A -= red_excess * (0.65 * cfg.blemishRemoval * skin_mask)
 
         # Lift green/neutral skin gently toward pink; leave already rosy skin alone.
@@ -1774,30 +1864,38 @@ class KoreanBeautyEngine:
             self.harmonize_face_tone(tone_before,lab,proc_img,faces,skin_mask)
             # Smooth only the ADDED light around nose/philtrum. Original shadows,
             # pores and facial hair remain in tone_before without reconstruction.
-            local_zone = np.zeros((h, w), np.float32)
+            sigma = max(1., avg_bw*.045)
+            pad_l = int(np.ceil(sigma * 2.5))
             for face in faces:
                 bx, by, bw, bh = face['box']
                 nx, ny = face['landmarks'][2]
                 mx, my = np.mean(face['landmarks'][3:], axis=0)
-                yy, xx = np.ogrid[:h, :w]
-                d = ((xx-nx)/max(1., bw*.22))**2 + ((yy-(ny+my)*.5)/max(1., bh*.16))**2
-                zone = np.clip(1.-d, 0., 1.)
-                local_zone = np.maximum(local_zone, zone*zone*(3.-2.*zone))
-            added = lab[...,0] - tone_before[...,0]
-            weight = skin_mask.astype(np.float32)
-            sigma = max(1., avg_bw*.045)
-            field = cv2.GaussianBlur(added*weight, (0,0), sigma)
-            norm = cv2.GaussianBlur(weight, (0,0), sigma)
-            correction = np.clip(field/np.maximum(norm, 1e-5)-added, -5., 5.)
-            lab[...,0] += correction * local_zone * skin_mask
+                cy = (ny + my) * .5
+                rx = max(1., bw * .22); ry = max(1., bh * .16)
+                zx0 = max(0, int(np.floor(nx - rx)) - pad_l)
+                zx1 = min(w, int(np.ceil(nx + rx)) + pad_l + 1)
+                zy0 = max(0, int(np.floor(cy - ry)) - pad_l)
+                zy1 = min(h, int(np.ceil(cy + ry)) + pad_l + 1)
+                if zx1 <= zx0 or zy1 <= zy0:
+                    continue
+                yy, xx = np.ogrid[zy0:zy1, zx0:zx1]
+                d = ((xx - nx) / rx)**2 + ((yy - cy) / ry)**2
+                zone = np.clip(1. - d, 0., 1.)
+                zone = zone * zone * (3. - 2. * zone)
+                added = lab[zy0:zy1, zx0:zx1, 0] - tone_before[zy0:zy1, zx0:zx1, 0]
+                weight = skin_mask[zy0:zy1, zx0:zx1].astype(np.float32)
+                field = self._fast_gaussian_blur(added * weight, sigma)
+                norm = self._fast_gaussian_blur(weight, sigma)
+                correction = np.clip(field / np.maximum(norm, 1e-5) - added, -5., 5.)
+                lab[zy0:zy1, zx0:zx1, 0] += correction * zone * weight
 
         if tone_before is not None:
             neck_lift = self.brighten_neck_toward_face(lab,proc_img,faces,wire_prot)
             if cfg.presetId == 'white_pink_v2':
                 neck_support = (neck_lift > 1e-4).astype(np.float32)
             self.soften_nose_wing_shadow(lab, tone_before, faces, skin_mask)
-            upper_lip_source = lab.copy()
             if cfg.presetId == 'white_pink':
+                upper_lip_source = lab.copy()
                 for _ in range(cfg.upperLipPasses):
                     self.soften_upper_lip_shadow(lab, upper_lip_source, faces, skin_mask, cfg.upperLipStrength)
 
@@ -1807,19 +1905,21 @@ class KoreanBeautyEngine:
             self.apply_rosy_blush(lab,cfg,blush_mask,A_surround)
 
         # E. Virtual Makeup: Lip Tint (son môi ombre san hô)
-        lip_strength = cfg.lipEnhancement
-        if tone_before is not None:
-            lip_strength = lip_strength * (1. - .75*np.clip((tone_before[...,1]-145.)/20., 0., 1.))
-        A += (20.0 * lip_strength) * lip_mask
-        B += (3.5 * lip_strength) * lip_mask
-        L += (2.0 * cfg.lipEnhancement) * lip_mask
-        if cfg.lipGloss > 0 and np.any(lip_mask > 0.3):
-            original_l = tone_before[...,0] if tone_before is not None else L
-            threshold = float(np.percentile(original_l[lip_mask > 0.3], 60))
-            gloss = np.clip((original_l - threshold) / max(255.0 - threshold, 1.0), 0.0, 1.0)
-            if cfg.presetId == 'white_pink':
-                gloss *= np.clip(lip_mask / .5, 0., 1.)
-            L += (255.0 - L) * gloss * lip_mask * cfg.lipGloss * 0.5
+        if cfg.lipEnhancement > 0 or cfg.lipGloss > 0:
+            lip_strength = cfg.lipEnhancement
+            if tone_before is not None:
+                lip_strength = lip_strength * (1. - .75*np.clip((tone_before[...,1]-145.)/20., 0., 1.))
+            if cfg.lipEnhancement > 0:
+                A += (20.0 * lip_strength) * lip_mask
+                B += (3.5 * lip_strength) * lip_mask
+                L += (2.0 * cfg.lipEnhancement) * lip_mask
+            if cfg.lipGloss > 0 and np.any(lip_mask > 0.3):
+                original_l = tone_before[...,0] if tone_before is not None else L
+                threshold = float(np.percentile(original_l[lip_mask > 0.3], 60))
+                gloss = np.clip((original_l - threshold) / max(255.0 - threshold, 1.0), 0.0, 1.0)
+                if cfg.presetId == 'white_pink':
+                    gloss *= np.clip(lip_mask / .5, 0., 1.)
+                L += (255.0 - L) * gloss * lip_mask * cfg.lipGloss * 0.5
 
         lab_final = cv2.merge([np.clip(L, 0, 255), np.clip(A, 0, 255), np.clip(B, 0, 255)])
         if cfg.shineReduction > 0 and np.any(skin_mask > 0.5):
@@ -1884,6 +1984,8 @@ class KoreanBeautyEngine:
 
         duration = time.time() - t0
         logger.info(f"Korean Soft Beauty V3 (Reshaping 4.5% + Retouch) xử lý thành công trong {duration:.2f}s.")
+        if return_mask:
+            return blended, treatment_mask
         return blended
 
 

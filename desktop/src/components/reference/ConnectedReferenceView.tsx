@@ -27,7 +27,7 @@ export default function ConnectedReferenceView(props: ReferenceProps) {
     return <ReferenceKioskView {...props} layouts={layouts} values={{
         selectedLayoutIdx: index, printCount: selectedCopies, capturedPhotos: photos,
         selectedFilterIdx: selectedFilter.id === 'vintage_noir' ? 1 : selectedFilter.id === 'retro_90s' ? 2 : 0,
-        remainingSeconds: photoboothSessionEndTime ? Math.max(0, Math.ceil((photoboothSessionEndTime - now) / 1000)) : 0,
+        remainingSeconds: photoboothSessionEndTime ? Math.max(0, Math.ceil((photoboothSessionEndTime - now) / 1000)) : 150,
         ...props.values,
     }} />
 }

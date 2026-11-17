@@ -11,18 +11,20 @@ import {
     SESSION_FOLDER_PREFIX,
     DEFAULT_ADMIN_PIN,
 } from '../lib/constants'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import QRCode from 'qrcode'
 import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
-import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import '../components/reference/fonts.css'
 import './ReviewScreen.css'
+import './ReviewCompletion.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
 import {
     buildGalleryUrl,
     extractRawPin,
     formatLocalSessionFolder,
+    isTestSessionPin,
 } from '../lib/pinUtils'
 
 export default function ReviewScreen() {
@@ -173,6 +175,9 @@ export default function ReviewScreen() {
                                 sessionType: isSelfboothMode
                                     ? 'selfbooth'
                                     : 'photobooth',
+                                skipCloudUpload: isTestSessionPin(
+                                    session?.pinCode || sId
+                                ),
                                 compositeDataUrl: stripUrl,
                                 compositeFileName,
                                 pairedPrintDataUrl: pairedUrl,
@@ -239,7 +244,7 @@ export default function ReviewScreen() {
             DEFAULT_ADMIN_PIN ||
             '8888'
         ).trim()
-        if (!pin || pin === '8888' || pin === adminPin) return
+        if (!pin || pin === '8888' || pin === adminPin || isTestSessionPin(pin)) return
 
         try {
             await fetch(`${cloudSyncService.getCmsUrl()}/api/kiosk/tickets`, {
@@ -267,10 +272,11 @@ export default function ReviewScreen() {
         markTicketCompleted()
     }, [markTicketCompleted])
 
-    // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS
+    // Lưu phiên chụp vào Outbox để đồng bộ lên Cloud CMS (bỏ qua nếu là mã test 1234)
     const recordSessionToOutbox = useMemo(
         () => () => {
             if (!session) return
+            if (isTestSessionPin(session.pinCode || localSessionFolder)) return
             const is4x6 = selectedFrameSize === '4x6'
             const layoutType = isSelfboothMode
                 ? 'selfbooth'
@@ -439,13 +445,14 @@ export default function ReviewScreen() {
     }
 
     function handleOpenGallery() {
-        if (galleryUrl) {
-            window.open(galleryUrl, '_blank')
+        const urlToOpen = targetCloudUrl || galleryUrl
+        if (urlToOpen) {
+            window.open(urlToOpen, '_blank')
         }
     }
 
     return (
-        <div className="review-screen-pastel" id="review-screen">
+        <div className={`review-screen-pastel ${isSelfboothMode ? '' : 'review-completion'}`} id="review-screen">
             {/* ── Fixed Brand Logo góc trên bên trái ── */}
             <img
                 src={BRAND_LOGO_SRC}
@@ -457,6 +464,9 @@ export default function ReviewScreen() {
             <header className="review-header-pastel">
                 <div className="review-header-center">
                     <h1 className="review-header-title">Ảnh hoàn thiện</h1>
+                    {!isSelfboothMode && (
+                        <p className="review-completion-subtitle">Lưu khoảnh khắc, mang kỷ niệm về nhà.</p>
+                    )}
                 </div>
             </header>
 
@@ -615,6 +625,7 @@ export default function ReviewScreen() {
                 <main className="review-content-pastel">
                     {/* Left: Photobooth Strip Frame */}
                     <section className="strip-frame-container review-preview-panel">
+                        <span className="review-preview-label">KHOẢNH KHẮC CỦA BẠN</span>
                         <div className="frame-preview-wrapper fade-in">
                             {isGeneratingComposite || !compositeStripUrl ? (
                                 <div className="composite-generating-loader" role="status" aria-live="polite">

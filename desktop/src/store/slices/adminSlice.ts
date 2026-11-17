@@ -145,6 +145,34 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
             }
 
             if (
+                !parsed.price2x6 ||
+                parsed.price2x6 === 50000 ||
+                parsed.price2x6 === 60000
+            ) {
+                parsed.price2x6 = DEFAULT_PRICE_2X6
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(
+                        LS_EVENT_CONFIG_KEY,
+                        JSON.stringify(parsed)
+                    )
+                }
+            }
+
+            if (
+                !parsed.price4x6 ||
+                parsed.price4x6 === 70000 ||
+                parsed.price4x6 === 80000
+            ) {
+                parsed.price4x6 = DEFAULT_PRICE_4X6
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(
+                        LS_EVENT_CONFIG_KEY,
+                        JSON.stringify(parsed)
+                    )
+                }
+            }
+
+            if (
                 !parsed.extraCopyPrice2x6 ||
                 parsed.extraCopyPrice2x6 === 20000
             ) {

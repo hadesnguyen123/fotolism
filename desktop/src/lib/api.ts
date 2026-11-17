@@ -176,6 +176,7 @@ export interface FotolismAPI {
             customerName?: string
             sessionType?: string
             cmsUrl?: string
+            skipCloudUpload?: boolean
             compositeDataUrl?: string
             compositeFileName?: string
             pairedPrintDataUrl?: string
