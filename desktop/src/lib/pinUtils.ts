@@ -6,6 +6,10 @@ export function extractRawPin(pinOrSessionId?: string | null): string {
     return raw.replace(/^session_/i, '')
 }
 
+export function isTestSessionPin(pinOrSessionId?: string | null): boolean {
+    return extractRawPin(pinOrSessionId) === '1234'
+}
+
 /**
  * Tên thư mục session trên máy local Kiosk: session_<mã pin>
  */
@@ -51,7 +55,7 @@ export function buildGalleryUrl(
 }
 
 /**
- * Xác định thời lượng gói chụp (phút: 5, 7, 10...) từ vé CMS hoặc lệnh mở máy
+ * Xác định thời lượng gói chụp (phút: 5, 7, 10 cho Selfbooth; Photobooth cố định 2.5 phút = 2p30s)
  */
 export function resolveTicketDurationMinutes(input?: {
     duration_minutes?: number | null
@@ -63,6 +67,7 @@ export function resolveTicketDurationMinutes(input?: {
     service_type?: string | null
 } | null): number {
     if (!input) return 5
+    if (input.service_type === 'photobooth') return 2.5
 
     if (
         typeof input.duration_minutes === 'number' &&
@@ -109,6 +114,7 @@ export function resolveTicketDurationSeconds(input?: {
     amount?: number | null
     service_type?: string | null
 } | null): number {
+    if (input?.service_type === 'photobooth') return 150
     if (
         input &&
         typeof input.duration_seconds === 'number' &&
@@ -117,5 +123,5 @@ export function resolveTicketDurationSeconds(input?: {
     ) {
         return Math.round(input.duration_seconds)
     }
-    return resolveTicketDurationMinutes(input) * 60
+    return Math.round(resolveTicketDurationMinutes(input) * 60)
 }

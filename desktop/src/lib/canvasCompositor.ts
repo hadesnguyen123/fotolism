@@ -434,42 +434,24 @@ export async function generateStripComposite(
                         finalSrcY = 0
                     }
                 } else {
-                    // Trường hợp 2: Ảnh gốc toàn cảnh chưa crop (webcam 16:9 hoặc Canon 3:2 vào ô dọc 4x6 4 ảnh hoặc 9 ảnh)
-                    // Cắt chuẩn xác 1 lần duy nhất theo Khung Vàng của Live View 16:9
-                    const viewfinderAspect = 16 / 9
-                    let viewX = 0
-                    let viewY = 0
-                    let viewW = img.width
-                    let viewH = img.height
+                    // Trường hợp 2: Ảnh khác tỉ lệ với ô slot (VD: ảnh gốc 3:2 vào ô dọc 4x6 4 ảnh/9 ảnh, hoặc ảnh dọc khác tỉ lệ)
+                    // Fit cover trực tiếp theo slotAspect trên toàn bộ ảnh gốc, không cắt trung gian sang 16:9 gây tự zoom
+                    const viewW = img.width
+                    const viewH = img.height
 
-                    if (imgAspect < viewfinderAspect - 0.02) {
-                        // Cảm biến 3:2 hẹp hơn 16:9 -> Live View 16:9 đã crop đỉnh/đáy
-                        viewH = Math.round(img.width / viewfinderAspect)
-                        viewY = Math.round((img.height - viewH) / 2)
-                    } else if (imgAspect > viewfinderAspect + 0.02) {
-                        // Ảnh rộng hơn 16:9 -> Live View 16:9 đã crop 2 bên
-                        viewW = Math.round(img.height * viewfinderAspect)
-                        viewX = Math.round((img.width - viewW) / 2)
-                    }
-
-                    const effectiveAspect = viewW / viewH
-                    if (effectiveAspect > slotAspect) {
-                        // Slot hẹp hơn Live View 16:9: Giữ chiều cao, co chiều rộng từ 2 bên vào giữa
+                    if (imgAspect > slotAspect) {
+                        // Ảnh rộng hơn slot: Giữ chiều cao, cắt 2 bên vào giữa
                         finalSrcH = Math.round(viewH / userScale)
                         finalSrcW = Math.round((viewH * slotAspect) / userScale)
-                        const slackX = (viewW - finalSrcW) / 2
-                        const slackY = (viewH - finalSrcH) / 2
-                        finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
-                        finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     } else {
-                        // Slot rộng hơn Live View 16:9: Giữ chiều rộng, co chiều cao
+                        // Ảnh cao/hẹp hơn slot: Giữ chiều rộng, cắt trên/dưới
                         finalSrcW = Math.round(viewW / userScale)
                         finalSrcH = Math.round((viewW / slotAspect) / userScale)
-                        const slackX = (viewW - finalSrcW) / 2
-                        const slackY = (viewH - finalSrcH) / 2
-                        finalSrcX = Math.round(viewX + slackX - clampedX * slackX)
-                        finalSrcY = Math.round(viewY + slackY - clampedY * slackY)
                     }
+                    const slackX = (viewW - finalSrcW) / 2
+                    const slackY = (viewH - finalSrcH) / 2
+                    finalSrcX = Math.round(slackX - clampedX * slackX)
+                    finalSrcY = Math.round(slackY - clampedY * slackY)
                     finalSrcX = Math.max(
                         0,
                         Math.min(img.width - finalSrcW, finalSrcX)

@@ -1821,8 +1821,8 @@
 .capture-screen-pastel.selfbooth-mode-screen {
     /* ── TÙY CHỈNH NHANH TỈ LỆ 3 PHẦN TẠI ĐÂY ── */
     --selfbooth-crop-ratio: 3 / 4;          /* Tỉ lệ 3 ngang : 4 dọc (1080x1440) */
-    --selfbooth-filmstrip-height: 5vh;      /* Phần 3 (Đáy): Dải ảnh nhỏ (5%) */
-    background-color: #12100f;
+    --selfbooth-filmstrip-height: clamp(64px, 7.5vh, 84px);
+    background-color: var(--bg-app, #faf6f1);
 }
 
 .capture-main-stage.selfbooth-stage {
@@ -1838,22 +1838,22 @@
     height: 100vh;
     min-height: 0;
     width: 100%;
-    background: #12100f;
+    background: var(--bg-app, #faf6f1);
 }
 
-/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 3:4 TRÀN FULL 100% CHIỀU RỘNG MÀN HÌNH (1080x1440) ── */
+/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 3:4 TRÀN FULL 100% CHIỀU RỘNG MÀN HÌNH ── */
 .liveview-selfbooth-full.selfbooth-liveview-section {
     width: 100%;
     aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
     height: auto;
-    max-height: 76vh;
+    max-height: 72vh;
     min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     min-width: 0;
-    background: #0b0908;
+    background: #14100f;
     overflow: hidden;
     flex-shrink: 0;
 }
@@ -1880,7 +1880,7 @@
     object-position: center center !important;
 }
 
-/* Lưới 3x3 (Rule of Thirds Grid) trên Live View */
+/* Lưới 3x3 (Rule of Thirds Grid) dịu nhẹ trên Live View */
 .selfbooth-grid-3x3 {
     position: absolute;
     inset: 0;
@@ -1893,7 +1893,7 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.14);
 }
 
 .selfbooth-grid-3x3 .grid-line-v.v1 {
@@ -1909,7 +1909,7 @@
     left: 0;
     right: 0;
     height: 1px;
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.14);
 }
 
 .selfbooth-grid-3x3 .grid-line-h.h1 {
@@ -1923,9 +1923,9 @@
 /* HUD nổi gọn ở 2 góc trên Live View (Đồng hồ + Nút Kết thúc) */
 .selfbooth-floating-hud {
     position: absolute;
-    top: 10px;
-    left: 12px;
-    right: 12px;
+    top: 14px;
+    left: 16px;
+    right: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1937,7 +1937,7 @@
     pointer-events: auto;
 }
 
-/* ── PHẦN 2 (GIỮA - PHẦN CÒN LẠI ~20%): ẢNH VỪA CHỤP MỚI NHẤT (TỈ LỆ 3:4) ── */
+/* ── PHẦN 2 (GIỮA): REVIEW ẢNH VỪA CHỤP + THANH STUDIO WARM MINIMALIST ── */
 .selfbooth-lastshot-section {
     width: 100%;
     height: auto;
@@ -1946,26 +1946,39 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #0b0908;
-    border-top: 2px solid #1f1b19;
+    background: var(--bg-app, #faf6f1);
+    border-top: 1px solid var(--border-subtle, #e6d9cf);
     position: relative;
     overflow: hidden;
-    padding: 4px 0;
+    padding: 12px 18px;
     box-sizing: border-box;
+}
+
+.selfbooth-review-deck {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 0;
 }
 
 .selfbooth-lastshot-frame {
     height: 100%;
     max-height: 100%;
     width: auto;
-    max-width: 100%;
+    max-width: 44%;
     aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
     position: relative;
     overflow: hidden;
-    background: #1a1615;
+    border-radius: 14px;
+    border: 1.5px solid var(--border-subtle, #e6d9cf);
+    background: #fff9f4;
+    box-shadow: 0 8px 24px rgba(42, 24, 16, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .selfbooth-lastshot-img {
@@ -1979,44 +1992,144 @@
 .selfbooth-lastshot-badge {
     position: absolute;
     bottom: 8px;
-    right: 10px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 11px;
+    right: 8px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 13px;
     font-weight: 800;
-    background: rgba(18, 16, 15, 0.72);
-    color: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(42, 24, 16, 0.8);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
     backdrop-filter: blur(6px);
 }
 
-.selfbooth-lastshot-empty {
-    width: 100%;
+.selfbooth-studio-info-card {
+    flex: 1;
+    min-width: 0;
     height: 100%;
+    max-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle, #e6d9cf);
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.05);
+    box-sizing: border-box;
+}
+
+.selfbooth-empty-banner {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle, #e6d9cf);
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.05);
+    box-sizing: border-box;
+}
+
+.selfbooth-empty-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.selfbooth-empty-icon-box {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    background: #fff9f4;
+    border: 1px solid var(--border-subtle, #e6d9cf);
+    color: var(--brand-primary, #502a1d);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 13px;
-    font-weight: 600;
+    flex-shrink: 0;
 }
 
-/* ── PHẦN 3 (ĐÁY ~5%): DẢI ẢNH ĐÃ CHỤP SIÊU NHỎ GỌN ── */
-.selfbooth-bottom-gallery {
-    width: 100%;
-    height: var(--selfbooth-filmstrip-height, 5vh);
-    min-height: 44px;
-    max-height: 64px;
+.selfbooth-studio-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.selfbooth-studio-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-primary, #2a1810);
+    line-height: 1.25;
+}
+
+.selfbooth-studio-hint {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary, #70594f);
+    line-height: 1.35;
+}
+
+.selfbooth-studio-toggles {
     display: flex;
     align-items: center;
-    gap: 4px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.selfbooth-tool-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 9999px;
+    border: 1.5px solid var(--border-subtle, #e6d9cf);
+    background: #fff9f4;
+    color: var(--text-primary, #2a1810);
+    font-family: var(--font-body, inherit);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.selfbooth-tool-pill:hover {
+    transform: scale(1.02);
+    border-color: var(--brand-primary, #502a1d);
+}
+
+.selfbooth-tool-pill:active {
+    transform: scale(0.97);
+}
+
+.selfbooth-tool-pill.active {
+    background: var(--brand-primary, #502a1d);
+    border-color: var(--brand-primary, #502a1d);
+    color: #ffffff;
+}
+
+/* ── PHẦN 3 (ĐÁY): DẢI FILMSTRIP TOUCH-FIRST ── */
+.selfbooth-bottom-gallery {
+    width: 100%;
+    height: var(--selfbooth-filmstrip-height, clamp(64px, 7.5vh, 84px));
+    min-height: 64px;
+    max-height: 88px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 3px 6px;
-    background: #f5f0eb;
-    border-top: 1px solid rgba(223, 210, 200, 0.85);
+    padding: 6px 14px;
+    background: #fff9f4;
+    border-top: 1px solid var(--border-subtle, #e6d9cf);
     border-radius: 0;
     flex-shrink: 0;
     scrollbar-width: none;
@@ -2030,27 +2143,32 @@
 .selfbooth-bottom-gallery-empty {
     width: 100%;
     text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: #8c7365;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary, #70594f);
 }
 
 .selfbooth-thumb-card {
     position: relative;
-    height: calc(100% - 2px);
+    height: calc(100% - 4px);
+    min-width: 48px;
     aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
-    border-radius: 3px;
+    border-radius: 10px;
     overflow: hidden;
     flex-shrink: 0;
-    border: 1.5px solid rgba(80, 42, 29, 0.25);
-    background: #e9e0d8;
+    border: 1.5px solid var(--border-subtle, #e6d9cf);
+    background: #faf6f1;
     cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.16s ease;
+}
+
+.selfbooth-thumb-card:hover {
+    transform: scale(1.03);
 }
 
 .selfbooth-thumb-card.active {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 1px #ef4444;
+    border: 2.5px solid var(--brand-primary, #502a1d);
+    box-shadow: 0 4px 12px rgba(80, 42, 29, 0.25);
 }
 
 .selfbooth-thumb-card img {
@@ -2062,28 +2180,30 @@
 
 .selfbooth-thumb-badge {
     position: absolute;
-    bottom: 1px;
-    right: 2px;
-    padding: 0 3px;
-    border-radius: 2px;
-    font-size: 8px;
+    bottom: 3px;
+    right: 3px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 11px;
     line-height: 1.25;
     font-weight: 800;
-    background: rgba(18, 16, 15, 0.72);
-    color: #fff;
+    background: rgba(42, 24, 16, 0.8);
+    color: #ffffff;
 }
 
 /* ── Top-Left Elapsed Timer Badge (Đồng hồ góc trái) ── */
 .selfbooth-elapsed-timer-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(18, 16, 15, 0.72);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    gap: 8px;
+    min-height: 44px;
+    background: rgba(42, 24, 16, 0.78);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: var(--radius-full, 9999px);
-    padding: 4px 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    padding: 0 16px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.26);
+    color: #ffffff;
     user-select: none;
 }
 
@@ -2115,10 +2235,10 @@
 
 .selfbooth-timer-digits {
     font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-    font-size: 0.92rem;
+    font-size: 1.08rem;
     font-weight: 800;
     color: #ffffff;
-    letter-spacing: 1px;
+    letter-spacing: 0.04em;
 }
 
 .selfbooth-timer-label {
@@ -2167,30 +2287,31 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 14px;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 22px;
     border-radius: var(--radius-full, 9999px);
-    background: rgba(80, 42, 29, 0.86);
+    background: var(--brand-primary, #502a1d);
     backdrop-filter: blur(8px);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.24);
+    border: 1.5px solid rgba(255, 255, 255, 0.26);
     font-family: var(--font-body, inherit);
-    font-size: 0.76rem;
-    font-weight: 800;
-    letter-spacing: 0.05em;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease;
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.32);
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .btn-selfbooth-finish-main:hover {
-    background: var(--brand-primary, #502a1d);
-    transform: translateY(-1px);
+    background: var(--brand-primary-hover, #633726);
+    transform: scale(1.03);
 }
 
 .btn-selfbooth-finish-main:active {
-    transform: translateY(0) scale(0.98);
+    background: var(--brand-primary-pressed, #3d2017);
+    transform: scale(0.97);
 }
 
 /* ── Popup Confirm Kết Thúc Buổi Chụp ── */

@@ -17,10 +17,11 @@
 /* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
 .review-fixed-brand-logo {
     position: absolute;
-    top: 5.2vh;
-    left: 5.2vw;
-    height: clamp(44px, 3.2vw, 56px);
-    width: auto;
+    top: clamp(7px, 1.3vh, 14px);
+    left: clamp(28px, 3.9vw, 75px);
+    width: clamp(136px, 11.07vw, 212.5px);
+    height: auto;
+    aspect-ratio: 250 / 82.483;
     object-fit: contain;
     z-index: 50;
     pointer-events: none;

@@ -11,6 +11,7 @@ import {
     FILE_PREFIX_FINAL,
     FILE_PREFIX_SHOT,
 } from '../lib/constants'
+import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import QRCode from 'qrcode'
 import {
     Loader2,
@@ -19,13 +20,13 @@ import {
     RefreshCw,
     ArrowRight,
 } from 'lucide-react'
-import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './ProcessingScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
 import {
     buildGalleryUrl,
     extractRawPin,
     formatLocalSessionFolder,
+    isTestSessionPin,
 } from '../lib/pinUtils'
 
 export default function ProcessingScreen() {
@@ -149,6 +150,8 @@ export default function ProcessingScreen() {
                 enhancedPhotoUrl: p.enhancedPath,
             }))
 
+            const isTestSession = isTestSessionPin(session?.pinCode || sessionId)
+
             try {
                 console.log(
                     '[ProcessingScreen] Finalizing session media into sessions/{sessionId}/raw & final...'
@@ -158,6 +161,7 @@ export default function ProcessingScreen() {
                     customerName: session?.customerName || undefined,
                     sessionType: isSelfbooth ? 'selfbooth' : 'photobooth',
                     cmsUrl,
+                    skipCloudUpload: isTestSession,
                     compositeDataUrl: stripUrl || '',
                     compositeFileName: finalCompositeFileName,
                     pairedPrintDataUrl: pairedPrintUrl || undefined,
@@ -169,65 +173,87 @@ export default function ProcessingScreen() {
                 throw finalizeErr
             }
 
-            // ── BƯỚC 3: ĐỒNG BỘ SESSION METADATA LÊN CLOUD CMS & SUPABASE NGAY LẬP TỨC ──
-            const layoutType = isSelfbooth
-                ? 'selfbooth'
-                : selectedFrameSize === '4x6'
-                  ? '4x6'
-                  : '2x6'
-            const kioskId =
-                cloudSyncService.getKioskId() ||
-                (isSelfbooth ? 'kiosk_02' : 'kiosk_01')
+            // ── BƯỚC 3: ĐỒNG BỘ SESSION METADATA LÊN CLOUD CMS & SUPABASE (Bỏ qua với mã test 1234) ──
+            if (!isTestSession) {
+                const layoutType = isSelfbooth
+                    ? 'selfbooth'
+                    : selectedFrameSize === '4x6'
+                      ? '4x6'
+                      : '2x6'
+                const kioskId =
+                    cloudSyncService.getKioskId() ||
+                    (isSelfbooth ? 'kiosk_02' : 'kiosk_01')
 
-            cloudSyncService.queueSession({
-                id: sessionId,
-                session_code: `JB${Date.now().toString().slice(-6)}`,
-                pin_code: rawPin || null,
-                customer_name: session?.customerName || null,
-                customer_phone: session?.customerPhone || null,
-                kiosk_id: kioskId,
-                branch_id: 'branch_01',
-                layout_type: layoutType,
-                copies: isSelfbooth ? 0 : 2,
-                total_amount:
-                    session?.paidAmount ||
-                    (isSelfbooth
-                        ? 50000
-                        : selectedFrameSize === '4x6'
-                          ? 70000
-                          : 50000),
-                payment_method: (session?.paymentMethod?.toLowerCase() ===
-                'cash'
-                    ? 'cash'
-                    : 'vietqr') as 'vietqr' | 'cash',
-                coupon_code: null,
-                paper_consumed: isSelfbooth ? 0 : 2,
-                storage_url: galleryTargetUrl,
-                status: 'completed',
-                created_at: new Date().toISOString(),
-                photos: sourcePhotos.map(
-                    (p) =>
-                        p.enhancedPath ||
-                        p.compositedPath ||
-                        p.rawPath ||
-                        ''
-                ),
-            })
+                const paidCopies =
+                    session?.paidCopies && session.paidCopies > 0
+                        ? session.paidCopies
+                        : selectedFrameSize === '2x6'
+                          ? 2
+                          : 1
 
-            // Cập nhật URL thư mục Cloud đồng nhất với QR Code
-            setGalleryUrl(galleryTargetUrl)
-            useAppStore.getState().setStorageUrl(galleryTargetUrl)
-            // Enqueue is durable locally, but is not a Cloud acknowledgement.
-            if (!isBrowser) {
-                const deadline = Date.now() + 60000
-                while (true) {
-                    const status = await api.storage.getUploadStatus(sessionId)
-                    if (!status.success || !status.data) throw new Error(status.error || 'Không đọc được trạng thái upload')
-                    if (status.data.failedTasks > 0) throw new Error('Upload chưa thành công. Ảnh đã lưu tại máy; hãy thử lại khi có mạng.')
-                    if (status.data.pendingTasks === 0 && status.data.uploadingTasks === 0 && status.data.activeStreams === 0) break
-                    if (Date.now() >= deadline) throw new Error('Cloud chưa xác nhận xong. Ảnh vẫn được giữ trong hàng đợi tại máy.')
-                    await new Promise((resolve) => setTimeout(resolve, 500))
+                cloudSyncService.queueSession({
+                    id: sessionId,
+                    session_code: `JB${Date.now().toString().slice(-6)}`,
+                    pin_code: rawPin || null,
+                    customer_name: session?.customerName || null,
+                    customer_phone: session?.customerPhone || null,
+                    kiosk_id: kioskId,
+                    branch_id: 'branch_01',
+                    layout_type: layoutType,
+                    copies: isSelfbooth ? 0 : paidCopies,
+                    total_amount:
+                        session?.paidAmount ||
+                        (isSelfbooth
+                            ? 50000
+                            : selectedFrameSize === '4x6'
+                              ? 90000
+                              : 70000),
+                    payment_method: (session?.paymentMethod?.toLowerCase() ===
+                    'cash'
+                        ? 'cash'
+                        : 'vietqr') as 'vietqr' | 'cash',
+                    coupon_code: null,
+                    paper_consumed: isSelfbooth ? 0 : paidCopies,
+                    storage_url: galleryTargetUrl,
+                    status: 'completed',
+                    created_at: new Date().toISOString(),
+                    photos: sourcePhotos.map(
+                        (p) =>
+                            p.enhancedPath ||
+                            p.compositedPath ||
+                            p.rawPath ||
+                            ''
+                    ),
+                })
+
+                // Chờ đồng bộ bản ghi session lên Cloud CMS/Supabase để quét QR mở Gallery không bị 404
+                const syncWaitDeadline = Date.now() + 5000
+                while (cloudSyncService.getStatus().isSyncing && Date.now() < syncWaitDeadline) {
+                    await new Promise((resolve) => setTimeout(resolve, 150))
                 }
+                const syncRes = await cloudSyncService.syncPendingSessions().catch(() => null)
+                if (syncRes && !syncRes.success && syncRes.message !== 'Tất cả phiên chụp đã được đồng bộ') {
+                    console.warn('[ProcessingScreen] Session sync warning:', syncRes.message)
+                }
+
+                // Cập nhật URL thư mục Cloud đồng nhất với QR Code
+                setGalleryUrl(galleryTargetUrl)
+                useAppStore.getState().setStorageUrl(galleryTargetUrl)
+                // Enqueue is durable locally, but is not a Cloud acknowledgement.
+                if (!isBrowser) {
+                    const deadline = Date.now() + 60000
+                    while (true) {
+                        const status = await api.storage.getUploadStatus(sessionId)
+                        if (!status.success || !status.data) throw new Error(status.error || 'Không đọc được trạng thái upload')
+                        if (status.data.failedTasks > 0) throw new Error('Upload chưa thành công. Ảnh đã lưu tại máy; hãy thử lại khi có mạng.')
+                        if (status.data.pendingTasks === 0 && status.data.uploadingTasks === 0 && status.data.activeStreams === 0) break
+                        if (Date.now() >= deadline) throw new Error('Cloud chưa xác nhận xong. Ảnh vẫn được giữ trong hàng đợi tại máy.')
+                        await new Promise((resolve) => setTimeout(resolve, 500))
+                    }
+                }
+            } else {
+                console.log('[ProcessingScreen] Mã test 1234: đã xử lý & lưu ảnh vào session_1234, không đẩy lên Cloud.')
+                setGalleryUrl(galleryTargetUrl)
             }
             useAppStore.getState().setMediaSyncDone(true)
             useAppStore.getState().setIsSyncingMedia(false)

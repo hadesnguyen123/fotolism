@@ -21,10 +21,11 @@
 /* ── Fixed Brand Logo góc trên bên trái ── */
 .selfbooth-fixed-brand {
     position: absolute;
-    top: 20px;
-    left: 48px;
-    height: clamp(44px, 3.2vw, 56px);
-    width: auto;
+    top: clamp(7px, 1.3vh, 14px);
+    left: clamp(28px, 3.9vw, 75px);
+    width: clamp(136px, 11.07vw, 212.5px);
+    height: auto;
+    aspect-ratio: 250 / 82.483;
     object-fit: contain;
     z-index: 10;
     pointer-events: none;

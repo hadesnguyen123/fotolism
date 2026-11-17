@@ -535,8 +535,7 @@ export default function ThemeSelectScreen() {
     )
     if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView screen="frame-filter"
         onNavigate={(target) => {
-            if (target === 'camera-booth') setScreen('capture');
-            else if (target === 'printing') { setStoreSlotOffsets(slotOffsetsRef.current); setScreen('processing'); }
+            if (target === 'printing') { setStoreSlotOffsets(slotOffsetsRef.current); setScreen('processing'); }
         }}
         themes={referenceThemes}
         framePreview={

@@ -454,10 +454,20 @@ export const SessionDB = {
     setUploadTaskPresignedUrl(
         id: string,
         presignedUrl: string,
-        expiresAt: number
+        expiresAt: number,
+        objectKey?: string
     ): void {
         const db = getDatabase()
         const now = new Date().toISOString()
+        if (objectKey) {
+            const stmt = db.prepare(`
+      UPDATE UploadTasks 
+      SET presigned_url = ?, url_expires_at = ?, object_key = ?, updated_at = ? 
+      WHERE id = ?
+    `)
+            stmt.run(presignedUrl, expiresAt, objectKey, now, id)
+            return
+        }
         const stmt = db.prepare(`
       UPDATE UploadTasks 
       SET presigned_url = ?, url_expires_at = ?, updated_at = ? 

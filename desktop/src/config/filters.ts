@@ -11,21 +11,21 @@ export interface ColorFilterItem {
 export const COLOR_FILTERS: ColorFilterItem[] = [
     {
         id: 'normal',
-        name: 'Tự nhiên',
+        name: 'Natural',
         cssFilter: 'none',
         tag: '',
         previewColor: '#E4D2C3',
     },
     {
         id: 'vintage_noir',
-        name: 'Cổ điển',
+        name: 'B&W',
         cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)',
         tag: '',
         previewColor: '#262626',
     },
     {
         id: 'retro_90s',
-        name: 'Retro 90s',
+        name: 'Vintage',
         cssFilter:
             'sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)',
         tag: '',

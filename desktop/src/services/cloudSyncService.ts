@@ -454,10 +454,24 @@ class CloudSyncService {
                     const currentEventConfig = JSON.parse(
                         localStorage.getItem('fotolism_event_config') || '{}'
                     )
+                    const remote2x6 = Number(
+                        configData.pricing.price_2x6 ??
+                            configData.pricing.price_2x6_weekday
+                    )
+                    const remote4x6 = Number(
+                        configData.pricing.price_4x6 ??
+                            configData.pricing.price_4x6_weekday
+                    )
                     const updatedEventConfig = {
                         ...currentEventConfig,
-                        price2x6: configData.pricing.price_2x6_weekday,
-                        price4x6: configData.pricing.price_4x6_weekday,
+                        price2x6:
+                            remote2x6 && remote2x6 >= 70000
+                                ? remote2x6
+                                : currentEventConfig.price2x6 || 70000,
+                        price4x6:
+                            remote4x6 && remote4x6 >= 90000
+                                ? remote4x6
+                                : currentEventConfig.price4x6 || 90000,
                         extraCopyPrice: configData.pricing.extra_print_price,
                         configVersion: configData.version || targetVersion || 1,
                     }

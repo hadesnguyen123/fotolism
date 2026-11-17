@@ -48,146 +48,149 @@ export const InteractiveStripPreview: React.FC<
     onPointerUp,
     onWheel,
 }) => {
-    return (
-        <div className="interactive-strip-preview-wrapper animate-pop">
-            <div className="strip-reposition-banner">
-                <span>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</span>
-            </div>
+        return (
+            <div className="interactive-strip-preview-wrapper animate-pop">
+                <div className="strip-reposition-banner">
+                    <span>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</span>
+                </div>
 
-            <div
-                className={`interactive-strip-preview ${
-                    selectedFrameSize === '2x6'
-                        ? 'strip-2x6-view'
-                        : 'postcard-4x6-view'
-                } ${selectedTheme?.overlayUrl ? 'has-custom-overlay' : ''}`}
-                style={{
-                    position: 'relative',
-                    aspectRatio: is2x6 ? '600 / 1800' : '1200 / 1800',
-                    background:
-                        selectedTheme?.bgGradient ||
-                        selectedTheme?.bgColor ||
-                        '#FAF6F0',
-                    borderRadius: '14px',
-                    boxShadow: '0 16px 45px rgba(0, 0, 0, 0.16)',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Cuộn phim 35mm: đục lỗ film 2 bên */}
-                {selectedTheme?.id === 'theme_vintage_film' && (
-                    <div className="film-live-perforations">
-                        <div className="film-holes-strip left" />
-                        <div className="film-holes-strip right" />
-                    </div>
-                )}
+                <div
+                    className={`interactive-strip-preview ${selectedFrameSize === '2x6'
+                            ? 'strip-2x6-view'
+                            : 'postcard-4x6-view'
+                        } ${selectedTheme?.overlayUrl ? 'has-custom-overlay' : ''}`}
+                    style={{
+                        position: 'relative',
+                        aspectRatio: is2x6 ? '600 / 1800' : '1200 / 1800',
+                        background:
+                            selectedTheme?.bgGradient ||
+                            selectedTheme?.bgColor ||
+                            '#FAF6F0',
+                        borderRadius: '14px',
+                        boxShadow: '0 16px 45px rgba(0, 0, 0, 0.16)',
+                        overflow: 'hidden',
+                    }}
+                >
+                    {/* Cuộn phim 35mm: đục lỗ film 2 bên */}
+                    {selectedTheme?.id === 'theme_vintage_film' && (
+                        <div className="film-live-perforations">
+                            <div className="film-holes-strip left" />
+                            <div className="film-holes-strip right" />
+                        </div>
+                    )}
 
-                {frameSlots.map((slot: any, idx: number) => {
-                    const photo = photos[idx]
-                    const photoSrc =
-                        photo?.compositedPath ||
-                        photo?.enhancedPath ||
-                        photo?.rawPath ||
-                        ''
-                    const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
-                    const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
+                    {frameSlots.map((slot: any, idx: number) => {
+                        const photo = photos[idx]
+                        const photoSrc =
+                            photo?.compositedPath ||
+                            photo?.enhancedPath ||
+                            photo?.rawPath ||
+                            ''
+                        const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
+                        const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
+                        const zoom = scaleVal * 1.08
+                        const maxTranslatePercent = ((zoom - 1) / 2) * 100
+                        const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
+                        const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
 
-                    return (
-                        <div
-                            key={photo?.id || idx}
-                            className={`interactive-slot-box ${activeDragIndex === idx ? 'is-dragging' : ''}`}
+                        return (
+                            <div
+                                key={photo?.id || idx}
+                                className={`interactive-slot-box ${activeDragIndex === idx ? 'is-dragging' : ''}`}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${slot.xPercent}%`,
+                                    top: `${slot.yPercent}%`,
+                                    width: `${slot.wPercent}%`,
+                                    height: `${slot.hPercent}%`,
+                                    overflow: 'hidden',
+                                    backgroundColor: '#141414',
+                                    cursor: 'grab',
+                                    touchAction: 'none',
+                                    userSelect: 'none',
+                                }}
+                                onPointerDown={(e) => onPointerDown(idx, e)}
+                                onPointerMove={onPointerMove}
+                                onPointerUp={onPointerUp}
+                                onPointerCancel={onPointerUp}
+                                onWheel={(e) => onWheel && onWheel(idx, e)}
+                            >
+                                {photoSrc ? (
+                                    <>
+                                        <img
+                                            src={photoSrc}
+                                            alt={`Slot ${idx + 1}`}
+                                            draggable={false}
+                                            style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover',
+                                                pointerEvents: 'none',
+                                                filter:
+                                                    selectedFilter?.cssFilter &&
+                                                        selectedFilter.cssFilter !== 'none'
+                                                        ? selectedFilter.cssFilter
+                                                        : undefined,
+                                                transform: `translate(${clampedX * maxTranslatePercent}%, ${clampedY * maxTranslatePercent}%) scale(${zoom})`,
+                                                transformOrigin: 'center center',
+                                                transition:
+                                                    activeDragIndex === idx
+                                                        ? 'none'
+                                                        : 'transform 0.12s ease-out',
+                                            }}
+                                        />
+                                        {(selectedFilter?.id === 'retro_90s' ||
+                                            selectedFilter?.hasGrain) && (
+                                                <div className="retro-film-grain-overlay" />
+                                            )}
+                                    </>
+                                ) : (
+                                    <div className="theme-slot-placeholder">
+                                        <Camera
+                                            size={16}
+                                            strokeWidth={2}
+                                            style={{
+                                                display: 'inline-block',
+                                                verticalAlign: 'middle',
+                                                marginRight: 4,
+                                            }}
+                                        />
+                                        <span>Ảnh {idx + 1}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
+
+                    {/* Chân dải ảnh in thương hiệu */}
+                    {!selectedTheme?.hideFooter && (
+                        <div className="strip-branding-footer">
+                            <span style={{ color: selectedTheme?.textColor || '#502a1d' }}>
+                                {eventName || DEFAULT_EVENT_NAME}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Lớp khung viền đồ họa PNG overlay */}
+                    {selectedTheme?.overlayUrl && (
+                        <img
+                            src={resolveAssetUrl(selectedTheme.overlayUrl)}
+                            alt="Frame Overlay"
+                            draggable={false}
                             style={{
                                 position: 'absolute',
-                                left: `${slot.xPercent}%`,
-                                top: `${slot.yPercent}%`,
-                                width: `${slot.wPercent}%`,
-                                height: `${slot.hPercent}%`,
-                                overflow: 'hidden',
-                                backgroundColor: '#141414',
-                                cursor: 'grab',
-                                touchAction: 'none',
-                                userSelect: 'none',
+                                inset: 0,
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'fill',
+                                pointerEvents: 'none',
+                                zIndex: 10,
                             }}
-                            onPointerDown={(e) => onPointerDown(idx, e)}
-                            onPointerMove={onPointerMove}
-                            onPointerUp={onPointerUp}
-                            onPointerCancel={onPointerUp}
-                            onWheel={(e) => onWheel && onWheel(idx, e)}
-                        >
-                            {photoSrc ? (
-                                <>
-                                    <img
-                                        src={photoSrc}
-                                        alt={`Slot ${idx + 1}`}
-                                        draggable={false}
-                                        style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            width: '100%',
-                                            height: '100%',
-                                            objectFit: 'cover',
-                                            pointerEvents: 'none',
-                                            filter:
-                                                selectedFilter?.cssFilter &&
-                                                selectedFilter.cssFilter !== 'none'
-                                                    ? selectedFilter.cssFilter
-                                                    : undefined,
-                                            transform: `translate(${offset.x * 4}%, ${offset.y * 4}%) scale(${scaleVal * 1.08})`,
-                                            transformOrigin: 'center center',
-                                            transition:
-                                                activeDragIndex === idx
-                                                    ? 'none'
-                                                    : 'transform 0.12s ease-out',
-                                        }}
-                                    />
-                                    {(selectedFilter?.id === 'retro_90s' ||
-                                        selectedFilter?.hasGrain) && (
-                                        <div className="retro-film-grain-overlay" />
-                                    )}
-                                </>
-                            ) : (
-                                <div className="theme-slot-placeholder">
-                                    <Camera
-                                        size={16}
-                                        strokeWidth={2}
-                                        style={{
-                                            display: 'inline-block',
-                                            verticalAlign: 'middle',
-                                            marginRight: 4,
-                                        }}
-                                    />
-                                    <span>Ảnh {idx + 1}</span>
-                                </div>
-                            )}
-                        </div>
-                    )
-                })}
-
-                {/* Chân dải ảnh in thương hiệu */}
-                {!selectedTheme?.hideFooter && (
-                    <div className="strip-branding-footer">
-                        <span style={{ color: selectedTheme?.textColor || '#502a1d' }}>
-                            {eventName || DEFAULT_EVENT_NAME}
-                        </span>
-                    </div>
-                )}
-
-                {/* Lớp khung viền đồ họa PNG overlay */}
-                {selectedTheme?.overlayUrl && (
-                    <img
-                        src={resolveAssetUrl(selectedTheme.overlayUrl)}
-                        alt="Frame Overlay"
-                        draggable={false}
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'fill',
-                            pointerEvents: 'none',
-                            zIndex: 10,
-                        }}
-                    />
-                )}
+                        />
+                    )}
+                </div>
             </div>
-        </div>
-    )
-}
+        )
+    }

@@ -188,8 +188,9 @@ export function registerStorageIpc(): void {
     success: boolean
     data?: {
         sessionId: string
-        folderKey: string
+        folderKey?: string
         enqueuedCount: number
+        offlineQueued?: boolean
     }
     error?: string
 }> {
@@ -205,6 +206,16 @@ export function registerStorageIpc(): void {
             return {
                 success: false,
                 error: 'Thiếu thông tin session hoặc danh sách file ảnh',
+            }
+        }
+        if (sessionId.replace(/^session_/i, '').trim() === '1234') {
+            return {
+                success: true,
+                data: {
+                    sessionId,
+                    enqueuedCount: 0,
+                    offlineQueued: true,
+                },
             }
         }
 
@@ -240,48 +251,58 @@ export function registerStorageIpc(): void {
             }
         }
 
-        // 2. Yêu cầu CMS cấp Presigned PUT URLs theo batch
+        // 2. Thử xin Presigned PUT URLs theo batch từ CMS (Offline-first: lỗi mạng/CMS vẫn ghi SQLite UploadTasks để worker tự xin URL bù sau)
         const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
-        const cmsRes = await fetch(`${effectiveCms}/api/storage/upload-urls`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sessionId,
-                customerName,
-                sessionType,
-                files: filesPayload,
-            }),
-        })
-
-        if (!cmsRes.ok) {
-            const errText = await cmsRes.text()
-            return {
-                success: false,
-                error: `CMS từ chối cấp Upload URLs (HTTP ${cmsRes.status}): ${errText}`,
-            }
-        }
-
-        const cmsData: any = await cmsRes.json()
-        if (!cmsData.success || !Array.isArray(cmsData.urls)) {
-            return {
-                success: false,
-                error: cmsData.error || 'CMS không trả về danh sách URLs hợp lệ',
-            }
-        }
-
-        // 3. Đưa vào SQLite UploadTasks Outbox Queue
         const urlMap = new Map<
             string,
             { putUrl: string; objectKey: string; expiresInSec: number }
         >()
-        for (const u of cmsData.urls) {
-            urlMap.set(u.fileName, {
-                putUrl: u.putUrl,
-                objectKey: u.objectKey,
-                expiresInSec: u.expiresInSec || 900,
+        let cmsFolderKey: string | undefined
+        try {
+            const cmsRes = await fetch(`${effectiveCms}/api/storage/upload-urls`, {
+                method: 'POST',
+                signal: AbortSignal.timeout(15000),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    customerName,
+                    sessionType,
+                    files: filesPayload,
+                }),
             })
+
+            if (cmsRes.ok) {
+                const cmsData: any = await cmsRes.json()
+                if (cmsData?.success && Array.isArray(cmsData.urls)) {
+                    cmsFolderKey = cmsData.folderKey
+                    for (const u of cmsData.urls) {
+                        urlMap.set(u.fileName, {
+                            putUrl: u.putUrl,
+                            objectKey: u.objectKey,
+                            expiresInSec: u.expiresInSec || 900,
+                        })
+                    }
+                } else {
+                    console.warn(
+                        '[Storage IPC] CMS upload-urls returned invalid payload, falling back to offline queue:',
+                        cmsData?.error
+                    )
+                }
+            } else {
+                const errText = await cmsRes.text().catch(() => '')
+                console.warn(
+                    `[Storage IPC] CMS upload-urls HTTP ${cmsRes.status}, falling back to offline queue:`,
+                    errText
+                )
+            }
+        } catch (cmsErr: any) {
+            console.warn(
+                '[Storage IPC] Cannot reach CMS upload-urls, queuing offline in SQLite:',
+                cmsErr?.message || cmsErr
+            )
         }
 
+        // 3. Luôn đưa vào SQLite UploadTasks Outbox Queue trước khi trả về
         const tasksToInsert: Array<
             Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
         > = []
@@ -329,8 +350,9 @@ export function registerStorageIpc(): void {
             success: true,
             data: {
                 sessionId,
-                folderKey: cmsData.folderKey,
+                folderKey: cmsFolderKey,
                 enqueuedCount: tasksToInsert.length,
+                offlineQueued: urlMap.size === 0,
             },
         }
     } catch (err: any) {
@@ -367,6 +389,7 @@ export function registerStorageIpc(): void {
                 customerName?: string
                 sessionType?: string
                 cmsUrl?: string
+                skipCloudUpload?: boolean
                 compositeDataUrl?: string
                 compositeFileName: string // e.g. fotolism_final_4x6.jpg
                 pairedPrintDataUrl?: string
@@ -386,6 +409,7 @@ export function registerStorageIpc(): void {
                     customerName,
                     sessionType = 'photobooth',
                     cmsUrl,
+                    skipCloudUpload,
                     compositeDataUrl,
                     compositeFileName,
                     pairedPrintDataUrl,
@@ -552,9 +576,16 @@ export function registerStorageIpc(): void {
                     }
                 }
 
-                // 3. Đẩy folder final này lên R2
+                // 3. Đẩy folder final này lên R2 (bỏ qua nếu là phiên test 1234)
+                const isTest1234 =
+                    Boolean(skipCloudUpload) ||
+                    sessionId.replace(/^session_/i, '').trim() === '1234'
                 let r2Result = null
-                if (finalFilesToEnqueue.length > 0) {
+                if (isTest1234) {
+                    console.log(
+                        `[Storage IPC] Phiên test (${sessionId}): đã lưu ảnh local vào ${finalDir}, bỏ qua đẩy lên Cloud R2.`
+                    )
+                } else if (finalFilesToEnqueue.length > 0) {
                     r2Result = await enqueueR2SessionInternal({
                         sessionId,
                         customerName,
