@@ -825,34 +825,6 @@ class CloudSyncService {
         return { paid: false }
     }
 
-    /**
-     * Giả lập giao dịch thanh toán thành công (dành cho Dev / Test hoặc cứu hộ nhân viên)
-     */
-    public async simulatePayment(
-        orderCode: string,
-        amount: number = 50000,
-        note?: string
-    ): Promise<{ success: boolean; paid: boolean; transaction?: any }> {
-        try {
-            const cmsUrl = this.getCmsUrl()
-            const res = await fetch(`${cmsUrl}/api/kiosk/payments/simulate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderCode, amount, note }),
-                signal: AbortSignal.timeout(5000),
-            })
-            if (res.ok) {
-                const json = await res.json()
-                if (json && json.paid) {
-                    return { success: true, paid: true, transaction: json.data }
-                }
-            }
-        } catch (err: any) {
-            console.warn('Simulate payment error:', err.message)
-        }
-        return { success: false, paid: false }
-    }
-
     // ──────────────────────────────────────────────────────────────────────────
     // 6. FORCE SYNC (DÀNH CHO NÚT BẤM TẠI LOCAL ADMIN)
     // ──────────────────────────────────────────────────────────────────────────
