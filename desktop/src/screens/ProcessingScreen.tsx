@@ -25,7 +25,6 @@ import {
     CheckCircle2,
     AlertCircle,
     RefreshCw,
-    ArrowRight,
 } from 'lucide-react'
 import './ProcessingScreen.css'
 import {
@@ -52,6 +51,10 @@ export default function ProcessingScreen() {
     const [compositeDone, setCompositeDone] = useState(false)
     const [uploadDone, setUploadDone] = useState(false)
     const [qrDone, setQrDone] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState<{
+        uploaded: number
+        total: number
+    } | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [isRetrying, setIsRetrying] = useState(false)
 
@@ -243,20 +246,68 @@ export default function ProcessingScreen() {
                 // Cập nhật URL thư mục Cloud đồng nhất với QR Code
                 setGalleryUrl(galleryTargetUrl)
                 useAppStore.getState().setStorageUrl(galleryTargetUrl)
-                // Enqueue is durable locally, but is not a Cloud acknowledgement.
+                // Bắt buộc chờ toàn bộ ảnh trong phiên tải lên hoàn tất 100% mới chuyển sang ReviewScreen
                 if (!isBrowser) {
-                    const deadline = Date.now() + 60000
+                    const STALL_TIMEOUT_MS = 90000
+                    let lastUploadedCount = -1
+                    let lastProgressAt = Date.now()
                     while (true) {
                         const status = await api.storage.getUploadStatus(sessionId)
-                        if (!status.success || !status.data) throw new Error(status.error || 'Không đọc được trạng thái upload')
-                        if (status.data.failedTasks > 0) throw new Error('Upload chưa thành công. Ảnh đã lưu tại máy; hãy thử lại khi có mạng.')
+                        if (!status.success || !status.data) {
+                            throw new Error(
+                                status.error || 'Không đọc được trạng thái upload'
+                            )
+                        }
+                        const {
+                            pendingTasks,
+                            uploadingTasks,
+                            failedTasks,
+                            uploadedTasks,
+                            totalTasks,
+                        } = status.data
+                        const effectiveTotal =
+                            totalTasks ??
+                            pendingTasks +
+                                uploadingTasks +
+                                uploadedTasks +
+                                failedTasks
+
+                        setUploadProgress({
+                            uploaded: uploadedTasks,
+                            total: effectiveTotal,
+                        })
+
+                        if (uploadedTasks > lastUploadedCount) {
+                            lastUploadedCount = uploadedTasks
+                            lastProgressAt = Date.now()
+                        }
+
+                        if (failedTasks > 0) {
+                            throw new Error(
+                                `Có ${failedTasks} ảnh chưa tải lên được (${uploadedTasks}/${effectiveTotal}). Vui lòng bấm Thử lại.`
+                            )
+                        }
                         if (
-                            status.data.pendingTasks === 0 &&
-                            status.data.uploadingTasks === 0
+                            effectiveTotal > 0 &&
+                            pendingTasks === 0 &&
+                            uploadingTasks === 0 &&
+                            uploadedTasks >= effectiveTotal
                         ) {
                             break
                         }
-                        if (Date.now() >= deadline) throw new Error('Cloud chưa xác nhận xong. Ảnh vẫn được giữ trong hàng đợi tại máy.')
+                        if (
+                            uploadingTasks === 0 &&
+                            Date.now() - lastProgressAt >= STALL_TIMEOUT_MS
+                        ) {
+                            throw new Error(
+                                `Tải ảnh lên Cloud bị gián đoạn (${uploadedTasks}/${effectiveTotal}). Vui lòng kiểm tra mạng và bấm Thử lại.`
+                            )
+                        }
+                        if (Date.now() - lastProgressAt >= STALL_TIMEOUT_MS * 2) {
+                            throw new Error(
+                                `Upload quá chậm (${uploadedTasks}/${effectiveTotal}). Vui lòng bấm Thử lại.`
+                            )
+                        }
                         await new Promise((resolve) => setTimeout(resolve, 500))
                     }
                 }
@@ -303,14 +354,14 @@ export default function ProcessingScreen() {
         }
     }, [])
 
-    function handleRetry() {
+    async function handleRetry() {
         setIsRetrying(true)
-        processMediaAndUpload()
-    }
-
-    function handleProceedOffline() {
-        // Luôn đảm bảo Offline-First: Chuyển sang review để khách nhận mã QR hoặc in tại buồng
-        setScreen('review')
+        if (!isBrowser) {
+            try {
+                await fotolismApi.storage.retryFailedUploads()
+            } catch {}
+        }
+        await processMediaAndUpload()
     }
 
     return (
@@ -368,6 +419,9 @@ export default function ProcessingScreen() {
                         </div>
                         <span className="proc-step-text">
                             Tải ảnh lên Cloud & Cloud Gallery
+                            {uploadProgress && uploadProgress.total > 0
+                                ? ` (${uploadProgress.uploaded}/${uploadProgress.total})`
+                                : ''}
                         </span>
                     </div>
 
@@ -407,14 +461,7 @@ export default function ProcessingScreen() {
                                 size={18}
                                 className={isRetrying ? 'step-spin' : ''}
                             />
-                            <span>Thử lại</span>
-                        </button>
-                        <button
-                            className="btn-proc-offline"
-                            onClick={handleProceedOffline}
-                        >
-                            <span>Tiếp tục (Offline)</span>
-                            <ArrowRight size={18} />
+                            <span>Thử lại tải ảnh</span>
                         </button>
                     </div>
                 )}

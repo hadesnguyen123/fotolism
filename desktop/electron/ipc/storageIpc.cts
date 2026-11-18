@@ -5,13 +5,56 @@
  * Phụ thuộc: electron (app, ipcMain, shell, BrowserWindow), Node.js (path, fs), common.cts, SessionDB, r2UploadWorker, enhanceIntegrity.
  */
 
-import { app, ipcMain, shell, BrowserWindow } from 'electron'
+import { app, ipcMain, shell, BrowserWindow, nativeImage } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
 import { getFotolismDir } from './common.cjs'
 import { SessionDB, type UploadTaskRecord } from '../sessionDatabase.cjs'
 import { r2UploadWorker, type UploadProgressEvent } from '../r2UploadWorker.cjs'
 import { assertEnhancedFile, enhancedFinalPath } from '../enhanceIntegrity.cjs'
+
+/**
+ * Tạo ảnh thumbnail nhẹ (~480px, ~35KB) để Gallery tải nhanh tức thì mà không ảnh hưởng ảnh gốc.
+ */
+function ensureLocalThumbnail(
+    originalPath: string,
+    sessionId: string,
+    preferredFileName?: string
+): { filePath: string; fileName: string } | null {
+    try {
+        if (!originalPath || !fs.existsSync(originalPath)) return null
+        const baseDir = getFotolismDir()
+        const localFolderName = sessionId.startsWith('session_')
+            ? sessionId
+            : `session_${sessionId}`
+        const thumbDir = path.join(baseDir, 'sessions', localFolderName, 'thumbnails')
+        if (!fs.existsSync(thumbDir)) {
+            fs.mkdirSync(thumbDir, { recursive: true })
+        }
+
+        const rawName = preferredFileName || path.basename(originalPath)
+        const baseName = rawName.replace(/\.[^.]+$/, '')
+        const thumbFileName = `${baseName}.jpg`
+        const thumbPath = path.join(thumbDir, thumbFileName)
+
+        if (fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0) {
+            return { filePath: thumbPath, fileName: thumbFileName }
+        }
+
+        const img = nativeImage.createFromPath(originalPath)
+        if (img.isEmpty()) return null
+        const size = img.getSize()
+        const resized = size.width > 480 ? img.resize({ width: 480 }) : img
+        const jpegBuffer = resized.toJPEG(80)
+        if (!jpegBuffer || jpegBuffer.length === 0) return null
+
+        fs.writeFileSync(thumbPath, jpegBuffer)
+        return { filePath: thumbPath, fileName: thumbFileName }
+    } catch (err) {
+        console.warn('[Storage IPC] Create thumbnail warning:', err)
+        return null
+    }
+}
 
 /**
  * Tự động dọn dẹp các tệp in ấn tạm thời (temp) và các thư mục phiên chụp cũ hơn số ngày lưu trữ chỉ định.
@@ -170,6 +213,7 @@ export function registerStorageIpc(): void {
                 stats.activeStreams = stats.uploadingTasks
                 stats.failedTasks = tasks.filter(t => t.status === 'FAILED_PERMANENT').length
                 stats.uploadedTasks = tasks.filter(t => t.status === 'UPLOADED').length
+                stats.totalTasks = tasks.length
                 stats.isProcessing = stats.uploadingTasks > 0
             }
             return { success: true, data: stats }
@@ -256,25 +300,76 @@ export function registerStorageIpc(): void {
             r2UploadWorker.setCmsUrl(cmsUrl)
         }
 
-        // 1. Kiểm tra và chuẩn bị danh sách files
+        // 1. Kiểm tra, tự sinh thumbnail nhẹ cho ảnh gốc và chuẩn bị danh sách files
         const filesPayload: Array<{
             fileName: string
-            type: 'original' | 'final'
+            type: 'original' | 'final' | 'thumbnail'
             sizeBytes: number
+            contentType: string
         }> = []
 
-        const validFiles = files
-            .map((f) => ({ ...f, filePath: cleanFilePath(f.filePath) }))
+        const normalizedValid = files
+            .map((f) => ({
+                ...f,
+                filePath: cleanFilePath(f.filePath),
+                isThumbnail: f.imageId.endsWith('_thumb'),
+            }))
             .filter((f) => f.filePath && fs.existsSync(f.filePath))
 
-        for (const file of validFiles) {
-            const stat = fs.statSync(file.filePath)
-            const fileName = path.basename(file.filePath)
-            filesPayload.push({
-                fileName,
-                type: file.isFinal ? 'final' : 'original',
-                sizeBytes: stat.size,
-            })
+        const validFiles: Array<{
+            imageId: string
+            filePath: string
+            isFinal?: boolean
+            isThumbnail?: boolean
+            uploadType: 'original' | 'final' | 'thumbnail'
+        }> = []
+        const seenTaskIds = new Set<string>()
+
+        for (const file of normalizedValid) {
+            const uploadType: 'original' | 'final' | 'thumbnail' = file.isThumbnail
+                ? 'thumbnail'
+                : file.isFinal
+                  ? 'final'
+                  : 'original'
+
+            if (!seenTaskIds.has(file.imageId)) {
+                seenTaskIds.add(file.imageId)
+                const stat = fs.statSync(file.filePath)
+                const fileName = path.basename(file.filePath)
+                validFiles.push({ ...file, uploadType })
+                filesPayload.push({
+                    fileName,
+                    type: uploadType,
+                    sizeBytes: stat.size,
+                    contentType: fileName.toLowerCase().endsWith('.webp')
+                        ? 'image/webp'
+                        : 'image/jpeg',
+                })
+            }
+
+            if (uploadType === 'original') {
+                const thumbId = `${file.imageId}_thumb`
+                if (!seenTaskIds.has(thumbId)) {
+                    const thumb = ensureLocalThumbnail(file.filePath, sessionId)
+                    if (thumb) {
+                        seenTaskIds.add(thumbId)
+                        const thumbStat = fs.statSync(thumb.filePath)
+                        validFiles.push({
+                            imageId: thumbId,
+                            filePath: thumb.filePath,
+                            isFinal: false,
+                            isThumbnail: true,
+                            uploadType: 'thumbnail',
+                        })
+                        filesPayload.push({
+                            fileName: thumb.fileName,
+                            type: 'thumbnail',
+                            sizeBytes: thumbStat.size,
+                            contentType: 'image/jpeg',
+                        })
+                    }
+                }
+            }
         }
 
         if (validFiles.length === 0) {
@@ -301,56 +396,60 @@ export function registerStorageIpc(): void {
         }
         const sessionDate = existingSession?.started_at || new Date().toISOString()
 
-        // 2. Thử xin Presigned PUT URLs theo batch từ CMS (Offline-first: lỗi mạng/CMS vẫn ghi SQLite UploadTasks để worker tự xin URL bù sau)
+        // 2. Chia batch tối đa 50 file/lượt xin Presigned PUT URLs (tránh vượt giới hạn payload khi chụp > 50 ảnh)
         const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
         const urlMap = new Map<
             string,
             { putUrl: string; objectKey: string; expiresInSec: number }
         >()
         let cmsFolderKey: string | undefined
-        try {
-            const cmsRes = await fetch(`${effectiveCms}/api/storage/upload-urls`, {
-                method: 'POST',
-                signal: AbortSignal.timeout(15000),
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionId,
-                    customerName,
-                    sessionType,
-                    date: sessionDate,
-                    files: filesPayload,
-                }),
-            })
+        const URL_BATCH_SIZE = 50
+        for (let i = 0; i < filesPayload.length; i += URL_BATCH_SIZE) {
+            const batchFiles = filesPayload.slice(i, i + URL_BATCH_SIZE)
+            try {
+                const cmsRes = await fetch(`${effectiveCms}/api/storage/upload-urls`, {
+                    method: 'POST',
+                    signal: AbortSignal.timeout(15000),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        customerName,
+                        sessionType,
+                        date: sessionDate,
+                        files: batchFiles,
+                    }),
+                })
 
-            if (cmsRes.ok) {
-                const cmsData: any = await cmsRes.json()
-                if (cmsData?.success && Array.isArray(cmsData.urls)) {
-                    cmsFolderKey = cmsData.folderKey
-                    for (const u of cmsData.urls) {
-                        urlMap.set(u.fileName, {
-                            putUrl: u.putUrl,
-                            objectKey: u.objectKey,
-                            expiresInSec: u.expiresInSec || 900,
-                        })
+                if (cmsRes.ok) {
+                    const cmsData: any = await cmsRes.json()
+                    if (cmsData?.success && Array.isArray(cmsData.urls)) {
+                        cmsFolderKey = cmsFolderKey || cmsData.folderKey
+                        for (const u of cmsData.urls) {
+                            urlMap.set(`${u.type}:${u.fileName}`, {
+                                putUrl: u.putUrl,
+                                objectKey: u.objectKey,
+                                expiresInSec: u.expiresInSec || 900,
+                            })
+                        }
+                    } else {
+                        console.warn(
+                            '[Storage IPC] CMS upload-urls returned invalid payload, falling back to offline queue:',
+                            cmsData?.error
+                        )
                     }
                 } else {
+                    const errText = await cmsRes.text().catch(() => '')
                     console.warn(
-                        '[Storage IPC] CMS upload-urls returned invalid payload, falling back to offline queue:',
-                        cmsData?.error
+                        `[Storage IPC] CMS upload-urls HTTP ${cmsRes.status}, falling back to offline queue:`,
+                        errText
                     )
                 }
-            } else {
-                const errText = await cmsRes.text().catch(() => '')
+            } catch (cmsErr: any) {
                 console.warn(
-                    `[Storage IPC] CMS upload-urls HTTP ${cmsRes.status}, falling back to offline queue:`,
-                    errText
+                    '[Storage IPC] Cannot reach CMS upload-urls, queuing offline in SQLite:',
+                    cmsErr?.message || cmsErr
                 )
             }
-        } catch (cmsErr: any) {
-            console.warn(
-                '[Storage IPC] Cannot reach CMS upload-urls, queuing offline in SQLite:',
-                cmsErr?.message || cmsErr
-            )
         }
 
         // 3. Luôn đưa vào SQLite UploadTasks Outbox Queue trước khi trả về (idempotent theo sessionId + imageId)
@@ -359,7 +458,9 @@ export function registerStorageIpc(): void {
         > = []
         for (const file of validFiles) {
             const fileName = path.basename(file.filePath)
-            const urlInfo = urlMap.get(fileName)
+            const urlInfo =
+                urlMap.get(`${file.uploadType}:${fileName}`) ||
+                urlMap.get(fileName)
             const stat = fs.statSync(file.filePath)
 
             tasksToInsert.push({
@@ -369,7 +470,7 @@ export function registerStorageIpc(): void {
                 file_path: file.filePath,
                 object_key:
                     urlInfo?.objectKey ||
-                    `fotolism-photos/${sessionId}/${fileName}`,
+                    `fotolism-photos/${sessionId}/${file.isThumbnail ? 'thumbnails/' : ''}${fileName}`,
                 size_bytes: stat.size,
                 is_final: file.isFinal ? 1 : 0,
                 status: 'PENDING',
@@ -499,12 +600,19 @@ export function registerStorageIpc(): void {
                 const safeCount = Math.max(1, Math.min(50, count))
                 const filesPayload: Array<{
                     fileName: string
-                    type: 'original'
+                    type: 'original' | 'thumbnail'
+                    contentType?: string
                 }> = []
                 for (let i = startIndex; i < startIndex + safeCount; i++) {
                     filesPayload.push({
                         fileName: `fotolism_enhanced_self_${i}.jpg`,
                         type: 'original',
+                        contentType: 'image/jpeg',
+                    })
+                    filesPayload.push({
+                        fileName: `fotolism_enhanced_self_${i}.jpg`,
+                        type: 'thumbnail',
+                        contentType: 'image/jpeg',
                     })
                 }
 
@@ -548,7 +656,7 @@ export function registerStorageIpc(): void {
                 }
                 const now = Date.now()
                 for (const u of cmsData.urls) {
-                    sessionMap.set(u.fileName, {
+                    sessionMap.set(`${u.type}:${u.fileName}`, {
                         putUrl: u.putUrl,
                         objectKey: u.objectKey,
                         expiresAt: now + (u.expiresInSec || 900) * 1000,
@@ -613,32 +721,75 @@ export function registerStorageIpc(): void {
                 }
 
                 const lookupName = targetFileName || path.basename(resolvedPath)
-                const cachedUrl = selfboothPrefetchedUrls
-                    .get(sessionId)
-                    ?.get(lookupName)
+                const sessionMap = selfboothPrefetchedUrls.get(sessionId)
+                const cachedUrl =
+                    sessionMap?.get(
+                        `${isFinal ? 'final' : 'original'}:${lookupName}`
+                    ) || sessionMap?.get(lookupName)
+
+                // Tạo thumbnail nhẹ song song cho ảnh gốc để Gallery hiển thị tức thì
+                const thumbInfo = !isFinal
+                    ? ensureLocalThumbnail(resolvedPath, sessionId, lookupName)
+                    : null
+                const cachedThumbUrl = thumbInfo
+                    ? sessionMap?.get(`thumbnail:${thumbInfo.fileName}`)
+                    : undefined
 
                 // Chỉ dùng URL pre-fetch khi còn hạn tối thiểu 30 giây
                 if (cachedUrl && cachedUrl.expiresAt > Date.now() + 30000) {
                     const stat = fs.statSync(resolvedPath)
-                    SessionDB.enqueueUploadTask({
-                        id: `task_${sessionId}_${imageId}`,
-                        session_id: sessionId,
-                        image_id: imageId,
-                        file_path: resolvedPath,
-                        object_key: cachedUrl.objectKey,
-                        size_bytes: stat.size,
-                        is_final: isFinal ? 1 : 0,
-                        status: 'PENDING',
-                        attempts: 0,
-                        presigned_url: cachedUrl.putUrl,
-                        url_expires_at: cachedUrl.expiresAt,
-                    })
+                    const tasksToQueue: Array<
+                        Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
+                    > = [
+                        {
+                            id: `task_${sessionId}_${imageId}`,
+                            session_id: sessionId,
+                            image_id: imageId,
+                            file_path: resolvedPath,
+                            object_key: cachedUrl.objectKey,
+                            size_bytes: stat.size,
+                            is_final: isFinal ? 1 : 0,
+                            status: 'PENDING',
+                            attempts: 0,
+                            presigned_url: cachedUrl.putUrl,
+                            url_expires_at: cachedUrl.expiresAt,
+                        },
+                    ]
+
+                    if (thumbInfo) {
+                        const thumbStat = fs.statSync(thumbInfo.filePath)
+                        const thumbObjectKey =
+                            cachedThumbUrl?.objectKey ||
+                            cachedUrl.objectKey.replace(
+                                /\/originals\/([^/]+)$/,
+                                `/thumbnails/${thumbInfo.fileName}`
+                            )
+                        tasksToQueue.push({
+                            id: `task_${sessionId}_${imageId}_thumb`,
+                            session_id: sessionId,
+                            image_id: `${imageId}_thumb`,
+                            file_path: thumbInfo.filePath,
+                            object_key: thumbObjectKey,
+                            size_bytes: thumbStat.size,
+                            is_final: 0,
+                            status: 'PENDING',
+                            attempts: 0,
+                            presigned_url:
+                                cachedThumbUrl &&
+                                cachedThumbUrl.expiresAt > Date.now() + 30000
+                                    ? cachedThumbUrl.putUrl
+                                    : undefined,
+                            url_expires_at: cachedThumbUrl?.expiresAt,
+                        })
+                    }
+
+                    SessionDB.enqueueBatchUploadTasks(tasksToQueue)
                     r2UploadWorker.triggerProcessing()
                     return {
                         success: true,
                         data: {
                             sessionId,
-                            enqueuedCount: 1,
+                            enqueuedCount: tasksToQueue.length,
                             usedPrefetch: true,
                         },
                     }

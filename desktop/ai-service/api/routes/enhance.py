@@ -518,7 +518,20 @@ def enhance_image(req: EnhanceRequest):
             with tempfile.NamedTemporaryFile(dir=out_path.parent, suffix=suffix, delete=False) as temporary:
                 temporary_path = Path(temporary.name)
                 temporary.write(image_bytes.tobytes())
-            os.replace(temporary_path, out_path)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            # Retry ngắn khi Windows Defender / trình đọc file tạm giữ lock gây WinError 5
+            last_replace_err = None
+            for attempt in range(8):
+                try:
+                    os.replace(temporary_path, out_path)
+                    last_replace_err = None
+                    break
+                except PermissionError as perm_err:
+                    last_replace_err = perm_err
+                    time.sleep(0.06 * (attempt + 1))
+            if last_replace_err is not None:
+                raise last_replace_err
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)

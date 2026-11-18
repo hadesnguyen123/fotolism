@@ -35,6 +35,7 @@ export interface WorkerStats {
     uploadingTasks: number
     uploadedTasks: number
     failedTasks: number
+    totalTasks?: number
     isProcessing: boolean
 }
 
@@ -390,6 +391,20 @@ export class R2UploadWorker {
         fileName: string,
         sizeBytes: number
     ): Promise<string> {
+        const isThumb =
+            task.object_key.includes('/thumbnails/') ||
+            task.image_id.endsWith('_thumb')
+        const uploadType: 'original' | 'final' | 'thumbnail' = isThumb
+            ? 'thumbnail'
+            : task.is_final
+              ? 'final'
+              : 'original'
+        const contentType = fileName.toLowerCase().endsWith('.webp')
+            ? 'image/webp'
+            : fileName.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg'
+
         const sessionDate = SessionDB.getSession(task.session_id)?.started_at
         const res = await fetch(`${this.cmsUrl}/api/storage/upload-urls`, {
             method: 'POST',
@@ -401,9 +416,9 @@ export class R2UploadWorker {
                 files: [
                     {
                         fileName,
-                        type: task.is_final ? 'final' : 'original',
+                        type: uploadType,
                         sizeBytes,
-                        contentType: 'image/jpeg',
+                        contentType,
                     },
                 ],
             }),
@@ -448,6 +463,15 @@ export class R2UploadWorker {
         fileName: string,
         sizeBytes: number
     ): Promise<void> {
+        const isThumb =
+            task.object_key.includes('/thumbnails/') ||
+            task.image_id.endsWith('_thumb')
+        const uploadType: 'original' | 'final' | 'thumbnail' = isThumb
+            ? 'thumbnail'
+            : task.is_final
+              ? 'final'
+              : 'original'
+
         const res = await fetch(`${this.cmsUrl}/api/storage/confirm`, {
             method: 'POST',
             signal: AbortSignal.timeout(15000),
@@ -456,7 +480,7 @@ export class R2UploadWorker {
                 sessionId: task.session_id,
                 objectKey: task.object_key,
                 fileName,
-                type: task.is_final ? 'final' : 'original',
+                type: uploadType,
                 sizeBytes,
                 checksum: task.checksum,
             }),
@@ -484,12 +508,18 @@ export class R2UploadWorker {
             const isHttps = parsedUrl.protocol === 'https:'
             const transport = isHttps ? https : http
 
+            const contentType = filePath.toLowerCase().endsWith('.webp')
+                ? 'image/webp'
+                : filePath.toLowerCase().endsWith('.png')
+                  ? 'image/png'
+                  : 'image/jpeg'
+
             const req = transport.request(
                 parsedUrl,
                 {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'image/jpeg',
+                        'Content-Type': contentType,
                         'Content-Length': fileSize,
                     },
                 },

@@ -26,7 +26,6 @@ import { PrintActionDeck } from '../components/review/PrintActionDeck'
 import '../components/reference/fonts.css'
 import './ReviewScreen.css'
 import './ReviewCompletion.css'
-import { isPhotoEnhanced } from '../lib/enhanceState'
 import {
     buildGalleryUrl,
     extractRawPin,
@@ -113,14 +112,36 @@ export default function ReviewScreen() {
             .catch((err) => console.error('Error generating QR:', err))
     }, [targetCloudUrl])
 
+    // Rule: Chỉ hiển thị ReviewScreen khi toàn bộ ảnh đã tải lên Cloud hoàn tất
+    useEffect(() => {
+        const isTest =
+            !isSelfboothMode &&
+            isTestSessionPin(session?.pinCode || localSessionFolder)
+        if (!isBrowser && !isTest && !useAppStore.getState().mediaSyncDone) {
+            setScreen('processing')
+        }
+    }, [isSelfboothMode, session?.pinCode, localSessionFolder, setScreen])
+
     // Sinh bản ghép canvas composite chất lượng cao & Đẩy ảnh lên Cloud Gallery
     useEffect(() => {
         let isMounted = true
 
         async function processSessionMedia() {
             try {
-                if (!photos.length || photos.some((photo) => !isPhotoEnhanced(photo))) {
-                    throw new Error('Ảnh AI chưa hoàn tất. Hãy quay lại bước chụp và thử lại.')
+                const hasMissingPhotoPath =
+                    !photos.length ||
+                    photos.some(
+                        (photo) =>
+                            !(
+                                photo.compositedPath ||
+                                photo.enhancedPath ||
+                                photo.rawPath
+                            )
+                    )
+                if (hasMissingPhotoPath) {
+                    throw new Error(
+                        'Chưa có đầy đủ ảnh hợp lệ trong phiên chụp. Hãy quay lại bước chụp và thử lại.'
+                    )
                 }
                 if (isSelfboothMode) {
                     // Chế độ Selfbooth: Không cần ghép khung in ấn
@@ -390,8 +411,17 @@ export default function ReviewScreen() {
 
         try {
             const api = isBrowser ? mockApi : fotolismApi
-            if (!photos.length || photos.some((photo) => !isPhotoEnhanced(photo))) {
-                throw new Error('Ảnh AI chưa hoàn tất; chưa thể in ảnh final.')
+            const hasValidPrintPhotos =
+                photos.length > 0 &&
+                photos.every((photo) =>
+                    Boolean(
+                        photo.compositedPath ||
+                            photo.enhancedPath ||
+                            photo.rawPath
+                    )
+                )
+            if (!hasValidPrintPhotos) {
+                throw new Error('Chưa có ảnh hợp lệ để in.')
             }
             let pathToPrint =
                 compositeStripUrl || photos[0]?.compositedPath || ''

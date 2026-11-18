@@ -558,8 +558,9 @@ export const SessionDB = {
             .prepare(
                 `
       UPDATE UploadTasks 
-      SET status = 'PENDING', last_error = NULL, updated_at = ? 
-      WHERE status = 'FAILED_RETRYABLE'
+      SET status = 'PENDING', attempts = 0, last_error = NULL, updated_at = ? 
+      WHERE status IN ('FAILED_RETRYABLE', 'FAILED_PERMANENT')
+        AND session_id NOT IN ('session_1234', '1234')
     `
             )
             .run(now)

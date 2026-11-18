@@ -155,6 +155,7 @@ export interface FotolismAPI {
             uploadingTasks: number
             uploadedTasks: number
             failedTasks: number
+            totalTasks?: number
             isProcessing: boolean
         }>
         setConcurrency: (
@@ -593,6 +594,7 @@ const defaultMockApi: FotolismAPI = {
                 uploadingTasks: 0,
                 uploadedTasks: 12,
                 failedTasks: 0,
+                totalTasks: 12,
                 isProcessing: false,
             },
         }),
