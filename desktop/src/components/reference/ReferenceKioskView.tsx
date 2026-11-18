@@ -768,7 +768,6 @@ export default function ReferenceKioskView(props: ReferenceProps) {
             <div className="header-bar-adaptive" data-node-id="0:237">
               <div
                 className="brand-logo"
-                style={{ marginTop: -14 }}
                 onClick={() => setScreen('welcome')}
                 data-node-id="0:238"
               >
@@ -2186,65 +2185,13 @@ export default function ReferenceKioskView(props: ReferenceProps) {
         ============================================================ */}
         {screen === 'camera-booth' && (
           <>
-            {/* Adaptive Top Header Bar: Brand Logo (left) + 8s/5s selector + Countdown Timer (right) */}
+            {/* Adaptive Top Header Bar: Brand Logo (left) + Countdown Timer (right) */}
             <div className="header-bar-adaptive" data-node-id="0:268-header">
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 28,
-                }}
+                className="brand-logo"
+                onClick={() => setScreen('welcome')}
               >
-                <div
-                  className="brand-logo"
-                  onClick={() => setScreen('welcome')}
-                >
-                  <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
-                </div>
-
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: 5,
-                    borderRadius: 999,
-                    background: '#fdf5ed',
-                    border: '1.5px solid #e5d9cf',
-                    boxShadow: '0 4px 12px rgba(64, 33, 20, 0.08)',
-                    opacity: capturedCount > 0 || activeCountdown !== null ? 0.55 : 1,
-                  }}
-                  aria-label="Chọn thời gian đếm ngược chụp ảnh"
-                >
-                {[8, 5].map((sec) => {
-                  const isActive = countdownSetting === sec;
-                  const isLocked = capturedCount > 0 || activeCountdown !== null;
-                  return (
-                    <button
-                      key={sec}
-                      type="button"
-                      disabled={isLocked}
-                      onClick={() => !isLocked && setCountdownSetting(sec)}
-                      style={{
-                        minWidth: 68,
-                        height: 44,
-                        padding: '0 16px',
-                        borderRadius: 999,
-                        border: 'none',
-                        background: isActive ? '#653125' : 'transparent',
-                        color: isActive ? '#fdf5ed' : '#653125',
-                        fontFamily: 'var(--font-sans)',
-                        fontWeight: 600,
-                        fontSize: 18,
-                        cursor: isLocked ? 'not-allowed' : 'pointer',
-                        transition: 'background 0.16s ease, color 0.16s ease',
-                      }}
-                    >
-                      {sec}s
-                    </button>
-                  );
-                })}
-                </div>
+                <img alt="Fotolism" src={BRAND_LOGO_SRC} style={{ objectFit: 'contain' }} />
               </div>
 
               <div className="timer-shell" data-node-id="0:269">
@@ -2339,62 +2286,117 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   {isFlashing && <div className="camera-flash-overlay" />}
                 </div>
 
-                <button
-                  type="button"
-                  className="interactive-btn"
-                  disabled={isProcessing}
-                  onClick={handleStartShoot}
+                <div
                   style={{
-                    position: 'relative',
-                    width: 378,
-                    height: 58.5,
-                    background: '#653125',
-                    borderRadius: 33,
-                    border: 'none',
-                    boxShadow: '0px 7.5px 15px 0px rgba(64,33,20,0.12)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 8,
-                    cursor: isProcessing ? 'wait' : 'pointer',
-                    opacity: isProcessing ? 0.72 : 1,
+                    gap: 16,
+                    flexWrap: 'wrap',
                   }}
-                  data-node-id="0:276"
                 >
                   <div
                     style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: 5,
+                      height: 58.5,
+                      borderRadius: 999,
+                      background: '#fdf5ed',
+                      border: '1.5px solid #e5d9cf',
+                      boxShadow: '0 4px 12px rgba(64, 33, 20, 0.08)',
+                      opacity: capturedCount > 0 || activeCountdown !== null ? 0.55 : 1,
+                    }}
+                    aria-label="Chọn thời gian đếm ngược chụp ảnh"
+                  >
+                    {[8, 5].map((sec) => {
+                      const isActive = countdownSetting === sec;
+                      const isLocked = capturedCount > 0 || activeCountdown !== null;
+                      return (
+                        <button
+                          key={sec}
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() => !isLocked && setCountdownSetting(sec)}
+                          style={{
+                            minWidth: 68,
+                            height: 46,
+                            padding: '0 16px',
+                            borderRadius: 999,
+                            border: 'none',
+                            background: isActive ? '#653125' : 'transparent',
+                            color: isActive ? '#fdf5ed' : '#653125',
+                            fontFamily: 'var(--font-sans)',
+                            fontWeight: 600,
+                            fontSize: 18,
+                            cursor: isLocked ? 'not-allowed' : 'pointer',
+                            transition: 'background 0.16s ease, color 0.16s ease',
+                          }}
+                        >
+                          {sec}s
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="interactive-btn"
+                    disabled={isProcessing}
+                    onClick={handleStartShoot}
+                    style={{
+                      position: 'relative',
+                      width: 378,
+                      height: 58.5,
+                      background: '#653125',
+                      borderRadius: 33,
+                      border: 'none',
+                      boxShadow: '0px 7.5px 15px 0px rgba(64,33,20,0.12)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 8,
+                      cursor: isProcessing ? 'wait' : 'pointer',
+                      opacity: isProcessing ? 0.72 : 1,
                     }}
-                    data-node-id="0:277"
+                    data-node-id="0:276"
                   >
-                    <img
-                      alt=""
-                      src={`${REFERENCE_ASSET_BASE}s_camera_icon.svg`}
-                      style={{ width: 30, height: 30 }}
-                      data-node-id="0:278"
-                    />
-                    <p
+                    <div
                       style={{
-                        fontFamily: 'var(--font-sans)',
-                        fontWeight: 600,
-                        fontSize: 18,
-                        lineHeight: 1.3,
-                        color: '#fdf5ed',
-                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
                       }}
-                      data-node-id="0:279"
+                      data-node-id="0:277"
                     >
-                      {isProcessing
-                        ? 'Đang xử lý ảnh AI...'
-                        : capturedCount < totalCaptureSlots
-                          ? `Bắt đầu chụp (Ảnh ${capturedCount + 1} / ${totalCaptureSlots})`
-                          : 'Tiếp tục chọn Frame & Filter →'}
-                    </p>
-                  </div>
-                </button>
+                      <img
+                        alt=""
+                        src={`${REFERENCE_ASSET_BASE}s_camera_icon.svg`}
+                        style={{ width: 30, height: 30 }}
+                        data-node-id="0:278"
+                      />
+                      <p
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontWeight: 600,
+                          fontSize: 18,
+                          lineHeight: 1.3,
+                          color: '#fdf5ed',
+                          textAlign: 'center',
+                        }}
+                        data-node-id="0:279"
+                      >
+                        {isProcessing
+                          ? 'Đang xử lý ảnh AI...'
+                          : capturedCount < totalCaptureSlots
+                            ? `Bắt đầu chụp (Ảnh ${capturedCount + 1} / ${totalCaptureSlots})`
+                            : 'Tiếp tục chọn Frame & Filter →'}
+                      </p>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -162,8 +162,8 @@
   top: 56px;
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 150px);
-  max-width: 1770px;
+  width: calc(100% - 128px);
+  max-width: 1792px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -186,9 +186,10 @@
 
 .reference-kiosk .brand-logo {
   position: relative;
-  width: 212.5px;
-  height: 70.11px;
-  margin-top: -54px;
+  width: 196px;
+  height: 58px;
+  margin-top: 10px;
+  margin-left: 18px;
   flex-shrink: 0;
   cursor: pointer;
 }

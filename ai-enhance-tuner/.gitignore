@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+frontend/node_modules/
+frontend/dist/
+backend/data/uploads/*
+backend/data/outputs/*
+!backend/data/uploads/.gitkeep
+!backend/data/outputs/.gitkeep
