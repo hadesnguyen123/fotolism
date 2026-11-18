@@ -168,57 +168,9 @@ export default function SelfboothSetupScreen() {
                 </div>
             </header>
 
-            {/* ── Main Stage: Bố cục dọc 9:16 — Bộ lọc trên, Preview 3:4 bên dưới ── */}
+            {/* ── Main Stage: Bố cục 16:9 (2 cột: Preview Trái, Bộ lọc Phải) ── */}
             <main className="selfbooth-setup-grid">
-                {/* PHẦN TRÊN: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
-                <section className="setup-controls-card">
-                    <div className="control-section">
-                        <div className="control-section-header">
-                            <span className="section-label">Chọn Filter</span>
-                        </div>
-
-                        <div className="setup-filter-circles-row">
-                            {SELFBOOTH_FILTERS.map((f) => {
-                                const isSelected = activeFilter.id === f.id
-                                return (
-                                    <div
-                                        key={f.id}
-                                        className="setup-filter-circle-col"
-                                    >
-                                        <button
-                                            type="button"
-                                            className={`setup-filter-circle-btn ${isSelected ? 'selected' : ''}`}
-                                            style={{
-                                                backgroundColor: f.previewColor,
-                                            }}
-                                            onClick={() =>
-                                                handleChooseFilter(f)
-                                            }
-                                            title={f.name}
-                                            aria-label={`Chọn filter ${f.name}`}
-                                        >
-                                            {isSelected && (
-                                                <Check
-                                                    size={24}
-                                                    strokeWidth={3.2}
-                                                    color="#FFFFFF"
-                                                    style={{
-                                                        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.45))',
-                                                    }}
-                                                />
-                                            )}
-                                        </button>
-                                        <span className="setup-filter-circle-label">
-                                            {f.name}
-                                        </span>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </section>
-
-                {/* PHẦN DƯỚI: LIVE CAMERA PREVIEW TỈ LỆ 3:4 KHỚP LIVE VIEW SELFBOOTH */}
+                {/* CỘT TRÁI: LIVE CAMERA PREVIEW TỈ LỆ 3:2 BẬT GƯƠNG */}
                 <section className="setup-preview-card">
                     <div className="preview-video-container-3-2">
                         {isCanonLive ? (
@@ -266,9 +218,57 @@ export default function SelfboothSetupScreen() {
                         </div>
                     </div>
                 </section>
+
+                {/* CỘT PHẢI: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
+                <section className="setup-controls-card">
+                    <div className="control-section">
+                        <div className="control-section-header">
+                            <span className="section-label">Chọn Filter</span>
+                        </div>
+
+                        <div className="setup-filter-circles-row">
+                            {SELFBOOTH_FILTERS.map((f) => {
+                                const isSelected = activeFilter.id === f.id
+                                return (
+                                    <div
+                                        key={f.id}
+                                        className="setup-filter-circle-col"
+                                    >
+                                        <button
+                                            type="button"
+                                            className={`setup-filter-circle-btn ${isSelected ? 'selected' : ''}`}
+                                            style={{
+                                                backgroundColor: f.previewColor,
+                                            }}
+                                            onClick={() =>
+                                                handleChooseFilter(f)
+                                            }
+                                            title={f.name}
+                                            aria-label={`Chọn filter ${f.name}`}
+                                        >
+                                            {isSelected && (
+                                                <Check
+                                                    size={24}
+                                                    strokeWidth={3.2}
+                                                    color="#FFFFFF"
+                                                    style={{
+                                                        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.45))',
+                                                    }}
+                                                />
+                                            )}
+                                        </button>
+                                        <span className="setup-filter-circle-label">
+                                            {f.name}
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </section>
             </main>
 
-            {/* ── Footer Navigation Bar: Nút Tiếp Tục (Căn giữa trên màn dọc) ── */}
+            {/* ── Footer Navigation Bar: Nút Tiếp Tục (Căn giữa) ── */}
             <footer className="selfbooth-bottom-nav">
                 <button
                     className="btn-selfbooth-proceed"

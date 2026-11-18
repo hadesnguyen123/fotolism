@@ -33,6 +33,7 @@ export default function App() {
     const loadDeviceConfig = useAppStore((s) => s.loadDeviceConfig)
     const isKioskLocked = useAppStore((s) => s.isKioskLocked)
     const setIsKioskLocked = useAppStore((s) => s.setIsKioskLocked)
+    const captureMode = useAppStore((s) => s.eventConfig.captureMode)
 
     // Lắng nghe trạng thái khóa máy (isLocked) từ Cloud CMS Heartbeat
     useEffect(() => {
@@ -102,8 +103,13 @@ export default function App() {
         return <OverheadScreen />
     }
 
-    return (
-        <div className="app-root">
+    const isSelfboothFixed169 =
+        captureMode === 'selfbooth' && screen !== 'admin'
+
+    const appContent = (
+        <div
+            className={`app-root ${isSelfboothFixed169 ? 'selfbooth-fixed-16-9' : ''}`}
+        >
             {screen === 'activate' && <DeviceActivationScreen />}
             {(screen === 'idle' || screen === 'welcome') && <IdleScreen />}
             {screen === 'select-layout' && <SelectLayoutScreen />}
@@ -127,4 +133,10 @@ export default function App() {
             <PhotoboothCountdownBadge />
         </div>
     )
+
+    if (isSelfboothFixed169) {
+        return <div className="app-viewport-16-9-host">{appContent}</div>
+    }
+
+    return appContent
 }

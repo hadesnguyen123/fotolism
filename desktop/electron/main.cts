@@ -31,7 +31,6 @@ try {
 } catch {}
 
 const isDev = process.env.NODE_ENV === 'development'
-const KIOSK_MODE = process.env.VITE_KIOSK_MODE
 const VITE_DEV_SERVER_URL =
     process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173'
 
@@ -39,13 +38,12 @@ let mainWindow: BrowserWindow | null = null
 
 /**
  * Khởi tạo cửa sổ BrowserWindow chính của Kiosk.
- * Cấu hình chế độ toàn màn hình không viền ở production và tải URL tương ứng.
+ * Cố định tỉ lệ 16:9 (1920x1080) cho cả Photobooth và Selfbooth.
  */
 function createWindow() {
-    const isSelfboothDev = isDev && KIOSK_MODE === 'selfbooth'
     mainWindow = new BrowserWindow({
-        width: isSelfboothDev ? 540 : 1920,
-        height: isSelfboothDev ? 960 : 1080,
+        width: 1920,
+        height: 1080,
         fullscreen: !isDev,
         frame: isDev,
         kiosk: !isDev,

@@ -320,14 +320,7 @@ export function registerWindowAndConfigIpc(): void {
             }
         ) => {
             try {
-                const effectiveCropAspect =
-                    payload.cropAspect ||
-                    (payload.outputPath &&
-                    path
-                        .basename(payload.outputPath)
-                        .startsWith('fotolism_enhanced_self_')
-                        ? '3:4'
-                        : undefined)
+                const effectiveCropAspect = payload.cropAspect
 
                 // Natural capture preserves the original JPEG bytes and avoids Python startup/inference.
                 if (

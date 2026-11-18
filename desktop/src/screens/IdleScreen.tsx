@@ -251,21 +251,9 @@ export default function IdleScreen() {
 
     if (eventConfig.captureMode === 'selfbooth') {
         return (
-            <div
-                style={{
-                    width: '100vw',
-                    height: '100vh',
-                    background: '#121110',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}
-            >
+            <>
                 <ConnectedReferenceView
                     screen="welcome"
-                    portrait
                     onNavigate={() => handleOpenUnlockModal('selfbooth')}
                 />
                 <NumericKeypadModal
@@ -286,7 +274,7 @@ export default function IdleScreen() {
                     className="idle-admin-btn"
                     id="idle-admin-btn"
                     style={{
-                        position: 'fixed',
+                        position: 'absolute',
                         top: 16,
                         right: 16,
                         zIndex: 50,
@@ -301,7 +289,7 @@ export default function IdleScreen() {
                 >
                     <Settings size={22} strokeWidth={1.8} />
                 </button>
-            </div>
+            </>
         )
     }
 

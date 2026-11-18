@@ -243,7 +243,11 @@ export function registerCameraIpc(): void {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             })
-            return res.json()
+            const data = (await res.json()) as any
+            if (data?.success && payload.savePath) {
+                await flipImageFile(payload.savePath)
+            }
+            return data
         }
     )
 
@@ -644,6 +648,8 @@ export function registerCameraIpc(): void {
                     }
 
                     if (fileReady) {
+                        // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip)
+                        await flipImageFile(savePath)
                         const buffer = fs.readFileSync(savePath)
                         const sizeMb = (buffer.length / (1024 * 1024)).toFixed(
                             1

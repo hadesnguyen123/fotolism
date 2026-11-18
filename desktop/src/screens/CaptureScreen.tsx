@@ -1192,11 +1192,11 @@ export default function CaptureScreen() {
             const photoPath =
                 photoDataUrl || `selfbooth_${timestamp}_${photoNum}.jpg`
 
-            // Giai đoạn 1 (< 1s): Tạo bản xem trước tỷ lệ dọc 3:4 (3 ngang, 4 dọc) ngay lập tức, không chờ AI
+            // Giai đoạn 1 (< 1s): Tạo bản xem trước tỷ lệ 3:2 khớp Live View Selfbooth ngay lập tức
             let fastPreviewUrl = photoPath
             if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
                 try {
-                    fastPreviewUrl = await cropImageToAspect(photoDataUrl, 3, 4)
+                    fastPreviewUrl = await cropImageToAspect(photoDataUrl, 3, 2)
                 } catch {
                     fastPreviewUrl = photoDataUrl
                 }
@@ -1228,8 +1228,7 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 selectedFilter?.id || 'normal',
-                                enhancedSavePath,
-                                '3:4'
+                                enhancedSavePath
                             )
                             .then((enhRes) => {
                                 if (
@@ -1319,15 +1318,14 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── Chạy Python AI Service (White Pink + Filter) trên ảnh 24MP lưu vào final (cắt tâm 3:4 khớp Live View) ──
+                            // ── Chạy Python AI Service (White Pink + Filter) trên ảnh 24MP lưu vào final (giữ nguyên khung ngang khớp Live View) ──
                             try {
                                 const enhanceRes = await selfApi.ai.enhance(
                                     canonData.savedPath,
                                     50,
                                     'white_pink_v2',
                                     selectedFilter?.id || 'normal',
-                                    enhancedSavePath,
-                                    '3:4'
+                                    enhancedSavePath
                                 )
                                 if (
                                     enhanceRes &&
@@ -1473,8 +1471,7 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 selectedFilter?.id || 'normal',
-                                enhancedSavePath,
-                                '3:4'
+                                enhancedSavePath
                             )
                             if (enhRes?.success && enhRes?.data?.enhancedPath) {
                                 const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
@@ -1880,7 +1877,7 @@ export default function CaptureScreen() {
                     </div>
                 )}
 
-                {/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 2:3 (1080x1620) TRONG SELFBOOTH HOẶC CỘT 9/12 PHOTOBOOTH ── */}
+                {/* ── PHẦN 1 (TRÁI): LIVE VIEW TỈ LỆ 3:2 BẬT GƯƠNG TRONG SELFBOOTH HOẶC CỘT 9/12 PHOTOBOOTH ── */}
                 <div
                     className={
                         isSelfboothMode

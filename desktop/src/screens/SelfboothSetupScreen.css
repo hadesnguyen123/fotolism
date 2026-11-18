@@ -1,31 +1,31 @@
 /* ==========================================================================
-   FOTOLISM 3.0 — SELFBOOTH SETUP SCREEN (THIẾT LẬP CHỤP CHO SELFBOOTH)
+   FOTOLISM 3.0 — SELFBOOTH SETUP SCREEN (THIẾT LẬP CHỤP CHO SELFBOOTH 16:9)
    - Warm Minimalist Luxury & Touch-First Kiosk
-   - Logo fotolism cố định góc trên bên trái
-   - Khối Trái: Live Camera 16:9 xem trước thời gian thực
-   - Khối Phải: Bộ 3 tông màu + Thời gian chụp phút tinh gọn
-   - Nút Quay lại & Tiếp tục không icon theo quy chuẩn
+   - Cố định tỉ lệ 16:9 đồng nhất cho mọi màn hình Selfbooth
+   - Khối Trái: Live Camera xem trước thời gian thực (bật gương)
+   - Khối Phải: Bộ 3 tông màu tinh gọn
+   - Nút Tiếp tục không icon theo quy chuẩn
    ========================================================================== */
 
 .selfbooth-setup-container {
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     background-color: #faf6f0;
     user-select: none;
     overflow: hidden;
     position: relative;
-    padding: 20px 24px 20px;
+    padding: 24px 48px;
     box-sizing: border-box;
 }
 
 /* ── Fixed Brand Logo ở góc trên bên trái ──────────────────────────────── */
 .selfbooth-fixed-brand-logo {
     position: absolute;
-    top: 18px;
-    left: 24px;
-    width: clamp(112px, 24vw, 148px);
+    top: clamp(7px, 1.3vh, 14px);
+    left: clamp(28px, 3.9vw, 75px);
+    width: clamp(136px, 11.07vw, 212.5px);
     height: auto;
     aspect-ratio: 250 / 82.483;
     object-fit: contain;
@@ -38,8 +38,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: 44px;
-    margin-bottom: 12px;
+    margin-top: 8px;
+    margin-bottom: 16px;
     flex-shrink: 0;
     z-index: 10;
 }
@@ -83,31 +83,30 @@
     margin: 6px 0 0 0;
 }
 
-/* ── Main Stage: Bố cục dọc 9:16 (Bộ lọc trên, Preview 3:4 bên dưới) ────── */
+/* ── Main Stage: Bố cục ngang 16:9 (2 cột: Preview Trái + Filter Phải) ── */
 .selfbooth-setup-grid {
     flex: 1;
     min-height: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
-    gap: 14px;
-    max-width: 492px;
+    justify-content: center;
+    gap: 36px;
+    max-width: 1220px;
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
 
-/* ── KHỐI DƯỚI: LIVE CAMERA PREVIEW 3:4 KHỚP LIVE VIEW SELFBOOTH ────────── */
+/* ── CỘT TRÁI: LIVE CAMERA PREVIEW 3:2 KHỚP LIVE VIEW SELFBOOTH ────────── */
 .setup-preview-card {
-    flex: 1 1 0;
-    min-height: 0;
-    width: 100%;
-    max-width: 100%;
+    flex: 1.15 1 0;
+    min-width: 0;
+    max-width: 640px;
     background: #ffffff;
-    border-radius: 22px;
-    padding: 14px;
+    border-radius: 26px;
+    padding: 20px;
     box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
     border: 1.5px solid #f0e6de;
     display: flex;
@@ -118,13 +117,12 @@
 }
 
 .preview-video-container-3-2 {
-    height: 100%;
+    width: 100%;
+    height: auto;
     max-height: 100%;
-    width: auto;
-    max-width: 100%;
-    aspect-ratio: 3 / 4;
+    aspect-ratio: 3 / 2;
     background: #18181b;
-    border-radius: 16px;
+    border-radius: 18px;
     overflow: hidden;
     position: relative;
     display: flex;
@@ -171,20 +169,20 @@
     font-weight: 800;
 }
 
-/* ── KHỐI TRÊN: BỘ ĐIỀU KHIỂN CHỌN FILTER ──────────────────────────────── */
+/* ── CỘT PHẢI: BỘ ĐIỀU KHIỂN CHỌN FILTER ──────────────────────────────── */
 .setup-controls-card {
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 100%;
+    flex: 0.85 1 0;
+    min-width: 0;
+    max-width: 500px;
     background: #ffffff;
-    border-radius: 22px;
-    padding: 16px 20px;
+    border-radius: 26px;
+    padding: 28px 32px;
     box-shadow: 0 10px 32px rgba(80, 42, 29, 0.05);
     border: 1.5px solid #f0e6de;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 12px;
+    gap: 16px;
     box-sizing: border-box;
 }
 
