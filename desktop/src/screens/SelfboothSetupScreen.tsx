@@ -1,20 +1,46 @@
+/**
+ * @file SelfboothSetupScreen.tsx
+ * Màn hình cấu hình trước khi chụp phòng tự chụp (Selfbooth):
+ * chọn tỷ lệ khung ảnh, chọn bộ lọc màu (Basic, B&W, Retro) và hiển thị thông tin thời gian phiên chụp.
+ * Phụ thuộc: react, store/appStore, lib/api.
+ */
+
 import { useState, useEffect, useRef } from 'react'
 import {
     useAppStore,
     ALL_LAYOUTS,
-    COLOR_FILTERS,
     type ColorFilterItem,
 } from '../store/appStore'
-import { DEFAULT_SELFBOOTH_DURATION_SECONDS } from '../lib/constants'
+import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Check } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import './SelfboothSetupScreen.css'
 
-// Các mốc thời gian chụp Selfbooth tinh gọn (5, 7, 10 phút)
-const SELFBOOTH_MINUTES_OPTIONS = [
-    { minutes: 5, seconds: 300 },
-    { minutes: 7, seconds: 420 },
-    { minutes: 10, seconds: 600 },
+// Bộ 3 filter riêng cho chế độ Selfbooth: Basic, B&W, Retro
+const SELFBOOTH_FILTERS: ColorFilterItem[] = [
+    {
+        id: 'normal',
+        name: 'Basic',
+        cssFilter: 'none',
+        tag: '',
+        previewColor: '#E4D2C3',
+    },
+    {
+        id: 'vintage_noir',
+        name: 'B&W',
+        cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)',
+        tag: '',
+        previewColor: '#262626',
+    },
+    {
+        id: 'retro_90s',
+        name: 'Retro',
+        cssFilter:
+            'sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)',
+        tag: '',
+        previewColor: '#8B4A39',
+        hasGrain: true,
+    },
 ]
 
 export default function SelfboothSetupScreen() {
@@ -23,35 +49,41 @@ export default function SelfboothSetupScreen() {
         selectLayout,
         selectedFilter,
         selectFilter,
-        eventConfig,
-        setSelfboothDurationSeconds,
     } = useAppStore()
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const [stream, setStream] = useState<MediaStream | null>(null)
+    const [isCanonLive, setIsCanonLive] = useState(false)
 
-    // Thời gian chụp đã chọn (mặc định 300s = 5p)
-    const currentDuration =
-        eventConfig.selfboothDurationSeconds ||
-        DEFAULT_SELFBOOTH_DURATION_SECONDS
-    const [selectedDuration, setSelectedDuration] =
-        useState<number>(currentDuration)
+    const activeFilter =
+        SELFBOOTH_FILTERS.find((f) => f.id === selectedFilter?.id) ||
+        SELFBOOTH_FILTERS[0]
 
-    // Đảm bảo ban đầu bộ lọc thuộc 1 trong 3 màu
+    // Đảm bảo mặc định chọn một trong 3 filter Basic / B&W / Retro
     useEffect(() => {
-        const isOneOfThree = COLOR_FILTERS.some(
+        const isValid = SELFBOOTH_FILTERS.some(
             (f) => f.id === selectedFilter?.id
         )
-        if (!isOneOfThree) {
-            selectFilter(COLOR_FILTERS[0])
+        if (!isValid) {
+            selectFilter(SELFBOOTH_FILTERS[0])
         }
     }, [selectedFilter?.id, selectFilter])
 
-    // Bật webcam xem trước thời gian thực tỉ lệ 16:9
+    // Ưu tiên Canon Daemon Live View nếu đang hoạt động, fallback sang webcam
     useEffect(() => {
         let activeStream: MediaStream | null = null
+        let mounted = true
 
         async function initCamera() {
+            try {
+                const apiClient = isBrowser ? mockApi : fotolismApi
+                const daemonRes = await apiClient.camera.canonDaemonStatus?.()
+                if (mounted && daemonRes?.success && daemonRes.data?.running) {
+                    setIsCanonLive(true)
+                    return
+                }
+            } catch {}
+
             try {
                 const s = await navigator.mediaDevices.getUserMedia({
                     video: {
@@ -62,6 +94,10 @@ export default function SelfboothSetupScreen() {
                     },
                     audio: false,
                 })
+                if (!mounted) {
+                    s.getTracks().forEach((t) => t.stop())
+                    return
+                }
                 activeStream = s
                 setStream(s)
                 if (videoRef.current) {
@@ -79,6 +115,7 @@ export default function SelfboothSetupScreen() {
         initCamera()
 
         return () => {
+            mounted = false
             if (activeStream) {
                 activeStream.getTracks().forEach((t) => t.stop())
             }
@@ -89,13 +126,7 @@ export default function SelfboothSetupScreen() {
         selectFilter(filter)
     }
 
-    function handleChooseDuration(durationSeconds: number) {
-        setSelectedDuration(durationSeconds)
-        setSelfboothDurationSeconds(durationSeconds)
-    }
-
     function handleStartCapture() {
-        setSelfboothDurationSeconds(selectedDuration)
         if (stream) {
             stream.getTracks().forEach((t) => t.stop())
         }
@@ -103,7 +134,6 @@ export default function SelfboothSetupScreen() {
         if (layouts && layouts[0]) {
             selectLayout(layouts[0])
         }
-        // Bỏ màn chọn frame: trỏ thẳng vào capture
         setScreen('capture')
     }
 
@@ -134,68 +164,74 @@ export default function SelfboothSetupScreen() {
                             <circle cx="12" cy="13" r="3" />
                         </svg>
                     </div>
-                    <h1 className="setup-header-title">Thiết Lập Chụp</h1>
+                    <h1 className="setup-header-title">Chọn Bộ Lọc Màu</h1>
                 </div>
             </header>
 
-            {/* ── Main Stage: 2 Cột Cân Đối Hoàn Hảo (Live Camera 3:2 + Tùy Chọn Cài Đặt) ── */}
+            {/* ── Main Stage: 2 Cột Cân Đối Hoàn Hảo (Live Camera 3:2 + Tùy Chọn Filter) ── */}
             <main className="selfbooth-setup-grid">
                 {/* CỘT TRÁI: LIVE CAMERA PREVIEW TỈ LỆ CHUẨN 3:2 */}
                 <section className="setup-preview-card">
                     <div className="preview-video-container-3-2">
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="preview-video-element"
-                            style={{
-                                filter:
-                                    selectedFilter?.cssFilter &&
-                                    selectedFilter.cssFilter !== 'none'
-                                        ? selectedFilter.cssFilter
-                                        : undefined,
-                                transform: 'scaleX(-1)', // Kiosk: Gương luôn luôn bật
-                            }}
-                        />
+                        {isCanonLive ? (
+                            <img
+                                src="http://127.0.0.1:8899/liveview"
+                                alt="Live View"
+                                className="preview-video-element"
+                                style={{
+                                    filter:
+                                        activeFilter.cssFilter !== 'none'
+                                            ? activeFilter.cssFilter
+                                            : undefined,
+                                    transform: 'scaleX(-1)',
+                                }}
+                            />
+                        ) : (
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="preview-video-element"
+                                style={{
+                                    filter:
+                                        activeFilter.cssFilter !== 'none'
+                                            ? activeFilter.cssFilter
+                                            : undefined,
+                                    transform: 'scaleX(-1)',
+                                }}
+                            />
+                        )}
 
                         {/* Indicator Tông Màu Đang Áp Dụng (Frosted Glass Badge) */}
                         <div className="preview-filter-indicator">
                             <span
                                 className="dot"
                                 style={{
-                                    background:
-                                        selectedFilter?.previewColor ||
-                                        '#ffffff',
+                                    background: activeFilter.previewColor,
                                 }}
                             />
                             <span>
-                                Tông màu:{' '}
-                                <strong>
-                                    {selectedFilter?.name || 'Tự nhiên'}
-                                </strong>
+                                Bộ lọc:{' '}
+                                <strong>{activeFilter.name}</strong>
                             </span>
                         </div>
                     </div>
                 </section>
 
-                {/* CỘT PHẢI: BỘ ĐIỀU KHIỂN TINH GỌN (3 TÔNG MÀU HÌNH TRÒN + THỜI GIAN 5P 7P 10P) */}
-                <section className="setup-controls-card">
-                    {/* PHẦN 1: BỘ 3 TÔNG MÀU HÌNH TRÒN ĐƠN GIẢN NHƯ PHOTOBOOTH */}
+                {/* CỘT PHẢI: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
+                <section
+                    className="setup-controls-card"
+                    style={{ justifyContent: 'center' }}
+                >
                     <div className="control-section">
                         <div className="control-section-header">
-                            <span className="section-label">Tông màu</span>
+                            <span className="section-label">Chọn Filter</span>
                         </div>
 
                         <div className="setup-filter-circles-row">
-                            {COLOR_FILTERS.map((f) => {
-                                const isSelected = selectedFilter.id === f.id
-                                const circleBg =
-                                    f.id === 'natural'
-                                        ? '#D8C7B5'
-                                        : f.id === 'classic'
-                                          ? '#2D2426'
-                                          : '#9C5832'
+                            {SELFBOOTH_FILTERS.map((f) => {
+                                const isSelected = activeFilter.id === f.id
                                 return (
                                     <div
                                         key={f.id}
@@ -205,13 +241,13 @@ export default function SelfboothSetupScreen() {
                                             type="button"
                                             className={`setup-filter-circle-btn ${isSelected ? 'selected' : ''}`}
                                             style={{
-                                                backgroundColor: circleBg,
+                                                backgroundColor: f.previewColor,
                                             }}
                                             onClick={() =>
                                                 handleChooseFilter(f)
                                             }
                                             title={f.name}
-                                            aria-label={`Chọn tông màu ${f.name}`}
+                                            aria-label={`Chọn filter ${f.name}`}
                                         >
                                             {isSelected && (
                                                 <Check
@@ -228,51 +264,6 @@ export default function SelfboothSetupScreen() {
                                             {f.name}
                                         </span>
                                     </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    {/* PHẦN 2: THỜI GIAN CHỤP (5p, 7p, 10p KHÔNG MÔ TẢ) */}
-                    <div className="control-section">
-                        <div className="control-section-header">
-                            <span className="section-label">
-                                Thời gian chụp
-                            </span>
-                        </div>
-
-                        <div className="durations-minutes-grid">
-                            {SELFBOOTH_MINUTES_OPTIONS.map((opt) => {
-                                const isSelected =
-                                    selectedDuration === opt.seconds
-                                return (
-                                    <button
-                                        key={opt.minutes}
-                                        type="button"
-                                        className={`duration-card-chip ${isSelected ? 'selected' : ''}`}
-                                        onClick={() =>
-                                            handleChooseDuration(opt.seconds)
-                                        }
-                                        aria-label={`Chọn thời gian ${opt.minutes} phút`}
-                                    >
-                                        {isSelected && (
-                                            <div
-                                                className="chip-check-badge"
-                                                aria-hidden="true"
-                                            >
-                                                <Check
-                                                    size={12}
-                                                    strokeWidth={3.2}
-                                                />
-                                            </div>
-                                        )}
-                                        <span className="duration-chip-number">
-                                            {opt.minutes}p
-                                        </span>
-                                        <span className="duration-chip-unit">
-                                            {opt.minutes} phút
-                                        </span>
-                                    </button>
                                 )
                             })}
                         </div>

@@ -1,3 +1,11 @@
+/**
+ * @file main.cts
+ * Điểm khởi chạy chính (Main Process) của ứng dụng Electron Kiosk Fotolism:
+ * quản lý vòng đời cửa sổ, khởi tạo các dịch vụ nền (Canon Daemon, AI Service, Outbox Worker),
+ * khóa ứng dụng đơn thể (single instance lock) và đăng ký toàn bộ kênh giao tiếp IPC.
+ * Phụ thuộc: electron, path, các module IPC trong ./ipc/.
+ */
+
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import {
@@ -29,6 +37,10 @@ const VITE_DEV_SERVER_URL =
 
 let mainWindow: BrowserWindow | null = null
 
+/**
+ * Khởi tạo cửa sổ BrowserWindow chính của Kiosk.
+ * Cấu hình chế độ toàn màn hình không viền ở production và tải URL tương ứng.
+ */
 function createWindow() {
     const isSelfboothDev = isDev && KIOSK_MODE === 'selfbooth'
     mainWindow = new BrowserWindow({

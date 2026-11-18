@@ -1,3 +1,10 @@
+/**
+ * @file faceDetector.ts
+ * Nhận diện khuôn mặt và trích xuất 468 điểm mốc đặc trưng (Landmarks) bằng MediaPipe Vision (Offline):
+ * tính toán tọa độ mắt, cằm, mũi, hàm phục vụ thuật toán làm đẹp khuôn mặt thời gian thực trên LiveView.
+ * Phụ thuộc: @mediapipe/tasks-vision.
+ */
+
 import {
     FilesetResolver,
     FaceLandmarker,

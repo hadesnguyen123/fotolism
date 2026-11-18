@@ -1,3 +1,11 @@
+/**
+ * @file App.tsx
+ * Thành phần gốc (Root Component) điều phối luồng chuyển màn hình của Kiosk:
+ * hiển thị màn hình chính tương ứng với trạng thái (Idle, Layout, Payment, Capture, Review),
+ * quản lý khóa máy từ xa (KioskLockOverlay) và hỗ trợ chế độ màn hình phụ Overhead Display.
+ * Phụ thuộc: react, store/appStore, services/cloudSyncService, các màn hình trong screens/*.
+ */
+
 import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
 import { cloudSyncService } from './services/cloudSyncService'

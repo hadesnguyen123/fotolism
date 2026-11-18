@@ -1,3 +1,10 @@
+/**
+ * @file storageIpc.cts
+ * Quản lý lưu trữ tệp cục bộ (RAW, AI enhanced, final layout), hàng đợi đồng bộ Cloudflare R2 Outbox,
+ * dọn dẹp ổ đĩa định kỳ và chuẩn hóa đường dẫn file trên môi trường Windows Kiosk.
+ * Phụ thuộc: electron (app, ipcMain, shell, BrowserWindow), Node.js (path, fs), common.cts, SessionDB, r2UploadWorker, enhanceIntegrity.
+ */
+
 import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -6,6 +13,12 @@ import { SessionDB, type UploadTaskRecord } from '../sessionDatabase.cjs'
 import { r2UploadWorker, type UploadProgressEvent } from '../r2UploadWorker.cjs'
 import { assertEnhancedFile, enhancedFinalPath } from '../enhanceIntegrity.cjs'
 
+/**
+ * Tự động dọn dẹp các tệp in ấn tạm thời (temp) và các thư mục phiên chụp cũ hơn số ngày lưu trữ chỉ định.
+ * Đảm bảo ổ cứng Kiosk không bị đầy khi vận hành liên tục tại cửa hàng.
+ *
+ * @param retentionDays Số ngày lưu trữ tối đa của ảnh phiên chụp trên đĩa cục bộ (mặc định 15 ngày).
+ */
 export function cleanupDiskStorage(retentionDays = 15): void {
     try {
         const tempDir = app.getPath('temp')
@@ -61,6 +74,12 @@ export function cleanupDiskStorage(retentionDays = 15): void {
     }
 }
 
+/**
+ * Chuẩn hóa chuỗi đường dẫn URI (file:///) về đường dẫn tệp Windows hợp lệ.
+ *
+ * @param p Chuỗi đường dẫn hoặc file URL từ frontend.
+ * @returns Đường dẫn tệp cục bộ đã chuẩn hóa.
+ */
 export function cleanFilePath(p?: string): string {
     if (!p) return ''
     let cleaned = p.trim()
@@ -75,6 +94,9 @@ export function cleanFilePath(p?: string): string {
     return path.normalize(decodeURIComponent(cleaned))
 }
 
+/**
+ * Đăng ký các kênh IPC lưu trữ (lưu ảnh chụp, lưu khung hoàn thiện, tạo session R2 outbox, mở thư mục).
+ */
 export function registerStorageIpc(): void {
     ipcMain.handle('storage:get-downloads-path', async () => {
         try {
@@ -251,6 +273,23 @@ export function registerStorageIpc(): void {
             }
         }
 
+        let existingSession = SessionDB.getSession(sessionId)
+        if (!existingSession) {
+            try {
+                existingSession = SessionDB.createSession({
+                    id: sessionId,
+                    status: 'ACTIVE',
+                    started_at: new Date().toISOString(),
+                    total_slots: validFiles.length,
+                    payment_status: 'PAID',
+                    print_copies: 1,
+                })
+            } catch {
+                existingSession = SessionDB.getSession(sessionId)
+            }
+        }
+        const sessionDate = existingSession?.started_at || new Date().toISOString()
+
         // 2. Thử xin Presigned PUT URLs theo batch từ CMS (Offline-first: lỗi mạng/CMS vẫn ghi SQLite UploadTasks để worker tự xin URL bù sau)
         const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
         const urlMap = new Map<
@@ -267,6 +306,7 @@ export function registerStorageIpc(): void {
                     sessionId,
                     customerName,
                     sessionType,
+                    date: sessionDate,
                     files: filesPayload,
                 }),
             })
@@ -302,7 +342,7 @@ export function registerStorageIpc(): void {
             )
         }
 
-        // 3. Luôn đưa vào SQLite UploadTasks Outbox Queue trước khi trả về
+        // 3. Luôn đưa vào SQLite UploadTasks Outbox Queue trước khi trả về (idempotent theo sessionId + imageId)
         const tasksToInsert: Array<
             Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
         > = []
@@ -312,7 +352,7 @@ export function registerStorageIpc(): void {
             const stat = fs.statSync(file.filePath)
 
             tasksToInsert.push({
-                id: `task_${sessionId}_${file.imageId}_${Date.now()}`,
+                id: `task_${sessionId}_${file.imageId}`,
                 session_id: sessionId,
                 image_id: file.imageId,
                 file_path: file.filePath,
@@ -329,17 +369,6 @@ export function registerStorageIpc(): void {
                     : undefined,
             })
         }
-
-        try {
-            SessionDB.createSession({
-                id: sessionId,
-                status: 'ACTIVE',
-                started_at: new Date().toISOString(),
-                total_slots: validFiles.length,
-                payment_status: 'PAID',
-                print_copies: 1,
-            })
-        } catch {}
 
         SessionDB.enqueueBatchUploadTasks(tasksToInsert)
 

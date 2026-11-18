@@ -1,5 +1,11 @@
-// Typed helper để gọi Fotolism desktop API qua preload IPC
-// An toàn khi chạy trên trình duyệt (mock data tự động)
+/**
+ * @file api.ts
+ * Lớp trừu tượng hóa giao tiếp (API Client) của giao diện React:
+ * điều hướng giữa Electron IPC (`window.electronAPI`) trong môi trường production/desktop
+ * và Mock API tự động khi chạy trên trình duyệt web dev (browser testing).
+ * Phụ thuộc: constants.ts, Window/Electron preload API.
+ */
+
 import {
     BRAND_NAME,
     APP_DOMAIN,

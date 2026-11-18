@@ -4,6 +4,7 @@ Quản lý, lưu bộ nhớ đệm (cache) và nạp bảng tra cứu màu (LUT)
 Hỗ trợ kiểm tra mtime (file modification time) để tự động nạp lại khi file thay đổi trên đĩa.
 """
 import logging
+import math
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 import numpy as np
@@ -95,6 +96,48 @@ class LUTManager:
         graded_g = cv2.LUT(img_bgr[..., 1], lut_g)
         graded_r = cv2.LUT(img_bgr[..., 2], lut_r)
         return cv2.merge([graded_b, graded_g, graded_r])
+
+    def apply_post_filter(self, img_bgr: np.ndarray, style_id: str) -> np.ndarray:
+        """Áp dụng bộ lọc màu (Basic / B&W / Retro) sau bước AI Enhance."""
+        sid = (style_id or "").strip().lower()
+        if not sid or sid in ("none", "raw", "original", "natural", "normal", "basic"):
+            return img_bgr
+
+        if sid in ("bw", "b&w", "vintage_noir", "monochrome"):
+            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+            gray = np.clip((gray - 0.5) * 1.18 + 0.5, 0.0, 1.0)
+            gray = np.clip(gray * 1.05, 0.0, 1.0)
+            out_gray = (gray * 255.0).astype(np.uint8)
+            return cv2.cvtColor(out_gray, cv2.COLOR_GRAY2BGR)
+
+        if sid in ("retro", "retro_90s", "vintage"):
+            # Chuyển BGR -> RGB [0..1] để khớp chuẩn ma trận CSS sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)
+            rgb = img_bgr[:, :, ::-1].astype(np.float32) / 255.0
+            s = 0.38
+            sepia_mat = np.array([
+                [1 - 0.607 * s, 0.769 * s,     0.189 * s],
+                [0.349 * s,     1 - 0.314 * s, 0.168 * s],
+                [0.272 * s,     0.534 * s,     1 - 0.869 * s],
+            ], dtype=np.float32)
+            a = math.radians(-14.0)
+            c, si = math.cos(a), math.sin(a)
+            hue_mat = np.array([
+                [0.213 + 0.787 * c - 0.213 * si, 0.715 - 0.715 * c - 0.715 * si, 0.072 - 0.072 * c + 0.928 * si],
+                [0.213 - 0.213 * c + 0.143 * si, 0.715 + 0.285 * c + 0.140 * si, 0.072 - 0.072 * c - 0.283 * si],
+                [0.213 - 0.213 * c - 0.787 * si, 0.715 - 0.715 * c + 0.715 * si, 0.072 + 0.928 * c + 0.072 * si],
+            ], dtype=np.float32)
+            sat = 1.2
+            sat_mat = np.array([
+                [0.213 + 0.787 * sat, 0.715 - 0.715 * sat, 0.072 - 0.072 * sat],
+                [0.213 - 0.213 * sat, 0.715 + 0.285 * sat, 0.072 - 0.072 * sat],
+                [0.213 - 0.213 * sat, 0.715 - 0.715 * sat, 0.072 + 0.928 * sat],
+            ], dtype=np.float32)
+            combined_mat = sat_mat @ hue_mat @ sepia_mat
+            rgb = np.clip(rgb @ combined_mat.T, 0.0, 1.0)
+            rgb = np.clip(((rgb - 0.5) * 1.08 + 0.5) * 0.98, 0.0, 1.0)
+            return (rgb[:, :, ::-1] * 255.0).astype(np.uint8)
+
+        return img_bgr
 
     def invalidate(self, style_id: Optional[str] = None):
         """Hủy bộ nhớ đệm."""

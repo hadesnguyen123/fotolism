@@ -1,3 +1,10 @@
+/**
+ * @file ProcessingScreen.tsx
+ * Màn hình chờ kết xuất và đồng bộ ảnh sau phiên chụp:
+ * kiểm soát thanh tiến trình ghép khung ảnh, tải lên Cloudflare R2 qua Outbox Worker và tạo mã QR nhận ảnh.
+ * Phụ thuộc: react, store/appStore, lib/canvasCompositor, lib/pinUtils, services/cloudSyncService.
+ */
+
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import {

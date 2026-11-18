@@ -1,3 +1,10 @@
+/**
+ * @file ReviewScreen.tsx
+ * Màn hình xem lại ảnh, kết xuất dải ảnh hoàn chỉnh (Strip 2x6 kép hoặc 4x6 đơn),
+ * tạo mã QR tải ảnh qua Cloudflare R2 / Wi-Fi Hotspot nội bộ và gửi lệnh in ảnh ra máy in DNP RX1HS.
+ * Phụ thuộc: react, store/appStore, lib/canvasCompositor, lib/pinUtils, services/cloudSyncService.
+ */
+
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'

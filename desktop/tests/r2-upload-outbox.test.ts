@@ -1,11 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { SessionDB } from '../dist-electron/sessionDatabase.cjs'
-import { r2UploadWorker } from '../dist-electron/r2UploadWorker.cjs'
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as os from 'node:os'
+
+const tempDbPath = vi.hoisted(() => {
+    const p = require('node:path')
+    const o = require('node:os')
+    const dbFile = p.join(
+        o.tmpdir(),
+        `fotolism_test_outbox_${process.pid}_${Date.now()}.db`
+    )
+    process.env.FOTOLISM_DB_PATH = dbFile
+    return dbFile
+})
+
+import { SessionDB } from '../dist-electron/sessionDatabase.cjs'
+import { r2UploadWorker } from '../dist-electron/r2UploadWorker.cjs'
 
 describe('Fotolism 3.0 — SQLite UploadTasks Outbox & Worker Suite', () => {
     const testSessionId = `test_sess_${Date.now()}`
+
+    afterAll(() => {
+        try {
+            if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath)
+        } catch {}
+    })
 
     beforeEach(() => {
         // Đảm bảo session tồn tại trong DB trước khi thêm upload task (foreign key)
@@ -137,5 +156,66 @@ describe('Fotolism 3.0 — SQLite UploadTasks Outbox & Worker Suite', () => {
         expect(typeof stats.pendingTasks).toBe('number')
         expect(typeof stats.uploadedTasks).toBe('number')
         expect(typeof stats.failedTasks).toBe('number')
+    })
+
+    it('OUTBOX-04: Cooldown requeue moves eligible FAILED_RETRYABLE tasks back to PENDING', () => {
+        const taskId = `task_${testSessionId}_cooldown`
+        SessionDB.enqueueUploadTask({
+            id: taskId,
+            session_id: testSessionId,
+            image_id: 'cooldown_img',
+            file_path: 'C:\\test\\cooldown.jpg',
+            object_key: `fotolism-photos/${testSessionId}/originals/cooldown.jpg`,
+            size_bytes: 1024,
+            is_final: 0,
+            status: 'PENDING',
+            attempts: 0,
+        })
+
+        SessionDB.updateUploadTaskStatus(
+            taskId,
+            'FAILED_RETRYABLE',
+            'Temporary error',
+            true
+        )
+
+        // Cooldown rất lớn -> chưa đến hạn requeue
+        expect(SessionDB.requeueRetryableUploadTasks(600_000)).toBe(0)
+        expect(SessionDB.getUploadTask(taskId)?.status).toBe('FAILED_RETRYABLE')
+
+        // Cooldown 0ms -> chuyển ngay về PENDING
+        expect(SessionDB.requeueRetryableUploadTasks(0)).toBeGreaterThanOrEqual(1)
+        expect(SessionDB.getUploadTask(taskId)?.status).toBe('PENDING')
+    })
+
+    it('WORKER-03: PUT failure transitions to FAILED_PERMANENT after 5 attempts', async () => {
+        const tmpFile = path.join(os.tmpdir(), `fotolism_put_fail_${Date.now()}.jpg`)
+        fs.writeFileSync(tmpFile, Buffer.from('fake-jpeg-data'))
+
+        const taskId = `task_${testSessionId}_put_perm`
+        const task = SessionDB.enqueueUploadTask({
+            id: taskId,
+            session_id: testSessionId,
+            image_id: 'put_perm',
+            file_path: tmpFile,
+            object_key: `fotolism-photos/${testSessionId}/originals/put_perm.jpg`,
+            size_bytes: 14,
+            is_final: 0,
+            status: 'PENDING',
+            attempts: 4,
+            presigned_url: 'http://127.0.0.1:1/unreachable-r2-endpoint',
+            url_expires_at: Date.now() + 600_000,
+        })
+
+        try {
+            await (r2UploadWorker as any).executeUpload(task)
+            const updated = SessionDB.getUploadTask(taskId)
+            expect(updated?.attempts).toBe(5)
+            expect(updated?.status).toBe('FAILED_PERMANENT')
+        } finally {
+            try {
+                fs.unlinkSync(tmpFile)
+            } catch {}
+        }
     })
 })

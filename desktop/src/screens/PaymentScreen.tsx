@@ -1,3 +1,10 @@
+/**
+ * @file PaymentScreen.tsx
+ * Màn hình thanh toán chuyển khoản ngân hàng qua mã VietQR Napas247 động,
+ * hiển thị bảng giá theo số bản in, áp dụng mã giảm giá (voucher) và lắng nghe biến động số dư SePay.
+ * Phụ thuộc: react, store/appStore, lib/vietqr, services/cloudSyncService.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, ALL_LAYOUTS } from '../store/appStore'

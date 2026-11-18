@@ -1,3 +1,10 @@
+/**
+ * @file ConfirmScreen.tsx
+ * Màn hình xác nhận đơn chụp: chọn số lượng bản in (bội số 2 cho dải 2x6 kép),
+ * nhập mã coupon giảm giá và tính toán tổng tiền thanh toán trước khi chuyển sang cổng thanh toán VietQR.
+ * Phụ thuộc: react, store/appStore, constants.ts.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, type DiscountCoupon } from '../store/appStore'

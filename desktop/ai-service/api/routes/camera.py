@@ -1,3 +1,7 @@
+"""
+Router xử lý truy vấn danh sách thiết bị máy ảnh và chụp ảnh dự phòng qua OpenCV/Webcam khi không dùng EDSDK.
+Phụ thuộc: fastapi, pydantic, cv2, core.config.
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import os

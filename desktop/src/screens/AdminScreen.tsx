@@ -1,3 +1,11 @@
+/**
+ * @file AdminScreen.tsx
+ * Bảng điều khiển quản trị viên và kỹ thuật viên Kiosk (Admin Dashboard):
+ * giám sát kết nối phần cứng (Canon Daemon, Máy in nhiệt, AI Service, Outbox Sync),
+ * điều chỉnh tỷ lệ khung in, đếm số lượng giấy in còn lại và chẩn đoán lỗi hệ thống.
+ * Phụ thuộc: react, store/appStore, lib/api, services/cloudSyncService, ./admin/*.
+ */
+
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'

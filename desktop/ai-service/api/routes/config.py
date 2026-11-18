@@ -1,3 +1,7 @@
+"""
+Router đọc và ghi cấu hình thiết lập AI, thông số màu sắc và thông tin sự kiện (Event) hiện tại.
+Phụ thuộc: fastapi, pydantic, core.database.
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Any

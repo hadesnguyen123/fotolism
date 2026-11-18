@@ -23,14 +23,22 @@
 - Chỉ hỏi khi thiếu thông tin quan trọng hoặc có rủi ro cao.
 - Chỉ dùng subagent cho task độc lập, đủ lớn; phân chia file ownership, tránh xung đột và test trùng.
 
-## 4. Kiểm thử
+## 4. Code Standards
+- **File:** Header ngắn mô tả mục đích và dependency chính (nếu có).
+- **Function:** Comment mô tả nghiệp vụ, tham số, kết quả và side effects khi cần.
+- **Format:** TypeScript/JS dùng JSDoc; C# dùng XML Docs; Python dùng Docstring.
+- **Language:** Comment tiếng Việt; tên biến/hàm/class tiếng Anh.
+- **Rules:** Giải thích WHY thay vì WHAT; không comment logic hiển nhiên, không comment từng dòng.
+- **Maintenance:** Cập nhật comment khi sửa logic; không tự thêm comment hàng loạt hoặc ngoài phạm vi task.
+
+## 5. Kiểm thử
 - UI/CSS/Text: kiểm tra diff; kiểm tra trực quan khi khả thi.
 - Logic/API: test đúng module bị ảnh hưởng.
 - Camera/AI: test chuyên biệt khi có môi trường.
 - Không tự chạy full build/test/verify; không chạy lại test PASS khi code liên quan không đổi.
 - Không báo PASS nếu chưa thực sự kiểm tra.
 
-## 5. Báo cáo
+## 6. Báo cáo
 Trả lời ngắn gọn bằng tiếng Việt, chỉ gồm:
 - **Đã thay đổi**
 - **Đã kiểm tra**

@@ -1,11 +1,12 @@
 """
-Fotolism AI Service — FastAPI Application
-Chạy local: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+Ứng dụng FastAPI backend AI Service cục bộ phục vụ Kiosk Fotolism (cổng 8000).
+Cung cấp các API xử lý ảnh AI làm đẹp chuẩn Hàn Quốc, ghép khung ảnh in, tạo mã QR và cấu hình màu sắc.
+Phụ thuộc: fastapi, uvicorn, các router trong api.routes, core.database.
 """
 import sys
 from contextlib import asynccontextmanager
 
-# Đảm bảo console Windows luôn encode UTF-8 an toàn, tránh lỗi UnicodeEncodeError
+# Đảm bảo console Windows luôn encode UTF-8 an toàn, tránh lỗi UnicodeEncodeError khi log tiếng Việt
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -22,7 +23,9 @@ from core.database import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup / shutdown lifecycle."""
+    """
+    Quản lý vòng đời khởi động và dừng dịch vụ FastAPI: khởi tạo CSDL SQLite nội bộ cho AI Service.
+    """
     # Startup
     await init_db()
     print("[AI Service] Fotolism AI Service ready on http://localhost:8000")
@@ -38,7 +41,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — chỉ cho Electron (localhost)
+# CORS — chỉ cấp phép cho giao diện Electron Kiosk (localhost / file protocol)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "file://"],
@@ -58,7 +61,11 @@ app.include_router(config.router,    prefix="/config",   tags=["Config"])
 
 @app.get("/health")
 async def health():
+    """
+    Kiểm tra nhanh tình trạng sống (health check) của tiến trình AI Service.
+    """
     return {"status": "ok", "service": "Fotolism AI", "version": "0.1.0"}
+
 
 
 if __name__ == "__main__":

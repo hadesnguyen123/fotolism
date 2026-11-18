@@ -1,3 +1,10 @@
+/**
+ * @file sessionDatabase.cts
+ * Quản lý cơ sở dữ liệu SQLite cục bộ (SessionDB) lưu trữ phiên chụp (Sessions), lịch sử chụp (Captures),
+ * lệnh in (PrintJobs) và hàng đợi đồng bộ đám mây (UploadTasks Outbox) phục vụ kiến trúc Offline-First.
+ * Phụ thuộc: node:fs, node:path, node:sqlite (DatabaseSync).
+ */
+
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -81,11 +88,20 @@ export interface UploadTaskRecord {
 
 let dbInstance: DatabaseSync | null = null
 
+/**
+ * Khởi tạo hoặc lấy kết nối Singleton đến SQLite database cục bộ.
+ * Tự động tạo cấu trúc bảng (schema) và chỉ mục nếu database chưa tồn tại.
+ *
+ * @param customPath Đường dẫn tùy biến tới tệp database (dành cho môi trường test/benchmark).
+ * @returns Thực thể DatabaseSync đã sẵn sàng giao dịch.
+ */
 export function getDatabase(customPath?: string): DatabaseSync {
     if (dbInstance) return dbInstance
 
     const dbPath =
-        customPath || path.join(process.cwd(), 'fotolism_sessions.db')
+        customPath ||
+        process.env.FOTOLISM_DB_PATH ||
+        path.join(process.cwd(), 'fotolism_sessions.db')
     const dir = path.dirname(dbPath)
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true })
@@ -530,6 +546,22 @@ export const SessionDB = {
     `
             )
             .run(now)
+        return Number(res.changes)
+    },
+
+    requeueRetryableUploadTasks(cooldownMs = 15000): number {
+        const db = getDatabase()
+        const now = new Date().toISOString()
+        const cutoff = new Date(Date.now() - Math.max(0, cooldownMs)).toISOString()
+        const res = db
+            .prepare(
+                `
+      UPDATE UploadTasks 
+      SET status = 'PENDING', updated_at = ? 
+      WHERE status = 'FAILED_RETRYABLE' AND updated_at <= ?
+    `
+            )
+            .run(now, cutoff)
         return Number(res.changes)
     },
 

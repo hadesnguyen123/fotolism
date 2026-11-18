@@ -1,5 +1,8 @@
-// ─── FOTOLISM SYSTEM & BRAND CONSTANTS ─────────────────────────────────────────
-// Cấu hình tập trung toàn bộ thông số, thương hiệu, đường dẫn và giá trị mặc định.
+/**
+ * @file constants.ts
+ * Quản lý tập trung toàn bộ hằng số thương hiệu, đường dẫn ổ đĩa, tiền tố tệp ảnh,
+ * tỷ lệ in ấn mặc định và tham số timeout phần cứng của hệ thống Fotolism Kiosk.
+ */
 
 // ── 1. Brand & Identity ──
 /** Tên thương hiệu chính */

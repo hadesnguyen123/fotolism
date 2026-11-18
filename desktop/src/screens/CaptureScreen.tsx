@@ -1,3 +1,11 @@
+/**
+ * @file CaptureScreen.tsx
+ * Màn hình chụp ảnh chính của Kiosk (Photobooth & Selfbooth):
+ * điều khiển luồng đếm ngược tự động, nút chụp từ xa, LiveView gương thời gian thực,
+ * gọi chụp ảnh Canon EDSDK với Idempotency, lưu ảnh RAW và gọi tiến trình AI làm đẹp nền.
+ * Phụ thuộc: react, store/appStore, components/BeautyCameraView, lib/canvasCompositor, lib/api.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
@@ -29,7 +37,7 @@ import {
 import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
-import { formatLocalSessionFolder, isTestSessionPin } from '../lib/pinUtils'
+import { formatLocalSessionFolder } from '../lib/pinUtils'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
 function playCameraShutterSound() {
@@ -1031,9 +1039,7 @@ export default function CaptureScreen() {
                             customerName: session?.customerName || undefined,
                             sessionType: 'photobooth',
                             cmsUrl: cloudSyncService.getCmsUrl(),
-                            skipCloudUpload: isTestSessionPin(
-                                session?.pinCode || targetSessionId
-                            ),
+                            skipCloudUpload: true,
                             compositeDataUrl: initialStrip,
                             compositeFileName,
                             pairedPrintDataUrl: paired4x6 || undefined,
@@ -1170,7 +1176,7 @@ export default function CaptureScreen() {
                                 rawSavePath,
                                 50,
                                 'white_pink_v2',
-                                'natural',
+                                selectedFilter?.id || 'normal',
                                 enhancedSavePath,
                                 '3:4'
                             )
@@ -1246,13 +1252,13 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── Chạy Python AI Service (White Pink) trên ảnh 24MP lưu vào final (cắt tâm 3:4 khớp Live View) ──
+                            // ── Chạy Python AI Service (White Pink + Filter) trên ảnh 24MP lưu vào final (cắt tâm 3:4 khớp Live View) ──
                             try {
                                 const enhanceRes = await selfApi.ai.enhance(
                                     canonData.savedPath,
                                     50,
                                     'white_pink_v2',
-                                    'natural',
+                                    selectedFilter?.id || 'normal',
                                     enhancedSavePath,
                                     '3:4'
                                 )
@@ -1394,7 +1400,7 @@ export default function CaptureScreen() {
                                 rawP,
                                 50,
                                 'white_pink_v2',
-                                'natural',
+                                selectedFilter?.id || 'normal',
                                 enhancedSavePath,
                                 '3:4'
                             )

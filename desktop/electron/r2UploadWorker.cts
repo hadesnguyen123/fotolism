@@ -1,3 +1,10 @@
+/**
+ * @file r2UploadWorker.cts
+ * Tiến trình nền (Worker) xử lý hàng đợi tải ảnh lên Cloudflare R2 (Outbox Pattern),
+ * hỗ trợ stream dữ liệu tệp lớn không chiếm dụng RAM, tự động retry khi rớt mạng và báo cáo tiến độ thời gian thực.
+ * Phụ thuộc: node:fs, node:http, node:https, node:url, SessionDB.
+ */
+
 import * as fs from 'node:fs'
 import * as http from 'node:http'
 import * as https from 'node:https'
@@ -40,6 +47,9 @@ const DEFAULT_CMS_URL =
     process.env.VITE_CMS_URL ||
     'https://fotolism-cms.vercel.app'
 
+/**
+ * Worker đồng bộ dữ liệu Outbox lên Cloudflare R2 theo luồng stream.
+ */
 export class R2UploadWorker {
     private static instance: R2UploadWorker | null = null
     private concurrency: number = 4
@@ -53,6 +63,9 @@ export class R2UploadWorker {
         this.concurrency = 4
     }
 
+    /**
+     * Lấy thực thể Singleton duy nhất của R2UploadWorker trong tiến trình chính.
+     */
     public static getInstance(): R2UploadWorker {
         if (!R2UploadWorker.instance) {
             R2UploadWorker.instance = new R2UploadWorker()
@@ -60,6 +73,10 @@ export class R2UploadWorker {
         return R2UploadWorker.instance
     }
 
+    /**
+     * Điều chỉnh số luồng stream tải lên đồng thời (1, 2, 4 hoặc 8 kết nối).
+     * @param concurrency Số luồng đồng thời cho phép.
+     */
     public setConcurrency(concurrency: number): void {
         if ([1, 2, 4, 8].includes(concurrency)) {
             this.concurrency = concurrency
@@ -72,6 +89,10 @@ export class R2UploadWorker {
         return this.concurrency
     }
 
+    /**
+     * Cập nhật URL máy chủ CMS để xin cấp presigned URL khi tải lên.
+     * @param url Địa chỉ gốc của CMS backend.
+     */
     public setCmsUrl(url: string): void {
         if (url && url.startsWith('http')) {
             this.cmsUrl = url.replace(/\/$/, '')
@@ -82,6 +103,11 @@ export class R2UploadWorker {
         return this.cmsUrl
     }
 
+    /**
+     * Đăng ký lắng nghe sự kiện tiến độ tải ảnh lên đám mây (upload progress).
+     * @param listener Hàm callback nhận sự kiện tiến độ.
+     * @returns Hàm hủy đăng ký lắng nghe (unsubscribe).
+     */
     public addListener(listener: ProgressListener): () => void {
         this.listeners.add(listener)
         return () => this.listeners.delete(listener)
@@ -97,6 +123,9 @@ export class R2UploadWorker {
         }
     }
 
+    /**
+     * Khởi động vòng lặp kiểm tra và xử lý tác vụ upload nền.
+     */
     public start(): void {
         if (this.isRunning) return
         this.isRunning = true
@@ -160,6 +189,11 @@ export class R2UploadWorker {
 
         const tasks = SessionDB.getPendingUploadTasks(availableSlots)
         if (tasks.length === 0) {
+            const requeued = SessionDB.requeueRetryableUploadTasks(15000)
+            if (requeued > 0) {
+                this.triggerProcessing()
+                return
+            }
             this.scheduleNextTick(3000)
             return
         }
@@ -325,7 +359,7 @@ export class R2UploadWorker {
             )
             const nextAttempts = task.attempts + 1
             const status: UploadTaskStatus =
-                nextAttempts >= 5 ? 'FAILED_RETRYABLE' : 'FAILED_RETRYABLE'
+                nextAttempts >= 5 ? 'FAILED_PERMANENT' : 'FAILED_RETRYABLE'
             SessionDB.updateUploadTaskStatus(
                 task.id,
                 status,
@@ -356,12 +390,14 @@ export class R2UploadWorker {
         fileName: string,
         sizeBytes: number
     ): Promise<string> {
+        const sessionDate = SessionDB.getSession(task.session_id)?.started_at
         const res = await fetch(`${this.cmsUrl}/api/storage/upload-urls`, {
             method: 'POST',
             signal: AbortSignal.timeout(15000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sessionId: task.session_id,
+                date: sessionDate,
                 files: [
                     {
                         fileName,

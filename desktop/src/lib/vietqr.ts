@@ -1,3 +1,10 @@
+/**
+ * @file vietqr.ts
+ * Bộ sinh mã QR thanh toán chuẩn EMVCo Napas247 VietQR (CRC-16-CCITT):
+ * hỗ trợ thanh toán chuyển khoản tức thì tương thích mọi ngân hàng và cổng thanh toán SePay.
+ * Phụ thuộc: qrcode, constants.ts.
+ */
+
 import QRCode from 'qrcode'
 import {
     DEFAULT_ACCOUNT_NUMBER,

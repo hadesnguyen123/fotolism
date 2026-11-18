@@ -1,3 +1,10 @@
+/**
+ * @file DeviceActivationScreen.tsx
+ * Màn hình kích hoạt thiết bị Kiosk lần đầu qua mã ghép đôi 6 chữ số (Pairing Code) từ Cloud CMS,
+ * lưu trữ token xác thực phần cứng và thiết lập địa chỉ máy chủ trung tâm.
+ * Phụ thuộc: react, store/appStore, services/cloudSyncService.
+ */
+
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { cloudSyncService } from '../services/cloudSyncService'

@@ -1,3 +1,10 @@
+/**
+ * @file cameraIpc.cts
+ * Điều phối luồng giao tiếp máy ảnh Canon EDSDK (Daemon HTTP cổng 8899), LiveView, chụp ảnh,
+ * lật gương JPEG và cài đặt driver/phần mềm hỗ trợ máy ảnh.
+ * Phụ thuộc: electron (app, ipcMain, shell), child_process, common.cts, SessionDB.
+ */
+
 import { app, ipcMain, shell } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -19,6 +26,11 @@ import {
 
 let canonDaemonProc: ChildProcess | null = null
 
+/**
+ * Kiểm tra trạng thái sẵn sàng kết nối của Canon EDSDK Daemon qua endpoint /status.
+ *
+ * @returns true nếu daemon đang chạy và máy ảnh Canon đã kết nối, ngược lại false.
+ */
 export async function checkCanonDaemon(): Promise<boolean> {
     try {
         const res = await fetch(`${CANON_DAEMON_URL}/status`, {
@@ -32,6 +44,11 @@ export async function checkCanonDaemon(): Promise<boolean> {
     return false
 }
 
+/**
+ * Đảm bảo Canon EDSDK Daemon đang chạy; tự khởi động file exe daemon nền nếu chưa kích hoạt.
+ *
+ * @returns true nếu kết nối thành công tới daemon, ngược lại false.
+ */
 export async function ensureCanonDaemon(): Promise<boolean> {
     if (await checkCanonDaemon()) return true
 
@@ -71,6 +88,9 @@ export async function ensureCanonDaemon(): Promise<boolean> {
     return false
 }
 
+/**
+ * Ngắt kết nối và đóng tiến trình Canon Daemon khi thoát ứng dụng Kiosk.
+ */
 export function stopCanonDaemon() {
     try {
         fetch(`${CANON_DAEMON_URL}/quit`, {
@@ -87,7 +107,13 @@ export function stopCanonDaemon() {
     }
 }
 
+/**
+ * Tìm file cài đặt bộ driver EOS Webcam Utility trong các thư mục tài nguyên của app.
+ *
+ * @returns Đường dẫn tuyệt đối file Setup.exe hoặc null nếu không tìm thấy.
+ */
 function findCanonDriverSetupPath(): string | null {
+
     const candidates = [
         path.join(
             app.getAppPath(),
@@ -121,6 +147,11 @@ function findCanonDriverSetupPath(): string | null {
     return null
 }
 
+/**
+ * Tìm file cài đặt công cụ digiCamControl làm phương án dự phòng khi máy ảnh không tương thích EDSDK.
+ *
+ * @returns Đường dẫn tới digiCamControlsetup.exe hoặc null.
+ */
 function findDigiCamSetupPath(): string | null {
     const candidates = [
         path.join(
@@ -195,6 +226,9 @@ async function flipImageFile(targetPath: string): Promise<void> {
     })
 }
 
+/**
+ * Đăng ký các kênh IPC phục vụ camera (liệt kê thiết bị, chụp ảnh tuần tự, kiểm tra trạng thái Canon, lật gương ảnh).
+ */
 export function registerCameraIpc(): void {
     ipcMain.handle('camera:list', async () => {
         const res = await fetch(`${AI_SERVICE_URL}/camera/list`)

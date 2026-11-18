@@ -1,3 +1,10 @@
+/**
+ * @file preload.cts
+ * Cầu nối bảo mật (Context Bridge) giữa Main Process và Renderer Process (React),
+ * cung cấp đối tượng `window.electronAPI` kiểu TypeScript mạnh mà không để lộ quyền truy cập Node.js trực tiếp.
+ * Phụ thuộc: electron (contextBridge, ipcRenderer).
+ */
+
 import { contextBridge, ipcRenderer } from 'electron'
 
 // Expose typed API từ main process sang renderer (React)

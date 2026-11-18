@@ -1,3 +1,10 @@
+/**
+ * @file beautyEngine.ts
+ * Động cơ làm đẹp thời gian thực (WebGL / Canvas) trên luồng LiveView Kiosk:
+ * mịn da, nâng tông trắng hồng, thon cằm V-Line và mở to mắt tự nhiên theo chuẩn phong cách Hàn Quốc.
+ * Phụ thuộc: faceDetector.ts, WebGL / Canvas2D Context.
+ */
+
 import {
     getImageFaceLandmarker,
     extractFaceData,

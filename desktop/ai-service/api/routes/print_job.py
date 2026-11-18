@@ -1,3 +1,7 @@
+"""
+Router phụ trách truy vấn danh sách máy in OS và gửi lệnh in ảnh fallback qua win32print / CUPS.
+Phụ thuộc: fastapi, pydantic, platform, subprocess, core.database.
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time

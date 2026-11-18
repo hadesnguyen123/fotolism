@@ -1,3 +1,11 @@
+/**
+ * @file canvasCompositor.ts
+ * Bộ xử lý kết xuất bố cục in ảnh (Canvas 2D Compositor) chuẩn 300 DPI:
+ * cắt crop căn chỉnh khuôn mặt thông minh, phủ lớp filter màu, dán sticker,
+ * ghép dải ảnh kép (Strip 2x6 kép 1200x1800) hoặc khổ đơn (4x6 1800x1200) và bù tỷ lệ co giãn máy in DNP RX1HS.
+ * Phụ thuộc: HTML5 Canvas, store/appStore, constants.ts.
+ */
+
 import type {
     GridLayoutItem,
     ThemeItem,

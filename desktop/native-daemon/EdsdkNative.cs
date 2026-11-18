@@ -1,3 +1,8 @@
+// <summary>
+// Khai báo P/Invoke tương thích 64-bit trực tiếp tới các hàm C API của Canon EDSDK.dll và EdsImage.dll.
+// Tự động định vị thư mục DLL tại runtime để nạp đúng thư viện phần cứng Canon.
+// </summary>
+
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -27,6 +32,9 @@ namespace FotolismCanonDaemon {
 
     public delegate uint EdsObjectEventHandler(uint inEvent, IntPtr inRef, IntPtr inContext);
 
+    /// <summary>
+    /// Wrapper P/Invoke chứa các hằng số command, property ID, event callback và hàm C API của Canon EDSDK.
+    /// </summary>
     public static class EdsdkNative {
         public const uint kEdsPropID_SaveTo = 0x0000000b;
         public const uint kEdsSaveTo_Host = 2;
