@@ -28,7 +28,6 @@ import {
     ArrowRight,
 } from 'lucide-react'
 import './ProcessingScreen.css'
-import { isPhotoEnhanced } from '../lib/enhanceState'
 import {
     buildGalleryUrl,
     extractRawPin,
@@ -68,9 +67,6 @@ export default function ProcessingScreen() {
             useAppStore.getState().setMediaSyncError(null)
 
             const photos = session?.photos || []
-            if (photos.some((photo) => !isPhotoEnhanced(photo))) {
-                throw new Error('Ảnh AI chưa hoàn tất. Hãy quay lại bước chụp để xử lý lại trước khi tạo final.')
-            }
             let stripUrl: string | null = null
 
             let pairedPrintUrl: string | null = null
@@ -157,7 +153,8 @@ export default function ProcessingScreen() {
                 enhancedPhotoUrl: p.enhancedPath,
             }))
 
-            const isTestSession = isTestSessionPin(session?.pinCode || sessionId)
+            const isTestSession =
+                !isSelfbooth && isTestSessionPin(session?.pinCode || sessionId)
 
             try {
                 console.log(
@@ -253,7 +250,12 @@ export default function ProcessingScreen() {
                         const status = await api.storage.getUploadStatus(sessionId)
                         if (!status.success || !status.data) throw new Error(status.error || 'Không đọc được trạng thái upload')
                         if (status.data.failedTasks > 0) throw new Error('Upload chưa thành công. Ảnh đã lưu tại máy; hãy thử lại khi có mạng.')
-                        if (status.data.pendingTasks === 0 && status.data.uploadingTasks === 0 && status.data.activeStreams === 0) break
+                        if (
+                            status.data.pendingTasks === 0 &&
+                            status.data.uploadingTasks === 0
+                        ) {
+                            break
+                        }
                         if (Date.now() >= deadline) throw new Error('Cloud chưa xác nhận xong. Ảnh vẫn được giữ trong hàng đợi tại máy.')
                         await new Promise((resolve) => setTimeout(resolve, 500))
                     }

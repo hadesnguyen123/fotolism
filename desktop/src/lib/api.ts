@@ -161,6 +161,32 @@ export interface FotolismAPI {
             concurrency: number
         ) => IpcResponse<{ concurrency: number }>
         retryFailedUploads: () => IpcResponse<{ retriedCount: number }>
+        readImageDataUrl: (filePath: string) => IpcResponse<string>
+        prefetchSelfboothUrls: (payload: {
+            sessionId: string
+            customerName?: string
+            cmsUrl?: string
+            startIndex?: number
+            count?: number
+        }) => IpcResponse<{
+            sessionId: string
+            folderKey?: string
+            prefetchedCount?: number
+        }>
+        enqueueR2Single: (payload: {
+            sessionId: string
+            customerName?: string
+            sessionType?: string
+            cmsUrl?: string
+            imageId: string
+            filePath: string
+            targetFileName?: string
+            isFinal?: boolean
+        }) => IpcResponse<{
+            sessionId: string
+            enqueuedCount: number
+            usedPrefetch?: boolean
+        }>
         enqueueR2Session: (payload: {
             sessionId: string
             customerName?: string
@@ -577,6 +603,26 @@ const defaultMockApi: FotolismAPI = {
         retryFailedUploads: async () => ({
             success: true,
             data: { retriedCount: 0 },
+        }),
+        readImageDataUrl: async (filePath: string) => ({
+            success: true,
+            data: filePath,
+        }),
+        prefetchSelfboothUrls: async (payload) => ({
+            success: true,
+            data: {
+                sessionId: payload.sessionId,
+                folderKey: `fotolism-photos/mock_${payload.sessionId}`,
+                prefetchedCount: payload.count || 50,
+            },
+        }),
+        enqueueR2Single: async (payload) => ({
+            success: true,
+            data: {
+                sessionId: payload.sessionId,
+                enqueuedCount: 1,
+                usedPrefetch: true,
+            },
         }),
         enqueueR2Session: async (payload) => ({
             success: true,

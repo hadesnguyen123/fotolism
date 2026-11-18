@@ -197,6 +197,36 @@ const api = {
         ): IpcResponse<{ savedPath: string }> =>
             ipcRenderer.invoke('storage:save-photo', { dataUrl, fileName }),
 
+        readImageDataUrl: (filePath: string): IpcResponse<string> =>
+            ipcRenderer.invoke('storage:read-image-data-url', filePath),
+
+        prefetchSelfboothUrls: (payload: {
+            sessionId: string
+            customerName?: string
+            cmsUrl?: string
+            startIndex?: number
+            count?: number
+        }): IpcResponse<{
+            sessionId: string
+            folderKey?: string
+            prefetchedCount?: number
+        }> => ipcRenderer.invoke('storage:prefetch-selfbooth-urls', payload),
+
+        enqueueR2Single: (payload: {
+            sessionId: string
+            customerName?: string
+            sessionType?: string
+            cmsUrl?: string
+            imageId: string
+            filePath: string
+            targetFileName?: string
+            isFinal?: boolean
+        }): IpcResponse<{
+            sessionId: string
+            enqueuedCount: number
+            usedPrefetch?: boolean
+        }> => ipcRenderer.invoke('storage:enqueue-r2-single', payload),
+
         openFolder: (targetPath?: string): IpcResponse =>
             ipcRenderer.invoke('storage:open-folder', targetPath),
 

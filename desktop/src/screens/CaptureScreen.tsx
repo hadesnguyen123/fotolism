@@ -18,8 +18,6 @@ import { cloudSyncService } from '../services/cloudSyncService'
 import {
     FILE_PREFIX_SHOT,
     FILE_PREFIX_SELF,
-    FILE_PREFIX_FINAL,
-    DEFAULT_PRINT_SCALE,
     DEFAULT_SELFBOOTH_DURATION_SECONDS,
     isRemoteTriggerEvent,
 } from '../lib/constants'
@@ -32,12 +30,11 @@ import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
 import {
     cropImageToAspect,
     generateStripComposite,
-    preparePrintImageForDNP,
 } from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
-import { formatLocalSessionFolder } from '../lib/pinUtils'
+import { formatLocalSessionFolder, isTestSessionPin } from '../lib/pinUtils'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
 function playCameraShutterSound() {
@@ -247,6 +244,39 @@ export default function CaptureScreen() {
     selfboothLibraryRef.current = selfboothLibrary
     const activeSessionIdRef = useRef(sessionId)
     activeSessionIdRef.current = sessionId
+    const prefetchedBatchesRef = useRef<Set<number>>(new Set())
+    const enqueuedSelfboothIdsRef = useRef<Set<string>>(new Set())
+
+    const ensureSelfboothPrefetched = useCallback(
+        (photoIndex: number) => {
+            if (!isSelfboothMode) return
+            const batchStart = Math.floor((Math.max(1, photoIndex) - 1) / 50) * 50 + 1
+            if (prefetchedBatchesRef.current.has(batchStart)) return
+            prefetchedBatchesRef.current.add(batchStart)
+            const selfApi = isBrowser ? mockApi : fotolismApi
+            const targetSessionId = formatLocalSessionFolder(
+                session?.pinCode || sessionId
+            )
+            void selfApi.storage
+                .prefetchSelfboothUrls({
+                    sessionId: targetSessionId,
+                    customerName: session?.customerName || undefined,
+                    cmsUrl: cloudSyncService.getCmsUrl(),
+                    startIndex: batchStart,
+                    count: 50,
+                })
+                .catch((err) => {
+                    console.warn('[Selfbooth] Prefetch URLs warning:', err)
+                })
+        },
+        [isSelfboothMode, isBrowser, session?.pinCode, session?.customerName, sessionId]
+    )
+
+    useEffect(() => {
+        if (isSelfboothMode) {
+            ensureSelfboothPrefetched(1)
+        }
+    }, [isSelfboothMode, ensureSelfboothPrefetched])
     const [isCanonDaemonActive, setIsCanonDaemonActive] =
         useState<boolean>(false)
     const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false)
@@ -969,12 +999,6 @@ export default function CaptureScreen() {
             const capturedSlots = currentSlots.filter(
                 (s): s is CapturedPhoto => s !== null
             )
-            if (capturedSlots.some((photo) => !isPhotoEnhanced(photo))) {
-                setAiProcessingError(
-                    'Một số ảnh chưa xử lý AI thành công. Ảnh gốc đã được giữ lại; hãy bấm tiếp tục để thử lại.'
-                )
-                return
-            }
 
             if (capturedSlots.length === 0) {
                 setIsSessionActive(false)
@@ -992,7 +1016,53 @@ export default function CaptureScreen() {
             }
             setSessionPhotos(chosenPhotos)
 
-            // ── TỰ ĐỘNG TẠO DẢI ẢNH THÀNH PHẨM & BẢN IN GHÉP 4X6 NGAY KHI KẾT THÚC LƯỢT CHỤP ──
+            // Đẩy các ảnh đơn lẻ đã xử lý AI vào thư mục final/ lên Cloud R2 trước khi sang Frame & Filter
+            const targetSessionId = formatLocalSessionFolder(
+                session?.pinCode || sessionId
+            )
+            const isPhotoboothTest = isTestSessionPin(
+                session?.pinCode || targetSessionId
+            )
+            if (!isPhotoboothTest) {
+                const shotFilesToPush = chosenPhotos
+                    .map((p, idx) => {
+                        const rawSrc = (p.enhancedPath || p.rawPath || '').trim()
+                        if (!rawSrc || rawSrc.startsWith('data:image')) return null
+                        return {
+                            imageId: p.id || `shot_${idx + 1}`,
+                            filePath: rawSrc,
+                            isFinal: false,
+                        }
+                    })
+                    .filter(
+                        (
+                            item
+                        ): item is {
+                            imageId: string
+                            filePath: string
+                            isFinal: boolean
+                        } => item !== null
+                    )
+
+                if (shotFilesToPush.length > 0) {
+                    void api.storage
+                        .enqueueR2Session({
+                            sessionId: targetSessionId,
+                            customerName: session?.customerName || undefined,
+                            sessionType: 'photobooth',
+                            cmsUrl: cloudSyncService.getCmsUrl(),
+                            files: shotFilesToPush,
+                        })
+                        .catch((err) =>
+                            console.warn(
+                                '[CaptureScreen] Early R2 shot upload warning:',
+                                err
+                            )
+                        )
+                }
+            }
+
+            // ── TỰ ĐỘNG TẠO DẢI ẢNH THÀNH PHẨM DỰ PHÒNG TRƯỚC KHI SANG FRAME & FILTER (KHÔNG CHẶN LUỒNG NẾU LỖI) ──
             try {
                 const photoUrls = chosenPhotos
                     .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
@@ -1011,52 +1081,6 @@ export default function CaptureScreen() {
                     })
                     if (initialStrip) {
                         setCompositeStripUrl(initialStrip)
-                        const currentPrintScale =
-                            useAppStore.getState().printScale || DEFAULT_PRINT_SCALE
-                        let paired4x6: string | null = null
-                        try {
-                            paired4x6 = await preparePrintImageForDNP(
-                                initialStrip,
-                                currentPrintScale
-                            )
-                        } catch (pairErr) {
-                            console.warn(
-                                '[CaptureScreen] preparePrintImageForDNP warning:',
-                                pairErr
-                            )
-                        }
-                        const compositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`
-                        const pairedFileName =
-                            selectedFrameSize === '2x6'
-                                ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
-                                : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
-
-                        const targetSessionId = formatLocalSessionFolder(
-                            session?.pinCode || sessionId
-                        )
-                        const finalized = await api.storage.finalizeSessionMedia({
-                            sessionId: targetSessionId,
-                            customerName: session?.customerName || undefined,
-                            sessionType: 'photobooth',
-                            cmsUrl: cloudSyncService.getCmsUrl(),
-                            skipCloudUpload: true,
-                            compositeDataUrl: initialStrip,
-                            compositeFileName,
-                            pairedPrintDataUrl: paired4x6 || undefined,
-                            pairedPrintFileName: pairedFileName,
-                            shots: chosenPhotos.map((p, idx) => ({
-                                slotIndex: idx,
-                                id: p.id || `shot_${idx + 1}`,
-                                fileName: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
-                                rawPath: p.rawPath,
-                                enhancedPath: p.enhancedPath,
-                            })),
-                        })
-                        if (!finalized.success) {
-                            throw new Error(
-                                finalized.error || 'Không thể xác minh ảnh AI'
-                            )
-                        }
                     }
                 }
             } catch (compErr) {
@@ -1064,10 +1088,6 @@ export default function CaptureScreen() {
                     '[CaptureScreen] Auto-generating initial composite warning:',
                     compErr
                 )
-                setAiProcessingError(
-                    'Chưa thể lưu ảnh final. Ảnh gốc được giữ nguyên; hãy thử lại.'
-                )
-                return
             }
 
             setIsSessionActive(false)
@@ -1112,11 +1132,42 @@ export default function CaptureScreen() {
             const capturedSessionId = sessionId
             const timestamp = Date.now()
             const photoNum = selfboothLibrary.length + 1
+            ensureSelfboothPrefetched(photoNum)
             const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
             const rawSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\raw\\${rawFileName}`
             const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
             const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\final\\${enhancedFileName}`
             const selfApi = isBrowser ? mockApi : fotolismApi
+            const targetSessionId = formatLocalSessionFolder(
+                session?.pinCode || sessionId
+            )
+
+            const pushSelfboothPhotoToR2 = (
+                imageId: string,
+                slotNum: number,
+                localPath: string
+            ) => {
+                if (!localPath || localPath.startsWith('data:image')) return
+                if (enqueuedSelfboothIdsRef.current.has(imageId)) return
+                enqueuedSelfboothIdsRef.current.add(imageId)
+                void selfApi.storage
+                    .enqueueR2Single({
+                        sessionId: targetSessionId,
+                        customerName: session?.customerName || undefined,
+                        sessionType: 'selfbooth',
+                        cmsUrl: cloudSyncService.getCmsUrl(),
+                        imageId,
+                        filePath: localPath,
+                        targetFileName: `fotolism_enhanced_self_${slotNum}.jpg`,
+                        isFinal: false,
+                    })
+                    .catch((err) =>
+                        console.warn(
+                            `[Selfbooth R2] Enqueue photo ${slotNum} warning:`,
+                            err
+                        )
+                    )
+            }
 
             // ── BỎ HOÀN TOÀN COUNTDOWN: BẮT ẢNH TỨC THÌ (< 50ms) ──────────────
             setCurrentCountdown(0)
@@ -1192,7 +1243,7 @@ export default function CaptureScreen() {
                                 return
                             }
 
-                            setSelfboothLibrary((prev) => {
+                                    setSelfboothLibrary((prev) => {
                                         const next: CapturedPhoto[] = prev.map((p) =>
                                             p.id === newPhoto.id
                                                 ? {
@@ -1207,14 +1258,30 @@ export default function CaptureScreen() {
                                         selfboothLibraryRef.current = next
                                         return next
                                     })
+                                    pushSelfboothPhotoToR2(
+                                        newPhoto.id,
+                                        photoNum,
+                                        enhRes.data.enhancedPath
+                                    )
+                                } else {
+                                    pushSelfboothPhotoToR2(
+                                        newPhoto.id,
+                                        photoNum,
+                                        rawSavePath
+                                    )
                                 }
                             })
-                            .catch((err) =>
+                            .catch((err) => {
                                 console.warn(
                                     'AI enhance selfbooth webcam shot error:',
                                     err
                                 )
-                            )
+                                pushSelfboothPhotoToR2(
+                                    newPhoto.id,
+                                    photoNum,
+                                    rawSavePath
+                                )
+                            })
                     })
                     .catch((err) =>
                         console.warn('Save selfbooth photo error:', err)
@@ -1300,6 +1367,11 @@ export default function CaptureScreen() {
                                 selfboothLibraryRef.current = next
                                 return next
                             })
+                            pushSelfboothPhotoToR2(
+                                newPhoto.id,
+                                photoNum,
+                                finalPhotoUrl
+                            )
                         }
                     })
                     .catch((err) =>
@@ -1426,11 +1498,40 @@ export default function CaptureScreen() {
         )
         selfboothLibraryRef.current = finalPhotos
         setSelfboothLibrary(finalPhotos)
-        if (finalPhotos.some((photo) => !isPhotoEnhanced(photo))) {
-            setIsAiProcessingBeforeTheme(false)
-            setAiProcessingError('Một số ảnh chưa xử lý AI thành công. Ảnh gốc đã được giữ lại; hãy thử lại trước khi tiếp tục.')
-            return
-        }
+
+        // Đẩy bổ sung lên R2 những tấm chưa kịp đưa vào hàng đợi trong lúc chụp
+        const targetSessionId = formatLocalSessionFolder(
+            session?.pinCode || sessionId
+        )
+        finalPhotos.forEach((p, idx) => {
+            const photoNum = idx + 1
+            const fileToPush = (p.enhancedPath || p.rawPath || '').trim()
+            if (
+                fileToPush &&
+                !fileToPush.startsWith('data:image') &&
+                !enqueuedSelfboothIdsRef.current.has(p.id)
+            ) {
+                enqueuedSelfboothIdsRef.current.add(p.id)
+                void selfApi.storage
+                    .enqueueR2Single({
+                        sessionId: targetSessionId,
+                        customerName: session?.customerName || undefined,
+                        sessionType: 'selfbooth',
+                        cmsUrl: cloudSyncService.getCmsUrl(),
+                        imageId: p.id,
+                        filePath: fileToPush,
+                        targetFileName: `fotolism_enhanced_self_${photoNum}.jpg`,
+                        isFinal: false,
+                    })
+                    .catch((err) =>
+                        console.warn(
+                            `[Selfbooth R2] Finish enqueue photo ${photoNum} warning:`,
+                            err
+                        )
+                    )
+            }
+        })
+
         setIsAiProcessingBeforeTheme(false)
 
         // 1. Lưu toàn bộ ảnh khách đã chụp vào session store
@@ -1445,8 +1546,9 @@ export default function CaptureScreen() {
         finishSelfboothRef.current = handleFinishSelfboothToReview
     })
 
-    // Hủy buổi chụp và làm mới (chỉ được phép chụp lại từ đầu 1 lần)
+    // Hủy buổi chụp và làm mới (chỉ áp dụng cho Photobooth; Selfbooth không cho phép reset/chụp lại)
     function handleResetShootSession() {
+        if (isSelfboothMode) return
         if (sessionResetCount >= 1) return
         setSessionResetCount((c) => c + 1)
         setIsSessionActive(false)
@@ -2184,7 +2286,9 @@ export default function CaptureScreen() {
                                 )}
 
                                 <div className="capture-aux-action-slot">
-                                    {isSessionActive && !isCapturingShot ? (
+                                    {!isSelfboothMode &&
+                                    isSessionActive &&
+                                    !isCapturingShot ? (
                                         sessionResetCount < 1 ? (
                                             <button
                                                 className="cancel-shoot-btn"

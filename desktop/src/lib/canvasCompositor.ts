@@ -37,15 +37,39 @@ export interface RenderOptions {
     slotOffsets?: SlotOffset[]
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+async function resolveLocalSrcForCanvas(src: string): Promise<string> {
+    if (!src) return src
+    const isLocalPath =
+        src.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(src)
+    if (!isLocalPath) return src
+
+    const readFn = (window as any)?.electronAPI?.storage?.readImageDataUrl
+    if (typeof readFn === 'function') {
+        try {
+            const res = await readFn(src)
+            if (res?.success && res?.data) {
+                return res.data
+            }
+        } catch (err) {
+            console.warn('[canvasCompositor] readImageDataUrl fallback:', err)
+        }
+    }
+    return src
+}
+
+async function loadImage(src: string): Promise<HTMLImageElement> {
+    const resolvedSrc = await resolveLocalSrcForCanvas(src)
     return new Promise((resolve, reject) => {
         const img = new Image()
-        if (src.startsWith('http://') || src.startsWith('https://')) {
+        if (
+            resolvedSrc.startsWith('http://') ||
+            resolvedSrc.startsWith('https://')
+        ) {
             img.crossOrigin = 'anonymous'
         }
         img.onload = () => resolve(img)
         img.onerror = (err) => reject(err)
-        img.src = src
+        img.src = resolvedSrc
     })
 }
 

@@ -94,6 +94,14 @@ export function cleanFilePath(p?: string): string {
     return path.normalize(decodeURIComponent(cleaned))
 }
 
+interface PrefetchedR2Url {
+    putUrl: string
+    objectKey: string
+    expiresAt: number
+}
+
+const selfboothPrefetchedUrls = new Map<string, Map<string, PrefetchedR2Url>>()
+
 /**
  * Đăng ký các kênh IPC lưu trữ (lưu ảnh chụp, lưu khung hoàn thiện, tạo session R2 outbox, mở thư mục).
  */
@@ -230,7 +238,10 @@ export function registerStorageIpc(): void {
                 error: 'Thiếu thông tin session hoặc danh sách file ảnh',
             }
         }
-        if (sessionId.replace(/^session_/i, '').trim() === '1234') {
+        if (
+            sessionType !== 'selfbooth' &&
+            sessionId.replace(/^session_/i, '').trim() === '1234'
+        ) {
             return {
                 success: true,
                 data: {
@@ -409,6 +420,250 @@ export function registerStorageIpc(): void {
         ) => enqueueR2SessionInternal(payload)
     )
 
+    // Đọc file ảnh cục bộ sang Data URL để Renderer vẽ Canvas không bị tainted bởi file://
+    ipcMain.handle(
+        'storage:read-image-data-url',
+        async (_event, filePath: string) => {
+            try {
+                const resolved = cleanFilePath(filePath)
+                if (!resolved || !fs.existsSync(resolved)) {
+                    return {
+                        success: false,
+                        error: 'Không tìm thấy tệp ảnh cục bộ',
+                    }
+                }
+                const ext = path.extname(resolved).toLowerCase()
+                const mime =
+                    ext === '.png'
+                        ? 'image/png'
+                        : ext === '.webp'
+                          ? 'image/webp'
+                          : 'image/jpeg'
+                const base64 = fs.readFileSync(resolved).toString('base64')
+                return {
+                    success: true,
+                    data: `data:${mime};base64,${base64}`,
+                }
+            } catch (err: any) {
+                return { success: false, error: err.message }
+            }
+        }
+    )
+
+    // Pre-fetch trước tối đa 50 Presigned PUT URLs đầu phiên Selfbooth (1 request duy nhất tới CMS)
+    ipcMain.handle(
+        'storage:prefetch-selfbooth-urls',
+        async (
+            _event,
+            payload: {
+                sessionId: string
+                customerName?: string
+                cmsUrl?: string
+                startIndex?: number
+                count?: number
+            }
+        ) => {
+            try {
+                const {
+                    sessionId,
+                    customerName,
+                    cmsUrl,
+                    startIndex = 1,
+                    count = 50,
+                } = payload
+                if (!sessionId) {
+                    return { success: false, error: 'Thiếu sessionId' }
+                }
+                if (cmsUrl) {
+                    r2UploadWorker.setCmsUrl(cmsUrl)
+                }
+
+                let existingSession = SessionDB.getSession(sessionId)
+                if (!existingSession) {
+                    try {
+                        existingSession = SessionDB.createSession({
+                            id: sessionId,
+                            status: 'ACTIVE',
+                            started_at: new Date().toISOString(),
+                            total_slots: count,
+                            payment_status: 'PAID',
+                            print_copies: 0,
+                        })
+                    } catch {
+                        existingSession = SessionDB.getSession(sessionId)
+                    }
+                }
+                const sessionDate =
+                    existingSession?.started_at || new Date().toISOString()
+
+                const safeCount = Math.max(1, Math.min(50, count))
+                const filesPayload: Array<{
+                    fileName: string
+                    type: 'original'
+                }> = []
+                for (let i = startIndex; i < startIndex + safeCount; i++) {
+                    filesPayload.push({
+                        fileName: `fotolism_enhanced_self_${i}.jpg`,
+                        type: 'original',
+                    })
+                }
+
+                const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
+                const cmsRes = await fetch(
+                    `${effectiveCms}/api/storage/upload-urls`,
+                    {
+                        method: 'POST',
+                        signal: AbortSignal.timeout(15000),
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionId,
+                            customerName,
+                            sessionType: 'selfbooth',
+                            date: sessionDate,
+                            files: filesPayload,
+                        }),
+                    }
+                )
+
+                if (!cmsRes.ok) {
+                    const errText = await cmsRes.text().catch(() => '')
+                    return {
+                        success: false,
+                        error: `CMS HTTP ${cmsRes.status}: ${errText}`,
+                    }
+                }
+
+                const cmsData: any = await cmsRes.json()
+                if (!cmsData?.success || !Array.isArray(cmsData.urls)) {
+                    return {
+                        success: false,
+                        error: cmsData?.error || 'Payload upload-urls không hợp lệ',
+                    }
+                }
+
+                let sessionMap = selfboothPrefetchedUrls.get(sessionId)
+                if (!sessionMap) {
+                    sessionMap = new Map<string, PrefetchedR2Url>()
+                    selfboothPrefetchedUrls.set(sessionId, sessionMap)
+                }
+                const now = Date.now()
+                for (const u of cmsData.urls) {
+                    sessionMap.set(u.fileName, {
+                        putUrl: u.putUrl,
+                        objectKey: u.objectKey,
+                        expiresAt: now + (u.expiresInSec || 900) * 1000,
+                    })
+                }
+
+                return {
+                    success: true,
+                    data: {
+                        sessionId,
+                        folderKey: cmsData.folderKey,
+                        prefetchedCount: cmsData.urls.length,
+                    },
+                }
+            } catch (err: any) {
+                console.warn(
+                    '[Storage IPC] Prefetch selfbooth URLs fallback offline:',
+                    err?.message || err
+                )
+                return { success: false, error: err?.message || String(err) }
+            }
+        }
+    )
+
+    // Đẩy ngay 1 ảnh vào hàng đợi R2 (tận dụng URL đã pre-fetch nếu còn hạn)
+    ipcMain.handle(
+        'storage:enqueue-r2-single',
+        async (
+            _event,
+            payload: {
+                sessionId: string
+                customerName?: string
+                sessionType?: string
+                cmsUrl?: string
+                imageId: string
+                filePath: string
+                targetFileName?: string
+                isFinal?: boolean
+            }
+        ) => {
+            try {
+                const {
+                    sessionId,
+                    customerName,
+                    sessionType = 'selfbooth',
+                    cmsUrl,
+                    imageId,
+                    filePath,
+                    targetFileName,
+                    isFinal = false,
+                } = payload
+                const resolvedPath = cleanFilePath(filePath)
+                if (!sessionId || !resolvedPath || !fs.existsSync(resolvedPath)) {
+                    return {
+                        success: false,
+                        error: 'Không tìm thấy tệp ảnh để đưa vào hàng đợi R2',
+                    }
+                }
+
+                if (cmsUrl) {
+                    r2UploadWorker.setCmsUrl(cmsUrl)
+                }
+
+                const lookupName = targetFileName || path.basename(resolvedPath)
+                const cachedUrl = selfboothPrefetchedUrls
+                    .get(sessionId)
+                    ?.get(lookupName)
+
+                // Chỉ dùng URL pre-fetch khi còn hạn tối thiểu 30 giây
+                if (cachedUrl && cachedUrl.expiresAt > Date.now() + 30000) {
+                    const stat = fs.statSync(resolvedPath)
+                    SessionDB.enqueueUploadTask({
+                        id: `task_${sessionId}_${imageId}`,
+                        session_id: sessionId,
+                        image_id: imageId,
+                        file_path: resolvedPath,
+                        object_key: cachedUrl.objectKey,
+                        size_bytes: stat.size,
+                        is_final: isFinal ? 1 : 0,
+                        status: 'PENDING',
+                        attempts: 0,
+                        presigned_url: cachedUrl.putUrl,
+                        url_expires_at: cachedUrl.expiresAt,
+                    })
+                    r2UploadWorker.triggerProcessing()
+                    return {
+                        success: true,
+                        data: {
+                            sessionId,
+                            enqueuedCount: 1,
+                            usedPrefetch: true,
+                        },
+                    }
+                }
+
+                // Fallback khi chưa prefetch / hết hạn / offline
+                return enqueueR2SessionInternal({
+                    sessionId,
+                    customerName,
+                    sessionType,
+                    cmsUrl,
+                    files: [
+                        {
+                            imageId,
+                            filePath: resolvedPath,
+                            isFinal,
+                        },
+                    ],
+                })
+            } catch (err: any) {
+                return { success: false, error: err?.message || String(err) }
+            }
+        }
+    )
+
     ipcMain.handle(
         'storage:finalize-session-media',
         async (
@@ -466,9 +721,19 @@ export function registerStorageIpc(): void {
                     isFinal: boolean
                 }> = []
 
-                // Validate every source before writing or enqueueing any final file.
+                // Kiểm tra tính toàn vẹn ảnh AI (lỗi AI không được chặn chụp/in; nếu thiếu AI sẽ fallback dùng ảnh gốc)
                 for (const shot of shots || []) {
-                    assertEnhancedFile(cleanFilePath(shot.rawPath), cleanFilePath(shot.enhancedPath))
+                    try {
+                        assertEnhancedFile(
+                            cleanFilePath(shot.rawPath),
+                            cleanFilePath(shot.enhancedPath)
+                        )
+                    } catch (aiCheckErr: any) {
+                        console.warn(
+                            '[Storage IPC] AI integrity fallback to raw:',
+                            aiCheckErr?.message || aiCheckErr
+                        )
+                    }
                 }
 
                 // 1. Lưu các ảnh chụp đơn lẻ vào raw/ và final/
@@ -488,7 +753,10 @@ export function registerStorageIpc(): void {
                             : `enhanced_${shotBaseName}`
                         const cleanRaw = cleanFilePath(s.rawPath)
                         const cleanEnh = cleanFilePath(s.enhancedPath)
-                        const finalTarget = enhancedFinalPath(cleanEnh, finalDir, enhancedBaseName)
+                        const hasEnhFile = Boolean(cleanEnh && fs.existsSync(cleanEnh))
+                        const finalTarget = hasEnhFile
+                            ? enhancedFinalPath(cleanEnh, finalDir, enhancedBaseName)
+                            : path.join(finalDir, enhancedBaseName)
 
                         // Lưu raw file
                         if (cleanRaw && fs.existsSync(cleanRaw)) {
@@ -506,19 +774,21 @@ export function registerStorageIpc(): void {
                             fs.writeFileSync(rawTarget, rawBuf)
                         }
 
-                        // Lưu final file (ảnh enhance bắt buộc)
-                        if (cleanEnh && fs.existsSync(cleanEnh)) {
+                        // Lưu final file (ưu tiên ảnh AI enhance, fallback sang ảnh gốc nếu AI gặp sự cố)
+                        if (hasEnhFile) {
                             if (
                                 path.resolve(cleanEnh) !==
                                 path.resolve(finalTarget)
                             ) {
                                 fs.copyFileSync(cleanEnh, finalTarget)
                             }
+                        } else if (fs.existsSync(rawTarget)) {
+                            fs.copyFileSync(rawTarget, finalTarget)
                         } else {
-                            throw new Error(`Ảnh AI chưa sẵn sàng: ${shotBaseName}`)
+                            throw new Error(`Không tìm thấy ảnh gốc hay ảnh AI: ${shotBaseName}`)
                         }
 
-                        if (!fs.existsSync(rawTarget) || !fs.existsSync(finalTarget)) {
+                        if (!fs.existsSync(finalTarget)) {
                             throw new Error(`Ảnh chưa lưu đầy đủ: ${shotBaseName}`)
                         }
                         if (fs.existsSync(finalTarget)) {
@@ -605,10 +875,11 @@ export function registerStorageIpc(): void {
                     }
                 }
 
-                // 3. Đẩy folder final này lên R2 (bỏ qua nếu là phiên test 1234)
+                // 3. Đẩy folder final này lên R2 (bỏ qua nếu là phiên test 1234 của Photobooth; Selfbooth luôn đẩy)
                 const isTest1234 =
                     Boolean(skipCloudUpload) ||
-                    sessionId.replace(/^session_/i, '').trim() === '1234'
+                    (sessionType !== 'selfbooth' &&
+                        sessionId.replace(/^session_/i, '').trim() === '1234')
                 let r2Result = null
                 if (isTest1234) {
                     console.log(

@@ -386,6 +386,23 @@ export const SessionDB = {
         task: Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
     ): UploadTaskRecord {
         const db = getDatabase()
+        // Giữ nguyên task đã hoàn tất hoặc đang tải lên để tránh ghi đè reset về PENDING khi enqueue lại cuối phiên
+        const existing = db
+            .prepare('SELECT * FROM UploadTasks WHERE id = ?')
+            .get(task.id) as UploadTaskRecord | undefined
+        if (existing) {
+            const sameFile =
+                existing.file_path === task.file_path &&
+                existing.size_bytes === task.size_bytes
+            if (
+                existing.status === 'UPLOADED' ||
+                existing.status === 'UPLOADING' ||
+                (existing.status === 'PENDING' && sameFile)
+            ) {
+                return existing
+            }
+        }
+
         const now = new Date().toISOString()
         const record: UploadTaskRecord = {
             ...task,
