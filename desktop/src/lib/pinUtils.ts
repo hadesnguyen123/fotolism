@@ -1,4 +1,10 @@
 /**
+ * @file pinUtils.ts
+ * Tiện ích xử lý mã PIN phiên chụp: trích xuất mã thô, định dạng thư mục cục bộ,
+ * tạo hash định danh 10 chữ số cho Cloudflare R2 gallery và sinh link/QR tải ảnh cho khách hàng.
+ */
+
+/**
  * Chuẩn hóa mã PIN hoặc sessionId về mã PIN gốc (bỏ tiền tố session_ nếu có)
  */
 export function extractRawPin(pinOrSessionId?: string | null): string {

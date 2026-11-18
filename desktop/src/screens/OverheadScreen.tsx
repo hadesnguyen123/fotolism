@@ -1,3 +1,10 @@
+/**
+ * @file OverheadScreen.tsx
+ * Màn hình phụ treo trần / màn hình hướng ngoại (Overhead Display):
+ * phát luồng LiveView trực tiếp từ Canon Daemon và hiển thị chỉ số trạng thái cho khách hàng bên ngoài phòng chụp.
+ * Phụ thuộc: react, Canon Daemon HTTP endpoint (8899).
+ */
+
 import { useState, useEffect } from 'react'
 import './OverheadScreen.css'
 

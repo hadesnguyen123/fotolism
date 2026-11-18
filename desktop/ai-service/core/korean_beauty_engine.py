@@ -54,8 +54,6 @@ class KoreanBeautyConfig(BaseModel):
     skinDiffuseLight: float = Field(0.0, ge=0.0, le=1.0)
     foundationCoverage: float = Field(0.0, ge=0.0, le=1.0)
     concealerStrength: float = Field(0.40, ge=0.0, le=1.0)
-    upperLipStrength: float = Field(0.90, ge=0.0, le=3.0)
-    upperLipPasses: int = Field(1, ge=1, le=3)
 
     @classmethod
     def white_pink(cls):
@@ -64,29 +62,26 @@ class KoreanBeautyConfig(BaseModel):
                    blushSpread=1.25, blushAdaptation=0.40, skinDiffuseLight=0.30,
                    skinYellowReduction=0.20,
                    rosyTone=0.60, rosyBlush=0.65, softGlow=0.0,
-                   lipEnhancement=0.40, lipGloss=0.60, eyeSharpening=0.08,
+                   eyeSharpening=0.08,
                    slimFace=0.04, bigEyes=0.10, slimNose=0.10, selectiveBlemish=True,
-                   shineReduction=0.30, protectGlasses=True,
-                   upperLipStrength=2.70, upperLipPasses=3)
+                   shineReduction=0.30, protectGlasses=True)
 
     @classmethod
     def white_pink_v2(cls):
         """Texture-first trial preset; independent of the established V1 values."""
         return cls(presetId="white_pink_v2", skinSmoothing=.70, blemishRemoval=1.90,
-                   skinEvening=.60, skinTextureRetention=.90, skinBrightening=.50,
+                   skinEvening=.60, skinTextureRetention=.60, skinBrightening=.55,
                    rosyTone=.925, rosyBlush=.60, blushSpread=1.30,
                    blushAdaptation=.85, softGlow=.13,
-                   lipEnhancement=0., lipGloss=0., eyeSharpening=0.,
-                   slimFace=.10, bigEyes=.06, slimNose=.06, upperLipStrength=.445,
+                   eyeSharpening=0.,
+                   slimFace=.10, bigEyes=.06, slimNose=.06,
                    darkCirclesReduction=0., skinYellowReduction=0.,
-                   upperLipPasses=1, protectGlasses=True, selectiveBlemish=True, selectiveSpotCorrection=True,
+                   protectGlasses=True, selectiveBlemish=True, selectiveSpotCorrection=True,
                    globalSharpening=0., foundationCoverage=0.)
 
     skinBrightening: float = Field(0.00, ge=0.0, le=1.0, description="Nâng sáng trắng hồng trong trẻo (0.00 bảo toàn ánh sáng đèn studio thật)")
     softGlow: float = Field(0.03, ge=0.0, le=1.0, description="Độ mềm và ánh sáng studio dịu dàng")
     rosyBlush: float = Field(0.15, ge=0.0, le=1.0, description="Má hồng tự nhiên (15%, thích ứng giảm còn 5% nếu đã có má hồng sẵn)")
-    lipEnhancement: float = Field(0.10, ge=0.0, le=1.0, description="Tăng sắc hồng tự nhiên cho môi")
-    lipGloss: float = Field(0.0, ge=0.0, le=1.0, description="Tăng phản sáng sẵn có trên môi, độc lập sắc môi")
     eyeSharpening: float = Field(0.15, ge=0.0, le=1.0, description="Độ sắc nét chọn lọc cho mắt, mi và lông mày")
     globalSharpening: float = Field(0.00, ge=0.0, le=1.0, description="Sharpening toàn cảnh (mặc định 0.0)")
     slimFace: float = Field(0.04, ge=0.0, le=0.20, description="Cằm V-line 4% (3-5%)")
@@ -1094,71 +1089,6 @@ class KoreanBeautyEngine:
         output[mask <= 1e-4] = image[mask <= 1e-4]
         return output
 
-    def soften_upper_lip_shadow(self, lab, source_lab, faces, skin, strength):
-        """Lift low-frequency upper-lip darkness against adjacent skin, not lips.
-
-        Five-point geometry provides a conservative region, not a hair classifier.
-        Bound the lift and skip faces without a reliable adjacent skin reference.
-        """
-        h, w = skin.shape
-        lift = np.zeros((h, w), np.float32)
-        for face in faces:
-            points = face['landmarks'].astype(np.float32)
-            nose, left, right = points[2], points[3], points[4]
-            center = (left + right) * .5
-            width = float(np.linalg.norm(right-left))
-            if width < 8:
-                continue
-            u = (right-left)/width
-            v = np.array([-u[1], u[0]], np.float32)
-            height = float(np.dot(center-nose, v))
-            if height < width*.20 or height > width*1.2:
-                continue
-            x1=max(0,int(center[0]-width));x2=min(w,int(center[0]+width)+1)
-            y1=max(0,int(center[1]-height-width*.4));y2=min(h,int(center[1]+width*.4)+1)
-            yy,xx=np.mgrid[y1:y2,x1:x2]
-            dx=xx-center[0];dy=yy-center[1]
-            horizontal=(dx*u[0]+dy*u[1])/(width*.5)
-            vertical=(dx*v[0]+dy*v[1])/height
-            src=source_lab[y1:y2,x1:x2]
-            weights=skin[y1:y2,x1:x2]
-            reference=(np.abs(horizontal)>1.05)&(np.abs(horizontal)<1.6)&(vertical>-.8)&(vertical<-.2)&(weights>.7)
-            if np.count_nonzero(reference)<12:
-                continue
-            target=np.median(lab[y1:y2,x1:x2][reference],axis=0)
-            source_target=np.median(src[reference],axis=0)
-            # Cover the lateral upper-lip skin as well as the central philtrum.
-            # A broad plateau avoids leaving a dark ring around a bright centre.
-            distance=(horizontal/1.20)**2+((vertical+.50)/.43)**2
-            zone=np.clip((1.-distance)/.55,0.,1.)
-            zone=zone*zone*(3.-2.*zone)
-            # Join the lateral upper-lip skin to the central correction. The
-            # former ellipse tapered too early near the corners of the mouth.
-            side_distance=((np.abs(horizontal)-.78)/.55)**2+((vertical+.36)/.29)**2
-            side_zone=np.clip((1.-side_distance)/.65,0.,1.)
-            side_zone=side_zone*side_zone*(3.-2.*side_zone)
-            zone=np.maximum(zone,side_zone)
-            # Nose/nostril shadows are outside upper-lip cleanup, even at 3x.
-            below_nose=np.clip((vertical+.70)/.20,0.,1.)
-            zone*=below_nose*below_nose*(3.-2.*below_nose)
-            # Preserve red lip pigment and very dark anatomical features.
-            safe=np.clip((source_target[1]+9.-src[...,1])/6.,0.,1.)*np.clip((src[...,0]-85.)/40.,0.,1.)
-            base=cv2.GaussianBlur(lab[y1:y2,x1:x2,0],(0,0),max(1.,width*.045))
-            deficit=np.clip(target[0]-base,0.,14.)
-            correction=deficit*zone*safe*weights*strength
-            # Multiple strong passes converge toward surrounding skin; they must
-            # never accumulate beyond its luminance or brighten existing highlights.
-            source_base=cv2.GaussianBlur(src[...,0],(0,0),max(1.,width*.045))
-            # A fixed, feathered total budget prevents repeated passes erasing
-            # texture or eventually lifting the entire edge to a flat colour.
-            total_budget=np.minimum(np.maximum(target[0]-source_base,0.),18.)*zone*safe*weights
-            already_added=np.maximum(lab[y1:y2,x1:x2,0]-src[...,0],0.)
-            headroom=np.maximum(total_budget-already_added,0.)
-            headroom=np.minimum(headroom,np.maximum(target[0]-lab[y1:y2,x1:x2,0],0.))
-            correction=np.minimum(correction,headroom)
-            lift[y1:y2,x1:x2]=np.maximum(lift[y1:y2,x1:x2],correction)
-        lab[...,0]+=lift
-        return lift
 
     def apply_rosy_blush(self, lab, cfg, blush_mask, A_surround):
         L, A, B = lab[...,0], lab[...,1], lab[...,2]
@@ -1796,17 +1726,6 @@ class KoreanBeautyEngine:
 
             blended = np.clip(out_ue, 0, 255).astype(np.uint8)
 
-        if cfg.presetId == 'white_pink_v2':
-            # Correct upper-lip darkness during retouch, before tone exaggerates
-            # differences. Reuse the bounded V1 lift without blurring image detail.
-            retouch_lab = cv2.cvtColor(blended, cv2.COLOR_BGR2LAB).astype(np.float32)
-            retouch_source = retouch_lab.copy()
-            retouch_roundtrip = cv2.cvtColor(retouch_source.astype(np.uint8), cv2.COLOR_LAB2BGR)
-            upper_skin = masks['colour'] * (1. - masks['lip'])
-            for _ in range(cfg.upperLipPasses):
-                self.soften_upper_lip_shadow(retouch_lab, retouch_source, faces, upper_skin, cfg.upperLipStrength)
-            corrected = cv2.cvtColor(np.clip(retouch_lab,0,255).astype(np.uint8), cv2.COLOR_LAB2BGR)
-            blended = np.clip(blended.astype(np.float32) + corrected.astype(np.float32) - retouch_roundtrip.astype(np.float32),0,255).astype(np.uint8)
 
         # 8. Korean Porcelain Tone, Anti-Redness & Virtual Makeup (CIELAB)
         # Tone uses a separate smooth mask; detail processing above retains edge protection.
@@ -1894,32 +1813,12 @@ class KoreanBeautyEngine:
             if cfg.presetId == 'white_pink_v2':
                 neck_support = (neck_lift > 1e-4).astype(np.float32)
             self.soften_nose_wing_shadow(lab, tone_before, faces, skin_mask)
-            if cfg.presetId == 'white_pink':
-                upper_lip_source = lab.copy()
-                for _ in range(cfg.upperLipPasses):
-                    self.soften_upper_lip_shadow(lab, upper_lip_source, faces, skin_mask, cfg.upperLipStrength)
 
         if cfg.presetId == 'white_pink_v2':
             self.harmonize_local_skin(lab,faces,skin_mask,lip_mask)
             self.lift_outer_cheeks(lab,faces,skin_mask,lip_mask)
             self.apply_rosy_blush(lab,cfg,blush_mask,A_surround)
 
-        # E. Virtual Makeup: Lip Tint (son môi ombre san hô)
-        if cfg.lipEnhancement > 0 or cfg.lipGloss > 0:
-            lip_strength = cfg.lipEnhancement
-            if tone_before is not None:
-                lip_strength = lip_strength * (1. - .75*np.clip((tone_before[...,1]-145.)/20., 0., 1.))
-            if cfg.lipEnhancement > 0:
-                A += (20.0 * lip_strength) * lip_mask
-                B += (3.5 * lip_strength) * lip_mask
-                L += (2.0 * cfg.lipEnhancement) * lip_mask
-            if cfg.lipGloss > 0 and np.any(lip_mask > 0.3):
-                original_l = tone_before[...,0] if tone_before is not None else L
-                threshold = float(np.percentile(original_l[lip_mask > 0.3], 60))
-                gloss = np.clip((original_l - threshold) / max(255.0 - threshold, 1.0), 0.0, 1.0)
-                if cfg.presetId == 'white_pink':
-                    gloss *= np.clip(lip_mask / .5, 0., 1.)
-                L += (255.0 - L) * gloss * lip_mask * cfg.lipGloss * 0.5
 
         lab_final = cv2.merge([np.clip(L, 0, 255), np.clip(A, 0, 255), np.clip(B, 0, 255)])
         if cfg.shineReduction > 0 and np.any(skin_mask > 0.5):

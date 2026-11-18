@@ -88,3 +88,6 @@ desktop/resources/drivers/digiCamControl/
 desktop/resources/drivers/*.zip
 desktop/resources/drivers/*.log
 desktop/resources/drivers/**/*.log
+
+# Standalone Frame Print App (local-only per request)
+frame-print-app/

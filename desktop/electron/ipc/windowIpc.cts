@@ -1,3 +1,10 @@
+/**
+ * @file windowIpc.cts
+ * Quản lý vòng đời cửa sổ phụ Overhead Display, kết nối và điều phối tiến trình AI Service (FastAPI),
+ * cùng các handler IPC phục vụ lưu/đọc cấu hình phần cứng Kiosk và xử lý ảnh AI.
+ * Phụ thuộc: electron (app, BrowserWindow, ipcMain, screen), child_process, common.cts, aiEnhanceQueue.cts, enhanceIntegrity.cts.
+ */
+
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -14,6 +21,12 @@ let overheadWindow: BrowserWindow | null = null
 let aiServiceProc: ChildProcess | null = null
 const aiEnhanceQueue = new AiEnhanceQueue(2)
 
+/**
+ * Kiểm tra trạng thái hoạt động của tiến trình AI Service qua endpoint /health.
+ * Dùng timeout ngắn (500ms) để phản hồi nhanh, không block luồng xử lý UI Kiosk.
+ *
+ * @returns true nếu AI service phản hồi HTTP OK, ngược lại false.
+ */
 export async function checkAiService(): Promise<boolean> {
     try {
         const res = await fetch(`${AI_SERVICE_URL}/health`, {
@@ -24,6 +37,12 @@ export async function checkAiService(): Promise<boolean> {
     return false
 }
 
+/**
+ * Đảm bảo tiến trình AI Service đang chạy; nếu chưa có sẽ tự động khởi chạy backend FastAPI.
+ * Kiểm tra các đường dẫn có thể chứa main.py (môi trường dev, build đóng gói hoặc ổ cứng cố định).
+ *
+ * @returns true nếu AI service đã sẵn sàng nhận request, false nếu khởi động thất bại.
+ */
 export async function ensureAiService(): Promise<boolean> {
     if (await checkAiService()) return true
 
@@ -70,6 +89,9 @@ export async function ensureAiService(): Promise<boolean> {
     return false
 }
 
+/**
+ * Cưỡng chế dừng tiến trình AI Service và toàn bộ tiến trình con (tree kill) khi ứng dụng đóng.
+ */
 export function stopAiService() {
     if (aiServiceProc && aiServiceProc.pid) {
         try {
@@ -81,7 +103,14 @@ export function stopAiService() {
     }
 }
 
+/**
+ * Khởi tạo hoặc tái tạo cửa sổ hiển thị phụ trên trần/màn hình ngoài (Overhead Display).
+ * Tự động chọn màn hình phụ khác với màn hình chính của Kiosk nếu không chỉ định displayId.
+ *
+ * @param displayId ID màn hình Windows đích để hiển thị cửa sổ overhead.
+ */
 export function createOverheadWindow(displayId?: number) {
+
     const displays = screen.getAllDisplays()
     let targetDisplay = displays.find((d) => d.id === displayId)
     if (!targetDisplay) {
@@ -125,6 +154,9 @@ export function createOverheadWindow(displayId?: number) {
 
 const DEVICE_CONFIG_FILENAME = 'device_config.json'
 
+/**
+ * Đăng ký các kênh IPC phục vụ màn hình phụ Overhead, cấu hình thiết bị Kiosk và giao tiếp AI Service.
+ */
 export function registerWindowAndConfigIpc(): void {
     // Overhead Handlers
     ipcMain.handle('overhead:get-displays', () => {

@@ -1,3 +1,11 @@
+/**
+ * @file IdleScreen.tsx
+ * Màn hình chờ (Idle/Standby Screen) của Kiosk Fotolism:
+ * hiển thị video/hình ảnh thương hiệu thu hút khách, tiếp nhận thao tác chạm màn hình bắt đầu,
+ * nhập mã PIN Selfbooth từ xa qua CMS POS và mở bảng điều khiển quản trị viên (Admin Screen).
+ * Phụ thuộc: react, store/appStore, services/cloudSyncService, lib/pinUtils.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, type CaptureMode } from '../store/appStore'
@@ -97,7 +105,7 @@ export default function IdleScreen() {
                     pinCode: '1234',
                 })
                 if (pendingMode === 'selfbooth') {
-                    setScreen('capture')
+                    setScreen('selfbooth-setup')
                 } else {
                     setScreen('select-layout')
                 }
@@ -123,7 +131,7 @@ export default function IdleScreen() {
                     pinCode: rawCode,
                 })
                 if (pendingMode === 'selfbooth') {
-                    setScreen('capture')
+                    setScreen('selfbooth-setup')
                 } else {
                     setScreen('select-layout')
                 }
@@ -220,7 +228,7 @@ export default function IdleScreen() {
                     })
 
                     if (effectiveMode === 'selfbooth') {
-                        setScreen('capture')
+                        setScreen('selfbooth-setup')
                     } else {
                         setScreen('select-layout')
                     }

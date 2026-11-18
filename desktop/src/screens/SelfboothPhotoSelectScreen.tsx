@@ -1,3 +1,10 @@
+/**
+ * @file SelfboothPhotoSelectScreen.tsx
+ * Màn hình tuyển chọn ảnh (Photo Selection) sau khi chụp Selfbooth:
+ * hiển thị thư viện ảnh đã chụp, lọc và chọn các bức ảnh đẹp nhất để đưa vào khung ảnh in ấn.
+ * Phụ thuộc: react, store/appStore, lucide-react.
+ */
+
 import { useState, useMemo } from 'react'
 import { useAppStore, type CapturedPhoto } from '../store/appStore'
 import {

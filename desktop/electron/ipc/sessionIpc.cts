@@ -1,6 +1,15 @@
+/**
+ * @file sessionIpc.cts
+ * Đăng ký các kênh IPC xử lý phiên chụp ảnh (Session) giữa Renderer Process và SQLite SessionDatabase.
+ * Phụ thuộc: electron ipcMain, ../sessionDatabase.cjs.
+ */
+
 import { ipcMain } from 'electron'
 import { SessionDB } from '../sessionDatabase.cjs'
 
+/**
+ * Đăng ký các handler IPC quản lý vòng đời phiên chụp (tạo mới, đọc, cập nhật, truy vấn ảnh).
+ */
 export function registerSessionIpc(): void {
     ipcMain.handle('session:create', (_event, sessionData) => {
         try {
@@ -41,3 +50,4 @@ export function registerSessionIpc(): void {
         }
     })
 }
+

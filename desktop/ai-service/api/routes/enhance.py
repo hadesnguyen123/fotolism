@@ -422,6 +422,11 @@ def crop_center_aspect(img_bgr: np.ndarray, aspect_str: str) -> np.ndarray:
 
 @router.post("", response_model=EnhanceResponse)
 def enhance_image(req: EnhanceRequest):
+    """
+    Tiếp nhận yêu cầu xử lý ảnh AI làm đẹp khuôn mặt (Korean Soft Beauty / White Pink V2),
+    cân bằng trắng, áp dụng Style LUT và cắt tỉ lệ khung hình in ấn.
+    Bảo toàn ảnh RAW gốc; ném lỗi hoặc rơi về fallback an toàn nếu phát hiện lỗi tính toán.
+    """
     start_time = time.time()
     input_path = Path(req.imagePath).resolve()
 
@@ -479,7 +484,6 @@ def enhance_image(req: EnhanceRequest):
                     k_cfg.skinBrightening = float(np.clip(k_cfg.skinBrightening * scale, 0.0, 1.0))
                     k_cfg.softGlow = float(np.clip(k_cfg.softGlow * scale, 0.0, 1.0))
                     k_cfg.rosyBlush = float(np.clip(k_cfg.rosyBlush * scale, 0.0, 1.0))
-                    k_cfg.lipEnhancement = float(np.clip(k_cfg.lipEnhancement * scale, 0.0, 1.0))
                     k_cfg.eyeSharpening = float(np.clip(k_cfg.eyeSharpening * scale, 0.0, 1.0))
                     k_cfg.slimFace = float(np.clip(k_cfg.slimFace * scale, 0.0, 0.20))
                     k_cfg.bigEyes = float(np.clip(k_cfg.bigEyes * scale, 0.0, 0.20))
@@ -499,6 +503,9 @@ def enhance_image(req: EnhanceRequest):
                 )
         else:
             final_img = styled_img
+
+        # BƯỚC 3: Áp dụng bộ lọc màu đầu ra (Basic / B&W / Retro) sau khi đã Enhance
+        final_img = lut_manager.apply_post_filter(final_img, req.styleId)
 
         # Publish only a complete image. Failed retries must never overwrite AI with RAW.
         suffix = out_path.suffix.lower()

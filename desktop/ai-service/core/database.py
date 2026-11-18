@@ -1,3 +1,8 @@
+"""
+Quản lý cơ sở dữ liệu SQLite nội bộ của AI Service (data/joybooth.db).
+Lưu trữ thông tin sự kiện, phiên xử lý ảnh, cấu hình thông số màu và nhật ký tác vụ.
+Phụ thuộc: sqlite3, json, pathlib.
+"""
 import sqlite3
 import os
 import json
@@ -9,6 +14,9 @@ DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "joybooth.db"
 
 def get_connection() -> sqlite3.Connection:
+    """
+    Tạo và mở kết nối tới SQLite database của AI Service với row_factory dạng Dictionary (Row).
+    """
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn

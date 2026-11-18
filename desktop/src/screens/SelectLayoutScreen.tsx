@@ -1,3 +1,9 @@
+/**
+ * @file SelectLayoutScreen.tsx
+ * Màn hình chọn khổ ảnh và bố cục ô chụp (Strip 2x6 kép 3/4 ô hoặc Khổ đơn 4x6 4/6 ô) kèm giá cước niêm yết.
+ * Phụ thuộc: react, store/appStore, constants.ts.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import {
     useAppStore,

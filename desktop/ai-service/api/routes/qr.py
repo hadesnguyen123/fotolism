@@ -1,3 +1,7 @@
+"""
+Router tạo mã QR phục vụ khách quét điện thoại để tải ảnh và video kỷ niệm từ thư viện đám mây hoặc mạng nội bộ.
+Phụ thuộc: fastapi, pydantic, qrcode / PIL, core.config.
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time

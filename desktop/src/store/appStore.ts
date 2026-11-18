@@ -1,3 +1,11 @@
+/**
+ * @file appStore.ts
+ * Kho trạng thái toàn cục (Zustand Global Store) của ứng dụng Kiosk Fotolism:
+ * hợp nhất các slice điều hướng (navigation), bố cục (layout/theme), thanh toán (payment),
+ * phiên chụp (session), camera làm đẹp (beauty) và quản trị viên (admin).
+ * Phụ thuộc: zustand, ./slices/*.
+ */
+
 import { create } from 'zustand'
 
 // ─── 1. Re-export toàn bộ Config tĩnh (Layouts, Themes, Stickers, Filters, Coupons) ──

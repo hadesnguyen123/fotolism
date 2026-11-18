@@ -1,3 +1,10 @@
+/**
+ * @file printerIpc.cts
+ * Điều phối lệnh in ảnh ra máy in nhiệt (DNP DS-RX1, HiTi) qua Windows Print Spooler:
+ * ưu tiên .NET System.Drawing trực tiếp để căn lề 0mm chuẩn 4x6, có cơ chế fallback qua Electron silent print.
+ * Phụ thuộc: electron (app, ipcMain, BrowserWindow), Node.js (path, fs, child_process), SessionDB.
+ */
+
 import { app, ipcMain, BrowserWindow } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -7,6 +14,11 @@ import { AI_SERVICE_URL } from './common.cjs'
 
 let isPrintSpoolerActive = false
 
+/**
+ * Đăng ký các kênh IPC phục vụ in ảnh (gửi lệnh in, kiểm tra danh sách máy in có sẵn).
+ *
+ * @param getMainWindow Hàm lấy tham chiếu tới BrowserWindow chính của Kiosk.
+ */
 export function registerPrinterIpc(
     getMainWindow: () => BrowserWindow | null
 ): void {

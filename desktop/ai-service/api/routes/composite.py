@@ -1,3 +1,7 @@
+"""
+Router xử lý ghép khung ảnh (Frame Composite), dán sticker và xuất bố cục đa ô (2x6 strip kép, 4x6 đơn).
+Phụ thuộc: fastapi, pydantic, PIL (Pillow), core.config.
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time

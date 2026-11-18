@@ -1,12 +1,9 @@
 /**
- * ============================================================================
- * FOTOLISM 3.0 — CLOUD SYNC WORKER & OUTBOX SERVICE
- * - 2-Way communication between Kiosk Client and Cloud CMS
- * - Periodic Heartbeat (every 30s) sending device health & paper levels
- * - Offline-First SQLite/LocalStorage Outbox queue for Session records
- * - Auto-fetch & apply updated Pricing Rules & Vouchers on configVersion bump
- * - Idempotent sync with automatic retry and exponential backoff
- * ============================================================================
+ * @file cloudSyncService.ts
+ * Dịch vụ đồng bộ đám mây hai chiều giữa Kiosk và Cloud CMS:
+ * gửi heartbeat định kỳ (30s) báo cáo sức khỏe thiết bị và định mức giấy in,
+ * quản lý hàng đợi Outbox cục bộ gửi phiên chụp, và tự động kéo bảng giá/voucher mới nhất.
+ * Phụ thuộc: localStorage, fetch API, Window/Electron API.
  */
 
 export interface KioskOutboxSession {

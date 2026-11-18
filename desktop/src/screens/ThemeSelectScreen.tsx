@@ -1,3 +1,10 @@
+/**
+ * @file ThemeSelectScreen.tsx
+ * Màn hình chọn khung ảnh (Frame Theme), bộ lọc màu sắc nghệ thuật và xem trước tương tác dải ảnh Strip/4x6,
+ * cho phép người dùng kéo thả căn chỉnh vị trí khuôn mặt trong từng ô ảnh.
+ * Phụ thuộc: react, store/appStore, components/theme/*, lib/canvasCompositor.
+ */
+
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { COLOR_FILTERS } from '../config/filters'
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'

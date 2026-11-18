@@ -1,3 +1,10 @@
+// <summary>
+// Tiến trình Canon EDSDK Persistent Daemon 64-bit lắng nghe HTTP cổng 8899.
+// Độc quyền quản lý kết nối phần cứng máy ảnh Canon EOS R100 qua luồng đơn STA Message Pump,
+// cung cấp API LiveView thời gian thực, chụp ảnh tuần tự chống trùng lặp và tự động phục hồi khi mất kết nối USB.
+// Phụ thuộc: EdsdkNative.cs, DaemonModels.cs, EDSDK.dll 64-bit.
+// </summary>
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,6 +17,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace FotolismCanonDaemon {
+    /// <summary>
+    /// Lớp điều phối chính của tiến trình Canon Daemon, xử lý vòng lặp STA và HTTP server nội bộ.
+    /// </summary>
     class Program {
         // Canon EDSDK Constants & Function Aliases mapped to EdsdkNative
         public const uint kEdsPropID_SaveTo = EdsdkNative.kEdsPropID_SaveTo;
@@ -119,6 +129,9 @@ namespace FotolismCanonDaemon {
         private static readonly List<StructuredLog> RecentLogs = new List<StructuredLog>();
         private static readonly object LogsLock = new object();
 
+        /// <summary>
+        /// Ghi nhật ký có cấu trúc JSON ra console và lưu đệm 60 bản ghi gần nhất phục vụ endpoint /diagnostics.
+        /// </summary>
         public static void Log(string level, string eventName, string details, string sessionId = null, string captureId = null, long durationMs = 0) {
             StructuredLog entry = new StructuredLog {
                 Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
@@ -139,7 +152,10 @@ namespace FotolismCanonDaemon {
             Console.WriteLine(entry.ToJson());
         }
 
-        // EDSDK Object Event Callback for Shutter & Transfer
+        /// <summary>
+        /// Callback nhận sự kiện từ EDSDK khi có file ảnh mới được tạo trên máy ảnh để tải về máy Kiosk.
+        /// Chạy bất đồng bộ từ luồng nội bộ của Canon SDK.
+        /// </summary>
         public static uint HandleObjectEvent(uint inEvent, IntPtr inRef, IntPtr inContext) {
             Log("DEBUG", "EDSDK_EVENT", string.Format("Event code 0x{0:X8}", inEvent));
             if (inEvent == kEdsObjectEvent_DirItemRequestTransfer || inEvent == kEdsObjectEvent_DirItemCreated || inEvent == kEdsObjectEvent_DirItemRequestTransferDT) {
@@ -249,6 +265,10 @@ namespace FotolismCanonDaemon {
             return 0;
         }
 
+        /// <summary>
+        /// Xác thực tính toàn vẹn của file JPEG dựa trên kích thước tối thiểu và cặp byte SOI Magic (0xFF, 0xD8).
+        /// Ngăn ngừa việc lưu trữ hoặc hiển thị file ảnh tải về bị cụt/hỏng do ngắt kết nối USB đột ngột.
+        /// </summary>
         private static bool VerifyJpegFile(string filePath) {
             try {
                 if (!File.Exists(filePath)) return false;
@@ -267,6 +287,9 @@ namespace FotolismCanonDaemon {
             }
         }
 
+        /// <summary>
+        /// Xử lý các sự kiện trạng thái máy ảnh từ EDSDK (cảnh báo ngủ, tự tắt nguồn hoặc lỗi chụp).
+        /// </summary>
         static uint HandleStateEvent(uint inEvent, uint inParameter, IntPtr inContext) {
             if (inEvent == kEdsStateEvent_WillSoonShutDown) {
                 Log("WARN", "CAMERA_WILL_SHUTDOWN", string.Format("Camera sleep warning: auto power-off in {0}s! Extending shutdown timer...", inParameter));
@@ -283,6 +306,9 @@ namespace FotolismCanonDaemon {
             return 0;
         }
 
+        /// <summary>
+        /// Giải phóng session EDSDK hiện tại và chuyển máy trạng thái về RECOVERING để luồng chính tự kết nối lại.
+        /// </summary>
         static void TriggerCameraReset(string reason) {
             Log("WARN", "CAMERA_RESET", "Triggering session reset: " + reason);
             CurrentState = CameraState.RECOVERING;
@@ -354,6 +380,10 @@ namespace FotolismCanonDaemon {
             Log("INFO", "DAEMON_STOP", "Daemon terminated cleanly.");
         }
 
+        /// <summary>
+        /// Kích hoạt chụp ảnh vật lý trên máy ảnh Canon, đo lường độ trễ màn trập và chờ ảnh tải về đĩa.
+        /// Chạy độc quyền trên luồng chính STA để tuân thủ luồng COM/PTP của Canon EDSDK.
+        /// </summary>
         static void ExecuteShutter(CaptureRecord job) {
             if (CurrentState == CameraState.DISCONNECTED || CameraRef == IntPtr.Zero) {
                 job.Status = CaptureStatus.FAILED;
@@ -467,6 +497,9 @@ namespace FotolismCanonDaemon {
             job.DoneEvent.Set();
         }
 
+        /// <summary>
+        /// Đảm bảo session EDSDK với máy ảnh Canon luôn mở; tự động phát hiện và kết nối lại với thuật toán Exponential Backoff.
+        /// </summary>
         static void EnsureCameraConnected(ref int backoffMs) {
             if (CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING) return;
 
@@ -544,6 +577,9 @@ namespace FotolismCanonDaemon {
             backoffMs = Math.Min(backoffMs * 2, 3000); // Exponential backoff capped at 3s
         }
 
+        /// <summary>
+        /// Kéo luồng khung hình EVF (Electronic Viewfinder LiveView) từ RAM máy ảnh Canon và lưu vào bộ nhớ đệm phục vụ endpoint /liveview.jpg.
+        /// </summary>
         static void PullEvfFrame() {
             if (CameraRef == IntPtr.Zero) return;
             Stopwatch sw = Stopwatch.StartNew();
@@ -588,6 +624,10 @@ namespace FotolismCanonDaemon {
             }
         }
 
+        /// <summary>
+        /// Xử lý các yêu cầu HTTP API gửi tới daemon (/status, /liveview.jpg, /capture, /fps, /diagnostics, /quit).
+        /// Hỗ trợ CORS cho phép giao diện Renderer truy vấn trạng thái phần cứng trực tiếp.
+        /// </summary>
         static void HandleRequest(HttpListenerContext ctx) {
             try {
                 ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*");

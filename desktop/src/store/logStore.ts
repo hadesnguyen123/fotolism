@@ -1,3 +1,10 @@
+/**
+ * @file logStore.ts
+ * Quản lý lịch sử nhật ký vận hành (System & API Logs) và thông báo Toast nổi trên màn hình Kiosk,
+ * hỗ trợ drawer kiểm tra chẩn đoán lỗi phần cứng (Camera, Print, Storage, AI) cho kỹ thuật viên.
+ * Phụ thuộc: zustand.
+ */
+
 import { create } from 'zustand'
 
 export type LogCategory =
