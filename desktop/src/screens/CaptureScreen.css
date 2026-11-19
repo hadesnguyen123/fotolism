@@ -1812,63 +1812,60 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   SELFBOOTH 16:9 LANDSCAPE STUDIO VIEWPORT
-   1. Cột trái: Live View 3:2 ngang bật gương toàn phần (khớp cảm biến Canon R100)
-   2. Cột phải: Ảnh vừa chụp xong (3:2 bật gương) & Studio Controls (Lưới 3x3, Đèn viền)
-   3. Hàng đáy toàn chiều rộng: Filmstrip lịch sử ảnh chụp
+   SELFBOOTH 3-SECTION PORTRAIT VIEWPORT
+   1. Live View 3:4 Full Width (1080x1440 = 75% màn 9:16)
+   2. Phần còn lại (~20%): Ảnh vừa chụp (3:4)
+   3. Dải ảnh đáy (5%): Filmstrip lịch sử ảnh
    ══════════════════════════════════════════════════════════════════════════════ */
 
 .capture-screen-pastel.selfbooth-mode-screen {
-    --selfbooth-crop-ratio: 3 / 2;
-    --selfbooth-filmstrip-height: 92px;
+    /* ── TÙY CHỈNH NHANH TỈ LỆ 3 PHẦN TẠI ĐÂY ── */
+    --selfbooth-crop-ratio: 3 / 4;          /* Tỉ lệ 3 ngang : 4 dọc (1080x1440) */
+    --selfbooth-filmstrip-height: clamp(64px, 7.5vh, 84px);
     background-color: var(--bg-app, #faf6f1);
 }
 
 .capture-main-stage.selfbooth-stage {
-    grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.85fr) !important;
-    grid-template-rows: minmax(0, 1fr) auto;
-    padding: 16px 24px 16px;
+    grid-template-columns: 1fr !important;
+    padding: 0;
     margin: 0;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     align-items: stretch;
-    justify-content: stretch;
-    gap: 14px 18px;
+    justify-content: flex-start;
+    gap: 0;
     flex: 1;
     height: 100%;
     min-height: 0;
     width: 100%;
-    box-sizing: border-box;
     background: var(--bg-app, #faf6f1);
 }
 
-/* ── CỘT TRÁI (HÀNG 1): LIVE VIEW TỈ LỆ 3:2 TRÀN KHUNG TRONG MÀN HÌNH 16:9 ── */
+/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 3:4 TRÀN FULL 100% CHIỀU RỘNG MÀN HÌNH ── */
 .liveview-selfbooth-full.selfbooth-liveview-section {
-    grid-column: 1;
-    grid-row: 1;
     width: 100%;
-    height: 100%;
-    max-height: none;
+    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
+    height: auto;
+    max-height: 72vh;
     min-height: 0;
-    min-width: 0;
-    container-type: size;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
+    min-width: 0;
     background: #14100f;
-    border-radius: 22px;
     overflow: hidden;
-    box-shadow: 0 12px 32px rgba(42, 24, 16, 0.14);
+    flex-shrink: 0;
 }
 
-/* Khung hình Selfbooth giữ chính xác tỉ lệ 3:2 không méo / không tràn trên 16:9 */
+/* Khung hình Selfbooth tràn 100% chiều ngang và chuẩn tỉ lệ 3:4 */
 .liveview-selfbooth-full .camera-viewfinder-wrapper {
-    width: min(100cqw, calc(100cqh * 3 / 2));
-    height: min(100cqh, calc(100cqw * 2 / 3));
+    width: 100%;
     max-width: 100%;
+    height: 100%;
     max-height: 100%;
-    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 2);
-    border-radius: 18px;
+    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
+    border-radius: 0;
     margin: 0;
     box-shadow: none;
     border: none;
@@ -1940,24 +1937,20 @@
     pointer-events: auto;
 }
 
-/* ── CỘT PHẢI (HÀNG 1): REVIEW ẢNH VỪA CHỤP + CÔNG CỤ STUDIO WARM MINIMALIST ── */
+/* ── PHẦN 2 (GIỮA): REVIEW ẢNH VỪA CHỤP + THANH STUDIO WARM MINIMALIST ── */
 .selfbooth-lastshot-section {
-    grid-column: 2;
-    grid-row: 1;
     width: 100%;
-    height: 100%;
+    height: auto;
+    flex: 1;
     min-height: 0;
-    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #ffffff;
-    border: 1.5px solid var(--border-subtle, #e6d9cf);
-    border-radius: 22px;
-    box-shadow: 0 8px 24px rgba(42, 24, 16, 0.06);
+    background: var(--bg-app, #faf6f1);
+    border-top: 1px solid var(--border-subtle, #e6d9cf);
     position: relative;
     overflow: hidden;
-    padding: 16px;
+    padding: 12px 18px;
     box-sizing: border-box;
 }
 
@@ -1965,30 +1958,27 @@
     width: 100%;
     height: 100%;
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: space-between;
-    gap: 14px;
+    align-items: center;
+    gap: 16px;
     min-height: 0;
 }
 
 .selfbooth-lastshot-frame {
-    width: 100%;
-    height: auto;
-    max-height: 62%;
-    max-width: 100%;
-    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 2);
+    height: 100%;
+    max-height: 100%;
+    width: auto;
+    max-width: 44%;
+    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
     position: relative;
     overflow: hidden;
-    border-radius: 16px;
+    border-radius: 14px;
     border: 1.5px solid var(--border-subtle, #e6d9cf);
     background: #fff9f4;
-    box-shadow: 0 8px 20px rgba(42, 24, 16, 0.1);
+    box-shadow: 0 8px 24px rgba(42, 24, 16, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin: 0 auto;
 }
 
 .selfbooth-lastshot-img {
@@ -2016,47 +2006,47 @@
 .selfbooth-studio-info-card {
     flex: 1;
     min-width: 0;
-    min-height: 0;
+    height: 100%;
+    max-height: 160px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 12px;
-    padding: 14px 16px;
-    border-radius: 16px;
-    background: #faf6f1;
+    padding: 14px 18px;
+    border-radius: 20px;
+    background: #ffffff;
     border: 1px solid var(--border-subtle, #e6d9cf);
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.05);
     box-sizing: border-box;
 }
 
 .selfbooth-empty-banner {
     width: 100%;
-    height: 100%;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    gap: 18px;
-    padding: 20px 16px;
-    border-radius: 18px;
-    background: #faf6f1;
-    border: 1px dashed var(--border-subtle, #e6d9cf);
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle, #e6d9cf);
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.05);
     box-sizing: border-box;
 }
 
 .selfbooth-empty-banner-left {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     min-width: 0;
 }
 
 .selfbooth-empty-icon-box {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    background: #ffffff;
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    background: #fff9f4;
     border: 1px solid var(--border-subtle, #e6d9cf);
     color: var(--brand-primary, #502a1d);
     display: flex;
@@ -2068,19 +2058,19 @@
 .selfbooth-studio-copy {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     min-width: 0;
 }
 
 .selfbooth-studio-title {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 800;
     color: var(--text-primary, #2a1810);
     line-height: 1.25;
 }
 
 .selfbooth-studio-hint {
-    font-size: 13.5px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--text-secondary, #70594f);
     line-height: 1.35;
@@ -2089,7 +2079,6 @@
 .selfbooth-studio-toggles {
     display: flex;
     align-items: center;
-    justify-content: center;
     flex-wrap: wrap;
     gap: 10px;
 }
@@ -2099,14 +2088,14 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 44px;
-    padding: 0 14px;
+    min-height: 48px;
+    padding: 0 16px;
     border-radius: 9999px;
     border: 1.5px solid var(--border-subtle, #e6d9cf);
-    background: #ffffff;
+    background: #fff9f4;
     color: var(--text-primary, #2a1810);
     font-family: var(--font-body, inherit);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2127,27 +2116,24 @@
     color: #ffffff;
 }
 
-/* ── HÀNG ĐÁY TOÀN CHIỀU RỘNG: DẢI FILMSTRIP TOUCH-FIRST ── */
+/* ── PHẦN 3 (ĐÁY): DẢI FILMSTRIP TOUCH-FIRST ── */
 .selfbooth-bottom-gallery {
-    grid-column: 1 / -1;
-    grid-row: 2;
     width: 100%;
-    height: var(--selfbooth-filmstrip-height, 92px);
-    min-height: 82px;
-    max-height: 98px;
+    height: var(--selfbooth-filmstrip-height, clamp(64px, 7.5vh, 84px));
+    min-height: 64px;
+    max-height: 88px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 8px 14px;
-    background: #ffffff;
-    border: 1.5px solid var(--border-subtle, #e6d9cf);
-    border-radius: 18px;
+    padding: 6px 14px;
+    background: #fff9f4;
+    border-top: 1px solid var(--border-subtle, #e6d9cf);
+    border-radius: 0;
     flex-shrink: 0;
     scrollbar-width: none;
     box-sizing: border-box;
-    box-shadow: 0 4px 16px rgba(42, 24, 16, 0.04);
 }
 
 .selfbooth-bottom-gallery::-webkit-scrollbar {
@@ -2164,9 +2150,9 @@
 
 .selfbooth-thumb-card {
     position: relative;
-    height: 100%;
-    min-width: 96px;
-    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 2);
+    height: calc(100% - 4px);
+    min-width: 48px;
+    aspect-ratio: var(--selfbooth-crop-ratio, 3 / 4);
     border-radius: 10px;
     overflow: hidden;
     flex-shrink: 0;
@@ -2194,8 +2180,8 @@
 
 .selfbooth-thumb-badge {
     position: absolute;
-    bottom: 4px;
-    right: 4px;
+    bottom: 3px;
+    right: 3px;
     padding: 1px 6px;
     border-radius: 6px;
     font-size: 11px;

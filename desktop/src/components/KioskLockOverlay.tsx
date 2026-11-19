@@ -12,9 +12,9 @@ export default function KioskLockOverlay() {
     const [pinError, setPinError] = useState<string | null>(null)
     const [isChecking, setIsChecking] = useState(false)
 
-    const kioskId = deviceConfig?.kiosk_id || 'kiosk_01'
-    const kioskName = deviceConfig?.kiosk_name || 'Kiosk Fotolism'
-    const branchName = deviceConfig?.branch_name || 'Chi Nhánh'
+    const kioskId = deviceConfig?.kiosk_id || 'Chưa kích hoạt'
+    const kioskName = deviceConfig?.kiosk_name || 'Chưa đặt tên Kiosk'
+    const branchName = deviceConfig?.branch_name || 'Chưa gán chi nhánh'
 
     const handleManualCheck = async () => {
         setIsChecking(true)

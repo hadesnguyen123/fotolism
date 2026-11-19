@@ -3,8 +3,13 @@
  * Dịch vụ đồng bộ đám mây hai chiều giữa Kiosk và Cloud CMS:
  * gửi heartbeat định kỳ (30s) báo cáo sức khỏe thiết bị và định mức giấy in,
  * quản lý hàng đợi Outbox cục bộ gửi phiên chụp, và tự động kéo bảng giá/voucher mới nhất.
- * Phụ thuộc: localStorage, fetch API, Window/Electron API.
+ * Phụ thuộc: localStorage, fetch API, Window/Electron API, lib/constants.
  */
+
+import {
+    ENV_CMS_URL,
+    ENABLE_BACKGROUND_SESSION_SYNC,
+} from '../lib/constants'
 
 export interface KioskOutboxSession {
     id: string
@@ -53,19 +58,6 @@ export interface DeviceConfig {
     activated_at?: string
 }
 
-// Tham chiếu trực tiếp từ biến môi trường (VITE_CMS_STAGING_URL, CMS_STAGING_URL, VITE_CMS_URL, CMS_URL)
-export const ENV_CMS_URL =
-    (typeof import.meta !== 'undefined' &&
-        (import.meta.env?.VITE_CMS_STAGING_URL ||
-            import.meta.env?.VITE_CMS_URL)) ||
-    (typeof process !== 'undefined' &&
-        (process.env?.CMS_STAGING_URL || process.env?.CMS_URL)) ||
-    ''
-
-export const DEFAULT_CMS_URL = (
-    ENV_CMS_URL || 'https://fotolism-cms.vercel.app'
-).replace(/\/$/, '')
-const DEFAULT_KIOSK_ID = 'kiosk_01'
 const OUTBOX_STORAGE_KEY = 'fotolism_sessions_outbox'
 const CONFIG_VER_KEY = 'fotolism_config_version'
 
@@ -102,6 +94,12 @@ class CloudSyncService {
             try {
                 this.deviceConfig = JSON.parse(savedCfg)
             } catch {}
+        }
+        if (
+            !ENABLE_BACKGROUND_SESSION_SYNC &&
+            typeof localStorage !== 'undefined'
+        ) {
+            localStorage.removeItem(OUTBOX_STORAGE_KEY)
         }
         this.refreshPendingCount()
     }
@@ -158,24 +156,17 @@ class CloudSyncService {
     }
 
     public getCmsUrl(): string {
-        // 1. Ưu tiên biến môi trường cấu hình (hỗ trợ cms_staging_url / VITE_CMS_STAGING_URL / VITE_CMS_URL)
-        const envUrl =
-            (typeof import.meta !== 'undefined' &&
-                (import.meta.env?.VITE_CMS_STAGING_URL ||
-                    import.meta.env?.VITE_CMS_URL)) ||
-            (typeof process !== 'undefined' &&
-                (process.env?.CMS_STAGING_URL || process.env?.CMS_URL))
-
-        if (envUrl) {
-            return (envUrl as string).replace(/\/$/, '')
-        }
-
-        // 2. Cấu hình được lưu trong localStorage (nếu có tùy chỉnh) hoặc fallback về DEFAULT_CMS_URL
+        // 1. Ưu tiên biến môi trường (.env) rồi tới cấu hình đã kích hoạt / nhân viên cấu hình
         const saved =
             typeof localStorage !== 'undefined'
                 ? localStorage.getItem('fotolism_cms_url')
                 : null
-        return (saved || DEFAULT_CMS_URL).replace(/\/$/, '')
+        return (
+            ENV_CMS_URL ||
+            this.getDeviceConfig()?.cms_url ||
+            saved ||
+            ''
+        ).replace(/\/$/, '')
     }
 
     public setCmsUrl(url: string) {
@@ -185,9 +176,56 @@ class CloudSyncService {
     public getKioskId(): string {
         return (
             this.getDeviceConfig()?.kiosk_id ||
-            localStorage.getItem('fotolism_kiosk_id') ||
-            DEFAULT_KIOSK_ID
+            (typeof localStorage !== 'undefined'
+                ? localStorage.getItem('fotolism_kiosk_id')
+                : null) ||
+            ''
         )
+    }
+
+    private lastReportedErrorKey: string | null = null
+
+    /** Gửi bản ghi lỗi client/sync lên endpoint /api/audit của Cloud CMS (không chặn luồng UI). */
+    public async reportErrorToServer(
+        action: string,
+        message: string,
+        details?: Record<string, unknown>
+    ): Promise<void> {
+        const cmsUrl = this.getCmsUrl()
+        if (!cmsUrl) return
+        try {
+            await fetch(`${cmsUrl}/api/audit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action,
+                    resource: 'desktop-kiosk',
+                    message,
+                    details: {
+                        kioskId: this.getKioskId() || null,
+                        ...details,
+                    },
+                }),
+                signal: AbortSignal.timeout(8000),
+            })
+        } catch (err) {
+            console.error('[CloudSync] Failed to report error to CMS /api/audit:', err)
+        }
+    }
+
+    private notifySyncFailure(
+        action: string,
+        message: string,
+        details?: Record<string, unknown>,
+        dedupeKey?: string
+    ): void {
+        if (dedupeKey && this.lastReportedErrorKey === dedupeKey) {
+            return
+        }
+        if (dedupeKey) {
+            this.lastReportedErrorKey = dedupeKey
+        }
+        console.error(`[CloudSync] [${action}] ${message}`, details ?? '')
     }
 
     public getStatus(): CloudSyncStatus {
@@ -254,15 +292,19 @@ class CloudSyncService {
     public startWorker(intervalMs = 5000) {
         if (this.timer) return
 
-        // Chạy đồng bộ ngay khi khởi động
+        // Chạy heartbeat ngay khi khởi động; chỉ đồng bộ phiên outbox khi bật cờ cấu hình
         this.sendHeartbeat().catch(console.warn)
-        this.syncPendingSessions().catch(console.warn)
-        this.purgeOldSessions(7)
+        if (ENABLE_BACKGROUND_SESSION_SYNC) {
+            this.syncPendingSessions().catch(console.warn)
+            this.purgeOldSessions(7)
+        }
 
         this.timer = window.setInterval(async () => {
             try {
                 await this.sendHeartbeat()
-                await this.syncPendingSessions()
+                if (ENABLE_BACKGROUND_SESSION_SYNC) {
+                    await this.syncPendingSessions()
+                }
             } catch (err) {
                 console.warn('[CloudSyncWorker] Background tick error:', err)
             }
@@ -317,9 +359,17 @@ class CloudSyncService {
         }
 
         const cmsUrl = this.getCmsUrl()
+        if (!cmsUrl) {
+            const msg = 'Thiếu cấu hình URL máy chủ Cloud CMS (.env)'
+            this.status.isOnline = false
+            this.status.lastError = msg
+            this.notify()
+            this.notifySyncFailure('MISSING_CMS_URL', msg, undefined, 'MISSING_CMS_URL')
+            return false
+        }
         const kioskId = this.getKioskId()
         const paperCount = Number(
-            localStorage.getItem('fotolism_paper_count') || '640'
+            localStorage.getItem('fotolism_paper_count') || '0'
         )
 
         try {
@@ -352,6 +402,7 @@ class CloudSyncService {
             this.status.lastHeartbeat = now.toLocaleTimeString('vi-VN')
             this.status.lastHeartbeatTimestamp = now.getTime()
             this.status.lastError = null
+            this.lastReportedErrorKey = null
 
             // Phản hồi trạng thái Tạm Khóa Kiosk từ Cloud CMS
             if (typeof body?.data?.is_locked === 'boolean') {
@@ -397,10 +448,16 @@ class CloudSyncService {
             this.notify()
             return true
         } catch (err: any) {
+            const errMsg = err?.message || 'Không thể kết nối đến máy chủ Cloud CMS'
             this.status.isOnline = false
-            this.status.lastError =
-                err.message || 'Không thể kết nối đến máy chủ Cloud CMS'
+            this.status.lastError = errMsg
             this.notify()
+            this.notifySyncFailure(
+                'KIOSK_HEARTBEAT_ERROR',
+                errMsg,
+                { kioskId },
+                `HB:${errMsg}`
+            )
             return false
         }
     }
@@ -461,14 +518,8 @@ class CloudSyncService {
                     )
                     const updatedEventConfig = {
                         ...currentEventConfig,
-                        price2x6:
-                            remote2x6 && remote2x6 >= 70000
-                                ? remote2x6
-                                : currentEventConfig.price2x6 || 70000,
-                        price4x6:
-                            remote4x6 && remote4x6 >= 90000
-                                ? remote4x6
-                                : currentEventConfig.price4x6 || 90000,
+                        ...(remote2x6 > 0 ? { price2x6: remote2x6 } : {}),
+                        ...(remote4x6 > 0 ? { price4x6: remote4x6 } : {}),
                         extraCopyPrice: configData.pricing.extra_print_price,
                         configVersion: configData.version || targetVersion || 1,
                     }
@@ -476,14 +527,24 @@ class CloudSyncService {
                         'fotolism_event_config',
                         JSON.stringify(updatedEventConfig)
                     )
+                } else {
+                    this.notifySyncFailure(
+                        'SYNC_CONFIG_EMPTY_PRICING',
+                        'CMS không trả về bảng giá khi đồng bộ cấu hình'
+                    )
                 }
 
                 this.notify()
                 return true
             }
+            this.notifySyncFailure(
+                'SYNC_CONFIG_ERROR',
+                `Lỗi đồng bộ cấu hình từ CMS: HTTP ${res.status}`
+            )
             return false
         } catch (err: any) {
-            console.warn('[CloudSyncService] Failed to pull config:', err)
+            const errMsg = err?.message || 'Không thể tải cấu hình từ CMS'
+            this.notifySyncFailure('SYNC_CONFIG_NETWORK_ERROR', errMsg)
             return false
         }
     }
@@ -530,10 +591,19 @@ class CloudSyncService {
         this.notify()
     }
 
+    public clearOutboxSessions() {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem(OUTBOX_STORAGE_KEY)
+        }
+        this.status.pendingCount = 0
+        this.notify()
+    }
+
     /**
      * Lưu phiên chụp mới vào Outbox cục bộ và kích hoạt đồng bộ ngay
      */
     public queueSession(session: Omit<KioskOutboxSession, 'sync_status'>) {
+        if (!ENABLE_BACKGROUND_SESSION_SYNC) return
         const sessions = this.getOutboxSessions()
         const newRecord: KioskOutboxSession = {
             ...session,
@@ -572,10 +642,14 @@ class CloudSyncService {
 
         const token = this.getBearerToken()
         if (!token) {
+            const msg = 'Thiết bị chưa được kích hoạt với Cloud CMS'
+            this.notifySyncFailure('SYNC_SESSION_UNACTIVATED', msg, {
+                pendingCount: pending.length,
+            })
             return {
                 success: false,
                 syncedCount: 0,
-                message: 'Thiết bị chưa được kích hoạt với Cloud CMS',
+                message: msg,
             }
         }
 
@@ -584,6 +658,7 @@ class CloudSyncService {
 
         const cmsUrl = this.getCmsUrl()
         const kioskId = this.getKioskId()
+        const deviceBranchId = this.getDeviceConfig()?.branch_id || undefined
 
         try {
             const payload = {
@@ -593,8 +668,8 @@ class CloudSyncService {
                     pin_code: s.pin_code || null,
                     customer_name: s.customer_name || null,
                     customer_phone: s.customer_phone || null,
-                    kiosk_id: s.kiosk_id || kioskId,
-                    branch_id: s.branch_id || 'branch_01',
+                    kiosk_id: s.kiosk_id || kioskId || undefined,
+                    branch_id: s.branch_id || deviceBranchId,
                     layout_type: s.layout_type,
                     copies: s.copies,
                     total_amount: s.total_amount,
@@ -618,15 +693,19 @@ class CloudSyncService {
             })
 
             if (res.status === 401) {
+                const errMsg =
+                    'Lỗi xác thực (HTTP 401): Token không hợp lệ hoặc Kiosk chưa kích hoạt'
                 this.status.isSyncing = false
                 this.status.lastError =
                     'Thiết bị chưa được xác thực (HTTP 401). Vui lòng kiểm tra mã kích hoạt Kiosk.'
                 this.notify()
+                this.notifySyncFailure('SYNC_SESSION_UNAUTHORIZED', errMsg, {
+                    pendingCount: pending.length,
+                })
                 return {
                     success: false,
                     syncedCount: 0,
-                    message:
-                        'Lỗi xác thực (HTTP 401): Token không hợp lệ hoặc Kiosk chưa kích hoạt',
+                    message: errMsg,
                 }
             }
 
@@ -667,15 +746,18 @@ class CloudSyncService {
                     `Đã đồng bộ thành công ${pending.length} phiên chụp`,
             }
         } catch (err: any) {
+            const errMsg = err?.message || 'Không thể kết nối đến máy chủ Cloud CMS'
             this.status.isSyncing = false
             this.status.lastError =
-                err.message || 'Lỗi kết nối khi đồng bộ phiên chụp'
+                err?.message || 'Lỗi kết nối khi đồng bộ phiên chụp'
             this.notify()
+            this.notifySyncFailure('SYNC_SESSION_NETWORK_ERROR', errMsg, {
+                pendingCount: pending.length,
+            })
             return {
                 success: false,
                 syncedCount: 0,
-                message:
-                    err.message || 'Không thể kết nối đến máy chủ Cloud CMS',
+                message: errMsg,
             }
         }
     }
@@ -693,6 +775,11 @@ class CloudSyncService {
     ): Promise<{ success: boolean; data?: DeviceConfig; error?: string }> {
         const cmsUrl = (customCmsUrl || this.getCmsUrl()).replace(/\/$/, '')
         const cleanCode = code.trim()
+        if (!cmsUrl) {
+            const errMsg = 'Thiếu cấu hình URL máy chủ Cloud CMS (.env) để kích hoạt Kiosk'
+            this.notifySyncFailure('ACTIVATE_MISSING_CMS_URL', errMsg)
+            return { success: false, error: errMsg }
+        }
 
         try {
             const res = await fetch(`${cmsUrl}/api/kiosk/activate`, {
@@ -705,14 +792,14 @@ class CloudSyncService {
 
             const json = await res.json()
             if (!res.ok || !json.success) {
-                // Nếu là mã dev 888888 nhưng CMS báo lỗi, tự động fallback chế độ offline dev
-                if (cleanCode === '888888') {
-                    return this.activateDevMode(cmsUrl)
-                }
+                const errMsg =
+                    json.error || 'Mã kích hoạt không đúng hoặc đã hết hạn'
+                this.notifySyncFailure('ACTIVATE_DEVICE_FAILED', errMsg, {
+                    status: res.status,
+                })
                 return {
                     success: false,
-                    error:
-                        json.error || 'Mã kích hoạt không đúng hoặc đã hết hạn',
+                    error: errMsg,
                 }
             }
 
@@ -736,46 +823,15 @@ class CloudSyncService {
 
             return { success: true, data: cfg }
         } catch (err: any) {
-            // Nếu là mã Dev / Test 888888 và không kết nối được CMS, kích hoạt Offline Dev tức thì
-            if (cleanCode === '888888') {
-                return this.activateDevMode(cmsUrl)
-            }
+            const errMsg =
+                err?.message ||
+                'Không thể kết nối đến máy chủ Cloud CMS. Vui lòng kiểm tra kết nối mạng.'
+            this.notifySyncFailure('ACTIVATE_DEVICE_NETWORK_ERROR', errMsg)
             return {
                 success: false,
-                error:
-                    err.message ||
-                    'Không thể kết nối đến máy chủ Cloud CMS. Vui lòng kiểm tra kết nối mạng.',
+                error: errMsg,
             }
         }
-    }
-
-    /**
-     * Kích hoạt nhanh chế độ Dev / Test Lab (Mã mặc định 888888)
-     */
-    public async activateDevMode(
-        customCmsUrl?: string
-    ): Promise<{ success: boolean; data: DeviceConfig }> {
-        const cmsUrl = (customCmsUrl || this.getCmsUrl()).replace(/\/$/, '')
-        const devCfg: DeviceConfig = {
-            device_token: 'jb_tok_dev_888888_test',
-            kiosk_id: 'kiosk_01',
-            kiosk_name: 'Kiosk #01',
-            branch_id: 'branch_01',
-            branch_name: 'Chi Nhánh Fotolism',
-            cms_url: cmsUrl,
-            activated_at: new Date().toISOString(),
-        }
-        this.setDeviceConfig(devCfg)
-        this.startWorker()
-        if (
-            typeof window !== 'undefined' &&
-            (window as any).device?.saveConfig
-        ) {
-            try {
-                await (window as any).device.saveConfig(devCfg)
-            } catch {}
-        }
-        return { success: true, data: devCfg }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

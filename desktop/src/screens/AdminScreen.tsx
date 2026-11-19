@@ -103,62 +103,10 @@ export const AdminScreen: React.FC = () => {
                 const raw = localStorage.getItem('fotolism_sessions_outbox')
                 if (raw) return JSON.parse(raw)
             }
-        } catch {}
-        return [
-            {
-                id: 'sess_1',
-                session_code: 'JB639525',
-                kiosk_id: 'kiosk_01',
-                layout_type: '2x6',
-                copies: 2,
-                total_amount: 70000,
-                payment_method: 'vietqr',
-                paper_consumed: 2,
-                status: 'completed',
-                created_at: '2026-11-02T14:47:19.000Z',
-                sync_status: 'PENDING_SYNC',
-            },
-            {
-                id: 'sess_2',
-                session_code: 'JB98214',
-                kiosk_id: 'kiosk_01',
-                layout_type: '2x6',
-                copies: 2,
-                total_amount: 50000,
-                payment_method: 'vietqr',
-                paper_consumed: 2,
-                status: 'completed',
-                created_at: '2026-11-01T11:08:39.000Z',
-                sync_status: 'SYNCED',
-                synced_at: '2026-11-01T11:09:00.000Z',
-            },
-            {
-                id: 'sess_3',
-                session_code: 'JB98213',
-                kiosk_id: 'kiosk_01',
-                layout_type: '2x6',
-                copies: 1,
-                total_amount: 50000,
-                payment_method: 'cash',
-                paper_consumed: 1,
-                status: 'completed',
-                created_at: '2026-11-01T10:38:39.000Z',
-                sync_status: 'SYNCED',
-            },
-            {
-                id: 'sess_4',
-                session_code: 'JB98212',
-                kiosk_id: 'kiosk_01',
-                layout_type: '4x6',
-                copies: 2,
-                total_amount: 70000,
-                payment_method: 'vietqr',
-                paper_consumed: 2,
-                status: 'completed',
-                created_at: '2026-11-01T09:53:39.000Z',
-                sync_status: 'PENDING_SYNC',
-            },
-        ]
+        } catch (err) {
+            console.error('[AdminScreen] Lỗi đọc danh sách phiên outbox:', err)
+        }
+        return []
     }
 
     const [sessions, setSessions] = useState<KioskOutboxSession[]>(
@@ -604,12 +552,21 @@ export const AdminScreen: React.FC = () => {
         setCmsPingResult(null)
         try {
             const cmsUrl = cloudSyncService.getCmsUrl()
+            const kioskId = cloudSyncService.getKioskId()
+            if (!cmsUrl) {
+                setCmsPingResult('Thiếu cấu hình URL Cloud CMS (.env)')
+                return
+            }
+            if (!kioskId) {
+                setCmsPingResult('Thiết bị chưa có Kiosk ID hợp lệ')
+                return
+            }
             const start = Date.now()
             const res = await fetch(`${cmsUrl}/api/kiosk/heartbeat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    kiosk_id: deviceConfig?.kiosk_id || 'kiosk_01',
+                    kiosk_id: kioskId,
                     ping_test: true,
                 }),
                 signal: AbortSignal.timeout(3000),

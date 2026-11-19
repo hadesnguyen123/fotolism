@@ -274,26 +274,39 @@ export default function ReviewScreen() {
         ).trim()
         if (!pin || pin === '8888' || pin === adminPin || isTestSessionPin(pin)) return
 
+        const cmsUrl = cloudSyncService.getCmsUrl()
+        const kioskId = cloudSyncService.getKioskId()
+        if (!cmsUrl || !kioskId) {
+            console.error(
+                '[ReviewScreen] Thiếu cấu hình Cloud CMS hoặc Kiosk ID khi cập nhật trạng thái vé',
+                { pin, cmsUrl: cmsUrl || null, kioskId: kioskId || null }
+            )
+            return
+        }
+
         try {
-            await fetch(`${cloudSyncService.getCmsUrl()}/api/kiosk/tickets`, {
+            const res = await fetch(`${cmsUrl}/api/kiosk/tickets`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     pin_code: pin,
                     status: 'COMPLETED',
-                    kiosk_id: isSelfboothMode ? 'kiosk_02' : 'kiosk_01',
+                    kiosk_id: kioskId,
                 }),
             })
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`)
+            }
             console.log(
                 `[ReviewScreen] Đã cập nhật vé ${pin} sang COMPLETED trên Cloud CMS`
             )
         } catch (err) {
-            console.warn(
-                '[ReviewScreen] Không thể cập nhật trạng thái vé COMPLETED:',
+            console.error(
+                `[ReviewScreen] Không thể cập nhật vé ${pin} sang COMPLETED:`,
                 err
             )
         }
-    }, [session?.pinCode, eventConfig.adminPin, isSelfboothMode])
+    }, [session?.pinCode, eventConfig.adminPin])
 
     // Cập nhật trạng thái COMPLETED ngay khi khách vào màn hình Review nhận ảnh
     useEffect(() => {
@@ -311,8 +324,17 @@ export default function ReviewScreen() {
                 : is4x6
                   ? '4x6'
                   : '2x6'
-            const kioskId = isSelfboothMode ? 'kiosk_02' : 'kiosk_01'
+            const deviceConfig = cloudSyncService.getDeviceConfig()
+            const kioskId = cloudSyncService.getKioskId()
+            const branchId = deviceConfig?.branch_id || undefined
             const storageUrl = webGalleryUrl
+
+            if (!kioskId) {
+                console.error(
+                    '[ReviewScreen] Thiếu cấu hình Kiosk ID khi lưu phiên chụp vào hàng đợi đồng bộ',
+                    { sessionId: localSessionFolder }
+                )
+            }
 
             cloudSyncService.queueSession({
                 id: localSessionFolder,
@@ -321,12 +343,10 @@ export default function ReviewScreen() {
                 customer_name: session.customerName || null,
                 customer_phone: session.customerPhone || null,
                 kiosk_id: kioskId,
-                branch_id: 'branch_01',
+                branch_id: branchId,
                 layout_type: layoutType,
                 copies: isSelfboothMode ? 0 : printCopies,
-                total_amount:
-                    session.paidAmount ||
-                    (isSelfboothMode ? 50000 : is4x6 ? 70000 : 50000),
+                total_amount: session.paidAmount ?? 0,
                 payment_method: (session.paymentMethod?.toLowerCase() === 'cash'
                     ? 'cash'
                     : 'vietqr') as 'vietqr' | 'cash',

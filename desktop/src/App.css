@@ -15,7 +15,7 @@
     background-color: var(--color-cream-bg);
 }
 
-.app-viewport-16-9-host {
+.app-viewport-9-16-host {
     width: 100vw;
     height: 100vh;
     display: flex;
@@ -25,24 +25,24 @@
     overflow: hidden;
 }
 
-.app-viewport-16-9-host:has(.reference-kiosk.theme-dark) {
-    background-color: #522c1f;
+.app-viewport-9-16-host:has(.reference-kiosk.theme-dark) {
+    background-color: #121110;
 }
 
-.app-root.selfbooth-fixed-16-9 {
-    width: min(100vw, calc(100vh * 16 / 9));
-    height: min(100vh, calc(100vw * 9 / 16));
+.app-root.selfbooth-fixed-9-16 {
+    width: min(100vw, calc(100vh * 9 / 16));
+    height: min(100vh, calc(100vw * 16 / 9));
     min-width: 0;
     min-height: 0;
     max-width: 100vw;
     max-height: 100vh;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 9 / 16;
     flex-shrink: 0;
 }
 
-.app-root.selfbooth-fixed-16-9 .reference-kiosk.fotolism-viewport {
-    position: absolute;
-    inset: 0;
+.app-root.selfbooth-fixed-9-16 .reference-kiosk.fotolism-viewport.portrait-916 {
+    position: relative;
+    inset: auto;
     width: 100%;
     height: 100%;
 }

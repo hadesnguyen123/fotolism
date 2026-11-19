@@ -15,6 +15,7 @@ import {
     FILE_PREFIX_FINAL,
     FILE_PREFIX_TIMELAPSE,
     DEFAULT_ACCOUNT_HOLDER,
+    CANON_DAEMON_BASE_URL,
 } from './constants'
 
 export type IpcResponse<T = unknown> = Promise<{
@@ -320,15 +321,17 @@ const defaultMockApi: FotolismAPI = {
         }),
         getDriverStatus: async () => {
             let isDaemonAlive = false
-            try {
-                const daemonRes = await fetch('http://127.0.0.1:8899/status', {
-                    signal: AbortSignal.timeout(300),
-                })
-                if (daemonRes.ok) {
-                    const json = await daemonRes.json()
-                    isDaemonAlive = Boolean(json.connected)
-                }
-            } catch {}
+            if (CANON_DAEMON_BASE_URL) {
+                try {
+                    const daemonRes = await fetch(`${CANON_DAEMON_BASE_URL}/status`, {
+                        signal: AbortSignal.timeout(300),
+                    })
+                    if (daemonRes.ok) {
+                        const json = await daemonRes.json()
+                        isDaemonAlive = Boolean(json.connected)
+                    }
+                } catch {}
+            }
 
             return {
                 success: true,
@@ -368,51 +371,53 @@ const defaultMockApi: FotolismAPI = {
             const slotIndex = payload.slotIndex ?? payload.shotIndex ?? 0
 
             // 1. Gọi trực tiếp Canon EDSDK Persistent Daemon 2.2 POST /api/captures
-            try {
-                const daemonRes = await fetch(
-                    'http://127.0.0.1:8899/api/captures',
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            captureId,
-                            sessionId,
-                            slotIndex,
-                        }),
-                        signal: AbortSignal.timeout(7000),
-                    }
-                )
-                if (daemonRes.ok) {
-                    const json = await daemonRes.json()
-                    if (json && json.success) {
-                        return {
-                            success: true,
-                            data: {
-                                savedPath:
-                                    json.savedPath ||
-                                    payload.savePath ||
-                                    `${MOCK_SAVE_BASE}/mock_raw_${captureId}.jpg`,
-                                dataUrl: `http://127.0.0.1:8899/frame?t=${Date.now()}`,
-                                source:
-                                    json.source ||
-                                    'Canon EOS R100 (EDSDK Persistent Daemon 2.2)',
-                                resolution:
-                                    json.resolution || '24MP (Full Resolution)',
-                                latencyMs: json.latencyMs,
-                                shutterMs: json.shutterMs,
-                                transferMs: json.transferMs,
+            if (CANON_DAEMON_BASE_URL) {
+                try {
+                    const daemonRes = await fetch(
+                        `${CANON_DAEMON_BASE_URL}/api/captures`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
                                 captureId,
                                 sessionId,
                                 slotIndex,
-                                idempotent: Boolean(json.idempotent),
-                            },
+                            }),
+                            signal: AbortSignal.timeout(7000),
+                        }
+                    )
+                    if (daemonRes.ok) {
+                        const json = await daemonRes.json()
+                        if (json && json.success) {
+                            return {
+                                success: true,
+                                data: {
+                                    savedPath:
+                                        json.savedPath ||
+                                        payload.savePath ||
+                                        `${MOCK_SAVE_BASE}/mock_raw_${captureId}.jpg`,
+                                    dataUrl: `${CANON_DAEMON_BASE_URL}/frame?t=${Date.now()}`,
+                                    source:
+                                        json.source ||
+                                        'Canon EOS R100 (EDSDK Persistent Daemon 2.2)',
+                                    resolution:
+                                        json.resolution || '24MP (Full Resolution)',
+                                    latencyMs: json.latencyMs,
+                                    shutterMs: json.shutterMs,
+                                    transferMs: json.transferMs,
+                                    captureId,
+                                    sessionId,
+                                    slotIndex,
+                                    idempotent: Boolean(json.idempotent),
+                                },
+                            }
+                        }
+                        if (json && json.error) {
+                            return { success: false, error: json.error }
                         }
                     }
-                    if (json && json.error) {
-                        return { success: false, error: json.error }
-                    }
-                }
-            } catch {}
+                } catch {}
+            }
 
             // 2. Fallback mock data
             return {
@@ -437,8 +442,19 @@ const defaultMockApi: FotolismAPI = {
             error: '[Mock] EDSDK Live View chưa khả dụng trong browser mode',
         }),
         canonDaemonStatus: async () => {
+            if (!CANON_DAEMON_BASE_URL) {
+                return {
+                    success: false,
+                    error: 'Thiếu cấu hình VITE_CANON_DAEMON_URL (.env)',
+                    data: {
+                        running: false,
+                        url: '',
+                        state: 'UNCONFIGURED',
+                    },
+                }
+            }
             try {
-                const res = await fetch('http://127.0.0.1:8899/status', {
+                const res = await fetch(`${CANON_DAEMON_BASE_URL}/status`, {
                     signal: AbortSignal.timeout(500),
                 })
                 if (res.ok) {
@@ -447,7 +463,7 @@ const defaultMockApi: FotolismAPI = {
                         success: true,
                         data: {
                             running: Boolean(data.connected),
-                            url: 'http://127.0.0.1:8899',
+                            url: CANON_DAEMON_BASE_URL,
                             state: data.cameraState,
                         },
                     }
@@ -457,22 +473,24 @@ const defaultMockApi: FotolismAPI = {
                 success: true,
                 data: {
                     running: false,
-                    url: 'http://127.0.0.1:8899',
+                    url: CANON_DAEMON_BASE_URL,
                     state: 'DISCONNECTED',
                 },
             }
         },
         canonDiagnostics: async () => {
-            try {
-                const res = await fetch(
-                    'http://127.0.0.1:8899/api/diagnostics',
-                    { signal: AbortSignal.timeout(600) }
-                )
-                if (res.ok) {
-                    const data = await res.json()
-                    return { success: true, data }
-                }
-            } catch {}
+            if (CANON_DAEMON_BASE_URL) {
+                try {
+                    const res = await fetch(
+                        `${CANON_DAEMON_BASE_URL}/api/diagnostics`,
+                        { signal: AbortSignal.timeout(600) }
+                    )
+                    if (res.ok) {
+                        const data = await res.json()
+                        return { success: true, data }
+                    }
+                } catch {}
+            }
             return {
                 success: true,
                 data: {

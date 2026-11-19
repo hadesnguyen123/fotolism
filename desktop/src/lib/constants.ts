@@ -4,6 +4,31 @@
  * tỷ lệ in ấn mặc định và tham số timeout phần cứng của hệ thống Fotolism Kiosk.
  */
 
+// ── 0. Service Endpoints & Timing Constants (đọc từ .env, không fallback URL cứng) ──
+/** Địa chỉ gốc Cloud CMS đọc từ biến môi trường Vite / Node */
+export const ENV_CMS_URL = (
+    (typeof import.meta !== 'undefined' &&
+        (import.meta.env?.VITE_CMS_STAGING_URL ||
+            import.meta.env?.VITE_CMS_URL)) ||
+    (typeof process !== 'undefined' &&
+        (process.env?.CMS_STAGING_URL || process.env?.CMS_URL)) ||
+    ''
+).replace(/\/$/, '')
+
+/** Địa chỉ gốc Canon EDSDK Persistent Daemon đọc từ biến môi trường (.env) */
+export const CANON_DAEMON_BASE_URL = (
+    (typeof import.meta !== 'undefined' &&
+        import.meta.env?.VITE_CANON_DAEMON_URL) ||
+    (typeof process !== 'undefined' && process.env?.CANON_DAEMON_URL) ||
+    ''
+).replace(/\/$/, '')
+
+/** Thời gian tối đa chờ tiến trình tải ảnh lên R2 trước khi báo treo (ms) */
+export const UPLOAD_STALL_TIMEOUT_MS = 90000
+
+/** Tạm bật/tắt luồng nền đồng bộ phiên chụp (Outbox -> CMS /api/kiosk/sessions) */
+export const ENABLE_BACKGROUND_SESSION_SYNC = false
+
 // ── 1. Brand & Identity ──
 /** Tên thương hiệu chính */
 export const BRAND_NAME = 'fotolism'

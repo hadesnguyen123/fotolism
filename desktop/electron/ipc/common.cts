@@ -10,6 +10,14 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { exec } from 'child_process'
 
+// Nạp biến môi trường ngay khi khởi tạo IPC helper để mọi module backend đọc đúng từ .env
+try {
+    process.loadEnvFile?.(path.join(__dirname, '../../.env'))
+} catch {}
+try {
+    process.loadEnvFile?.(path.join(__dirname, '../../.env.local'))
+} catch {}
+
 /** Thời gian chờ tối đa cho các lệnh thao tác phần cứng (ms). */
 export const HARDWARE_TIMEOUT_MS = 6000
 /** Thời gian chờ tối đa khi lấy khung hình LiveView (ms). */
@@ -19,14 +27,34 @@ export const DEVICE_QUERY_TIMEOUT_MS = 3000
 /** Mã định danh phần cứng (Vendor ID) của Canon qua cổng USB. */
 export const CANON_VENDOR_ID = 'VID_04A9'
 
-/** Cổng HTTP lắng nghe của Canon EDSDK Native Daemon. */
-export const CANON_DAEMON_PORT = 8899
-export const CANON_DAEMON_URL = `http://127.0.0.1:${CANON_DAEMON_PORT}`
+/** Địa chỉ & cổng lắng nghe của Canon EDSDK Native Daemon (đọc từ .env). */
+export const CANON_DAEMON_URL = (
+    process.env.CANON_DAEMON_URL || ''
+).replace(/\/$/, '')
+export const CANON_DAEMON_PORT = Number(
+    (() => {
+        try {
+            return CANON_DAEMON_URL ? new URL(CANON_DAEMON_URL).port || '8899' : '8899'
+        } catch {
+            return '8899'
+        }
+    })()
+)
 
-/** Cổng HTTP lắng nghe của Python FastAPI AI Service. */
-export const AI_SERVICE_PORT = 8000
-export const AI_SERVICE_URL =
-    process.env.AI_SERVICE_URL ?? `http://127.0.0.1:${AI_SERVICE_PORT}`
+/** Địa chỉ & cổng lắng nghe của Python FastAPI AI Service (đọc từ .env). */
+export const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || '').replace(
+    /\/$/,
+    ''
+)
+export const AI_SERVICE_PORT = Number(
+    (() => {
+        try {
+            return AI_SERVICE_URL ? new URL(AI_SERVICE_URL).port || '8000' : '8000'
+        } catch {
+            return '8000'
+        }
+    })()
+)
 
 /** Đường dẫn cài đặt EOS Webcam Utility có thể gây xung đột chiếm dụng camera EDSDK. */
 export const CANON_UTILITY_PATHS = [

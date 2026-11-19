@@ -14,6 +14,8 @@ import {
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Check } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
+import { CANON_DAEMON_BASE_URL } from '../lib/constants'
+import { BW_CSS_FILTER } from '../config/bwFilter'
 import './SelfboothSetupScreen.css'
 
 // Bộ 3 filter riêng cho chế độ Selfbooth: Basic, B&W, Retro
@@ -28,7 +30,7 @@ const SELFBOOTH_FILTERS: ColorFilterItem[] = [
     {
         id: 'vintage_noir',
         name: 'B&W',
-        cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)',
+        cssFilter: BW_CSS_FILTER,
         tag: '',
         previewColor: '#262626',
     },
@@ -168,58 +170,9 @@ export default function SelfboothSetupScreen() {
                 </div>
             </header>
 
-            {/* ── Main Stage: Bố cục 16:9 (2 cột: Preview Trái, Bộ lọc Phải) ── */}
+            {/* ── Main Stage: Bố cục dọc 9:16 — Bộ lọc trên, Preview 3:4 bên dưới ── */}
             <main className="selfbooth-setup-grid">
-                {/* CỘT TRÁI: LIVE CAMERA PREVIEW TỈ LỆ 3:2 BẬT GƯƠNG */}
-                <section className="setup-preview-card">
-                    <div className="preview-video-container-3-2">
-                        {isCanonLive ? (
-                            <img
-                                src="http://127.0.0.1:8899/liveview"
-                                alt="Live View"
-                                className="preview-video-element"
-                                style={{
-                                    filter:
-                                        activeFilter.cssFilter !== 'none'
-                                            ? activeFilter.cssFilter
-                                            : undefined,
-                                    transform: 'scaleX(-1)',
-                                }}
-                            />
-                        ) : (
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className="preview-video-element"
-                                style={{
-                                    filter:
-                                        activeFilter.cssFilter !== 'none'
-                                            ? activeFilter.cssFilter
-                                            : undefined,
-                                    transform: 'scaleX(-1)',
-                                }}
-                            />
-                        )}
-
-                        {/* Indicator Tông Màu Đang Áp Dụng (Frosted Glass Badge) */}
-                        <div className="preview-filter-indicator">
-                            <span
-                                className="dot"
-                                style={{
-                                    background: activeFilter.previewColor,
-                                }}
-                            />
-                            <span>
-                                Bộ lọc:{' '}
-                                <strong>{activeFilter.name}</strong>
-                            </span>
-                        </div>
-                    </div>
-                </section>
-
-                {/* CỘT PHẢI: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
+                {/* PHẦN TRÊN: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
                 <section className="setup-controls-card">
                     <div className="control-section">
                         <div className="control-section-header">
@@ -266,9 +219,58 @@ export default function SelfboothSetupScreen() {
                         </div>
                     </div>
                 </section>
+
+                {/* PHẦN DƯỚI: LIVE CAMERA PREVIEW TỈ LỆ 3:4 KHỚP LIVE VIEW SELFBOOTH */}
+                <section className="setup-preview-card">
+                    <div className="preview-video-container-3-2">
+                        {isCanonLive && CANON_DAEMON_BASE_URL ? (
+                            <img
+                                src={`${CANON_DAEMON_BASE_URL}/liveview`}
+                                alt="Live View"
+                                className="preview-video-element"
+                                style={{
+                                    filter:
+                                        activeFilter.cssFilter !== 'none'
+                                            ? activeFilter.cssFilter
+                                            : undefined,
+                                    transform: 'scaleX(-1)',
+                                }}
+                            />
+                        ) : (
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="preview-video-element"
+                                style={{
+                                    filter:
+                                        activeFilter.cssFilter !== 'none'
+                                            ? activeFilter.cssFilter
+                                            : undefined,
+                                    transform: 'scaleX(-1)',
+                                }}
+                            />
+                        )}
+
+                        {/* Indicator Tông Màu Đang Áp Dụng (Frosted Glass Badge) */}
+                        <div className="preview-filter-indicator">
+                            <span
+                                className="dot"
+                                style={{
+                                    background: activeFilter.previewColor,
+                                }}
+                            />
+                            <span>
+                                Bộ lọc:{' '}
+                                <strong>{activeFilter.name}</strong>
+                            </span>
+                        </div>
+                    </div>
+                </section>
             </main>
 
-            {/* ── Footer Navigation Bar: Nút Tiếp Tục (Căn giữa) ── */}
+            {/* ── Footer Navigation Bar: Nút Tiếp Tục (Căn giữa trên màn dọc) ── */}
             <footer className="selfbooth-bottom-nav">
                 <button
                     className="btn-selfbooth-proceed"

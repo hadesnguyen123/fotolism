@@ -13,7 +13,7 @@
 - Kiosk offline-first; Cloud Sync dùng Outbox + retry idempotent.
 - Canon Daemon độc quyền EDSDK session; chụp tuần tự, chống trùng `captureId`.
 - Bảo toàn ảnh gốc; lỗi AI không được chặn chụp/in.
-- **Selfbooth 16:9:** Tất cả các màn hình ở chế độ Selfbooth phải cố định tỉ lệ `16:9` (không chuyển sang giao diện dọc `9:16` hoặc crop khung ảnh `3:4`).
+- **Selfbooth 9:16 & Live View 3:4:** Tất cả các màn hình ở chế độ Selfbooth phải cố định tỉ lệ màn hình dọc `9:16` (không chuyển sang giao diện ngang `16:9`), và Live View / ảnh chụp Selfbooth cố định tỉ lệ `3:4`.
 - **Luôn bật gương (Mirror):** Cả Photobooth và Selfbooth bắt buộc luôn bật gương — Live View phải bật gương, ảnh chụp xong phải bật gương, và kết quả (xem lại, ghép/lưu, tải lên, in ấn) phải bật gương khớp Live View.
 - UI touch-first, tối giản, dùng Lucide Icons; **tuân thủ thiết kế tham chiếu có sẵn**, không tự thay đổi design system.
 - Không tự ý thay đổi giá, thanh toán, quy tắc in, schema, API contract hoặc kiến trúc.

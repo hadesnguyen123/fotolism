@@ -167,8 +167,7 @@ export default function IdleScreen() {
 
                 // Rule: Mã của Selfbooth không thể nhập cho Photobooth và ngược lại
                 const ticketServiceType: CaptureMode =
-                    ticket.service_type === 'selfbooth' ||
-                    ticket.kiosk_id === 'kiosk_02'
+                    ticket.service_type === 'selfbooth'
                         ? 'selfbooth'
                         : 'photobooth'
 
@@ -185,33 +184,43 @@ export default function IdleScreen() {
                 setWelcomeGuest('Thành công')
 
                 const effectiveMode: CaptureMode = targetMode
+                const kioskId = cloudSyncService.getKioskId()
 
                 // Cập nhật trạng thái vé thành IN_BOOTH trên CMS để đánh dấu đang chụp
-                fetch(`${cmsUrl}/api/kiosk/tickets`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pin_code: rawCode,
-                        status: 'IN_BOOTH',
-                        kiosk_id:
-                            effectiveMode === 'selfbooth'
-                                ? 'kiosk_02'
-                                : 'kiosk_01',
-                    }),
-                })
-                    .then((r) => r.json())
-                    .then((d) =>
-                        console.log(
-                            '[IdleScreen] Cập nhật vé IN_BOOTH thành công:',
-                            d
+                if (kioskId) {
+                    fetch(`${cmsUrl}/api/kiosk/tickets`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pin_code: rawCode,
+                            status: 'IN_BOOTH',
+                            kiosk_id: kioskId,
+                        }),
+                    })
+                        .then(async (r) => {
+                            if (!r.ok) {
+                                throw new Error(`HTTP ${r.status}`)
+                            }
+                            return r.json()
+                        })
+                        .then((d) =>
+                            console.log(
+                                '[IdleScreen] Cập nhật vé IN_BOOTH thành công:',
+                                d
+                            )
                         )
+                        .catch((err) => {
+                            console.error(
+                                `[IdleScreen] Lỗi cập nhật vé ${rawCode} sang IN_BOOTH:`,
+                                err
+                            )
+                        })
+                } else {
+                    console.error(
+                        '[IdleScreen] Thiếu Kiosk ID nên không thể gắn định danh vé IN_BOOTH',
+                        { pinCode: rawCode }
                     )
-                    .catch((err) =>
-                        console.warn(
-                            '[IdleScreen] Lỗi cập nhật vé IN_BOOTH:',
-                            err
-                        )
-                    )
+                }
 
                 const durationSeconds = resolveTicketDurationSeconds(ticket)
 
@@ -251,9 +260,21 @@ export default function IdleScreen() {
 
     if (eventConfig.captureMode === 'selfbooth') {
         return (
-            <>
+            <div
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    background: '#121110',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}
+            >
                 <ConnectedReferenceView
                     screen="welcome"
+                    portrait
                     onNavigate={() => handleOpenUnlockModal('selfbooth')}
                 />
                 <NumericKeypadModal
@@ -289,7 +310,7 @@ export default function IdleScreen() {
                 >
                     <Settings size={22} strokeWidth={1.8} />
                 </button>
-            </>
+            </div>
         )
     }
 

@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { CANON_DAEMON_BASE_URL } from '../lib/constants'
 import './OverheadScreen.css'
 
 export default function OverheadScreen() {
@@ -14,9 +15,14 @@ export default function OverheadScreen() {
     const [streamError, setStreamError] = useState<boolean>(false)
 
     useEffect(() => {
+        if (!CANON_DAEMON_BASE_URL) {
+            setCameraState('DISCONNECTED')
+            setStreamError(true)
+            return
+        }
         const timer = setInterval(async () => {
             try {
-                const res = await fetch('http://127.0.0.1:8899/status', {
+                const res = await fetch(`${CANON_DAEMON_BASE_URL}/status`, {
                     signal: AbortSignal.timeout(600),
                 })
                 if (res.ok) {
@@ -43,9 +49,11 @@ export default function OverheadScreen() {
     return (
         <div className="overhead-container">
             {/* Live View MJPEG Stream */}
-            {!streamError && cameraState !== 'DISCONNECTED' ? (
+            {!streamError &&
+            cameraState !== 'DISCONNECTED' &&
+            CANON_DAEMON_BASE_URL ? (
                 <img
-                    src="http://127.0.0.1:8899/liveview"
+                    src={`${CANON_DAEMON_BASE_URL}/liveview`}
                     alt="Overhead Live View"
                     className="overhead-stream"
                     onError={() => setStreamError(true)}

@@ -20,6 +20,7 @@ import {
     FILE_PREFIX_SELF,
     DEFAULT_SELFBOOTH_DURATION_SECONDS,
     isRemoteTriggerEvent,
+    CANON_DAEMON_BASE_URL,
 } from '../lib/constants'
 import {
     BeautyCameraView,
@@ -218,7 +219,9 @@ export default function CaptureScreen() {
 
     useEffect(() => {
         // Đánh thức Canon Daemon và gia hạn shutdown timer
-        fetch('http://127.0.0.1:8899/wake').catch(() => {})
+        if (CANON_DAEMON_BASE_URL) {
+            fetch(`${CANON_DAEMON_BASE_URL}/wake`).catch(() => {})
+        }
 
         // Khởi tạo phiên trong SQLite persistent session storage (FR-06)
         api.session
@@ -301,7 +304,9 @@ export default function CaptureScreen() {
     const startCamera = useCallback(
         async (deviceId?: string) => {
             // Gửi tín hiệu đánh thức camera daemon trước khi khởi động luồng
-            fetch('http://127.0.0.1:8899/wake').catch(() => {})
+            if (CANON_DAEMON_BASE_URL) {
+                fetch(`${CANON_DAEMON_BASE_URL}/wake`).catch(() => {})
+            }
             // 0. Kiểm tra Canon Persistent Daemon (Direct EDSDK)
             const userCameraType = useAppStore.getState().cameraType
             let daemonActive = false
@@ -1192,11 +1197,11 @@ export default function CaptureScreen() {
             const photoPath =
                 photoDataUrl || `selfbooth_${timestamp}_${photoNum}.jpg`
 
-            // Giai đoạn 1 (< 1s): Tạo bản xem trước tỷ lệ 3:2 khớp Live View Selfbooth ngay lập tức
+            // Giai đoạn 1 (< 1s): Tạo bản xem trước tỷ lệ dọc 3:4 (3 ngang, 4 dọc) ngay lập tức, không chờ AI
             let fastPreviewUrl = photoPath
             if (photoDataUrl && photoDataUrl.startsWith('data:image')) {
                 try {
-                    fastPreviewUrl = await cropImageToAspect(photoDataUrl, 3, 2)
+                    fastPreviewUrl = await cropImageToAspect(photoDataUrl, 3, 4)
                 } catch {
                     fastPreviewUrl = photoDataUrl
                 }
@@ -1228,7 +1233,8 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 selectedFilter?.id || 'normal',
-                                enhancedSavePath
+                                enhancedSavePath,
+                                '3:4'
                             )
                             .then((enhRes) => {
                                 if (
@@ -1318,14 +1324,15 @@ export default function CaptureScreen() {
                             let finalPhotoUrl =
                                 canonData.dataUrl || canonData.savedPath
 
-                            // ── Chạy Python AI Service (White Pink + Filter) trên ảnh 24MP lưu vào final (giữ nguyên khung ngang khớp Live View) ──
+                            // ── Chạy Python AI Service (White Pink + Filter) trên ảnh 24MP lưu vào final (cắt tâm 3:4 khớp Live View) ──
                             try {
                                 const enhanceRes = await selfApi.ai.enhance(
                                     canonData.savedPath,
                                     50,
                                     'white_pink_v2',
                                     selectedFilter?.id || 'normal',
-                                    enhancedSavePath
+                                    enhancedSavePath,
+                                    '3:4'
                                 )
                                 if (
                                     enhanceRes &&
@@ -1471,7 +1478,8 @@ export default function CaptureScreen() {
                                 50,
                                 'white_pink_v2',
                                 selectedFilter?.id || 'normal',
-                                enhancedSavePath
+                                enhancedSavePath,
+                                '3:4'
                             )
                             if (enhRes?.success && enhRes?.data?.enhancedPath) {
                                 const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
@@ -1660,13 +1668,14 @@ export default function CaptureScreen() {
                                             }
                                             mjpegUrl={
                                                 isCanonDaemonActive &&
+                                                Boolean(CANON_DAEMON_BASE_URL) &&
                                                 !(
                                                     typeof window !== 'undefined' &&
                                                     window.location.search.includes(
                                                         'noLiveStream=1'
                                                     )
                                                 )
-                                                    ? 'http://127.0.0.1:8899/liveview'
+                                                    ? `${CANON_DAEMON_BASE_URL}/liveview`
                                                     : undefined
                                             }
                                             mirrorCamera={mirrorCamera}
@@ -1877,7 +1886,7 @@ export default function CaptureScreen() {
                     </div>
                 )}
 
-                {/* ── PHẦN 1 (TRÁI): LIVE VIEW TỈ LỆ 3:2 BẬT GƯƠNG TRONG SELFBOOTH HOẶC CỘT 9/12 PHOTOBOOTH ── */}
+                {/* ── PHẦN 1 (TRÊN): LIVE VIEW TỈ LỆ 2:3 (1080x1620) TRONG SELFBOOTH HOẶC CỘT 9/12 PHOTOBOOTH ── */}
                 <div
                     className={
                         isSelfboothMode
@@ -1952,13 +1961,14 @@ export default function CaptureScreen() {
                                     }
                                     mjpegUrl={
                                         isCanonDaemonActive &&
+                                        Boolean(CANON_DAEMON_BASE_URL) &&
                                         !(
                                             typeof window !== 'undefined' &&
                                             window.location.search.includes(
                                                 'noLiveStream=1'
                                             )
                                         )
-                                            ? 'http://127.0.0.1:8899/liveview'
+                                            ? `${CANON_DAEMON_BASE_URL}/liveview`
                                             : undefined
                                     }
                                     mirrorCamera={mirrorCamera}

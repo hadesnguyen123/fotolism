@@ -17,6 +17,7 @@ import {
     DEFAULT_PRINT_SCALE,
     FILE_PREFIX_FINAL,
     FILE_PREFIX_SHOT,
+    UPLOAD_STALL_TIMEOUT_MS,
 } from '../lib/constants'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import QRCode from 'qrcode'
@@ -187,15 +188,22 @@ export default function ProcessingScreen() {
                     : selectedFrameSize === '4x6'
                       ? '4x6'
                       : '2x6'
-                const kioskId =
-                    cloudSyncService.getKioskId() ||
-                    (isSelfbooth ? 'kiosk_02' : 'kiosk_01')
+                const deviceConfig = cloudSyncService.getDeviceConfig()
+                const kioskId = cloudSyncService.getKioskId()
+                const branchId = deviceConfig?.branch_id || undefined
+
+                if (!kioskId) {
+                    console.error(
+                        '[ProcessingScreen] Thiếu cấu hình Kiosk ID (device_config) khi đồng bộ phiên chụp',
+                        { sessionId }
+                    )
+                }
 
                 const paidCopies =
                     session?.paidCopies && session.paidCopies > 0
                         ? session.paidCopies
-                        : selectedFrameSize === '2x6'
-                          ? 2
+                        : isSelfbooth
+                          ? 0
                           : 1
 
                 cloudSyncService.queueSession({
@@ -205,16 +213,10 @@ export default function ProcessingScreen() {
                     customer_name: session?.customerName || null,
                     customer_phone: session?.customerPhone || null,
                     kiosk_id: kioskId,
-                    branch_id: 'branch_01',
+                    branch_id: branchId,
                     layout_type: layoutType,
                     copies: isSelfbooth ? 0 : paidCopies,
-                    total_amount:
-                        session?.paidAmount ||
-                        (isSelfbooth
-                            ? 50000
-                            : selectedFrameSize === '4x6'
-                              ? 90000
-                              : 70000),
+                    total_amount: session?.paidAmount ?? 0,
                     payment_method: (session?.paymentMethod?.toLowerCase() ===
                     'cash'
                         ? 'cash'
@@ -238,9 +240,12 @@ export default function ProcessingScreen() {
                 while (cloudSyncService.getStatus().isSyncing && Date.now() < syncWaitDeadline) {
                     await new Promise((resolve) => setTimeout(resolve, 150))
                 }
-                const syncRes = await cloudSyncService.syncPendingSessions().catch(() => null)
-                if (syncRes && !syncRes.success && syncRes.message !== 'Tất cả phiên chụp đã được đồng bộ') {
-                    console.warn('[ProcessingScreen] Session sync warning:', syncRes.message)
+                const syncRes = await cloudSyncService.syncPendingSessions()
+                if (!syncRes.success && syncRes.message !== 'Tất cả phiên chụp đã được đồng bộ') {
+                    console.error('[ProcessingScreen] Session sync error:', syncRes.message, {
+                        sessionId,
+                        kioskId,
+                    })
                 }
 
                 // Cập nhật URL thư mục Cloud đồng nhất với QR Code
@@ -248,7 +253,7 @@ export default function ProcessingScreen() {
                 useAppStore.getState().setStorageUrl(galleryTargetUrl)
                 // Bắt buộc chờ toàn bộ ảnh trong phiên tải lên hoàn tất 100% mới chuyển sang ReviewScreen
                 if (!isBrowser) {
-                    const STALL_TIMEOUT_MS = 90000
+                    const STALL_TIMEOUT_MS = UPLOAD_STALL_TIMEOUT_MS
                     let lastUploadedCount = -1
                     let lastProgressAt = Date.now()
                     while (true) {

@@ -22,7 +22,6 @@ import OverheadScreen from './screens/OverheadScreen'
 import SelfboothSetupScreen from './screens/SelfboothSetupScreen'
 import SelfboothPhotoSelectScreen from './screens/SelfboothPhotoSelectScreen'
 import ProcessingScreen from './screens/ProcessingScreen'
-import ErrorNotificationCenter from './components/ErrorNotificationCenter'
 import KioskLockOverlay from './components/KioskLockOverlay'
 import PhotoboothCountdownBadge from './components/PhotoboothCountdownBadge'
 import './App.css'
@@ -103,12 +102,12 @@ export default function App() {
         return <OverheadScreen />
     }
 
-    const isSelfboothFixed169 =
+    const isSelfboothFixed916 =
         captureMode === 'selfbooth' && screen !== 'admin'
 
     const appContent = (
         <div
-            className={`app-root ${isSelfboothFixed169 ? 'selfbooth-fixed-16-9' : ''}`}
+            className={`app-root ${isSelfboothFixed916 ? 'selfbooth-fixed-9-16' : ''}`}
         >
             {screen === 'activate' && <DeviceActivationScreen />}
             {(screen === 'idle' || screen === 'welcome') && <IdleScreen />}
@@ -123,9 +122,6 @@ export default function App() {
             {screen === 'review' && <ReviewScreen />}
             {screen === 'admin' && <AdminScreen />}
 
-            {/* Trung tâm thông báo lỗi API & Camera Logs */}
-            <ErrorNotificationCenter />
-
             {/* Lệnh khóa máy từ xa từ Cloud CMS */}
             {isKioskLocked && <KioskLockOverlay />}
 
@@ -134,8 +130,8 @@ export default function App() {
         </div>
     )
 
-    if (isSelfboothFixed169) {
-        return <div className="app-viewport-16-9-host">{appContent}</div>
+    if (isSelfboothFixed916) {
+        return <div className="app-viewport-9-16-host">{appContent}</div>
     }
 
     return appContent

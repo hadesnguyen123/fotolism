@@ -28,11 +28,13 @@ describe('Device Activation & M2M Token Authentication', () => {
         ;(globalThis as any).localStorage = mockStorage
         ;(globalThis as any).window = globalThis
         delete (globalThis as any).device
+        cloudSyncService.setDeviceConfig(null)
     })
 
     afterEach(() => {
         vi.restoreAllMocks()
         mockStorage.clear()
+        cloudSyncService.setDeviceConfig(null)
     })
 
     describe('cloudSyncService M2M Token handling', () => {
@@ -67,6 +69,8 @@ describe('Device Activation & M2M Token Authentication', () => {
                 cms_url: 'https://fotolism-cms.vercel.app',
                 activated_at: new Date().toISOString(),
             })
+            cloudSyncService.stopWorker()
+            mockFetch.mockClear()
 
             const result = await cloudSyncService.sendHeartbeat()
             expect(result).toBe(true)
@@ -125,7 +129,10 @@ describe('Device Activation & M2M Token Authentication', () => {
             )
         })
 
-        it('activates offline Dev Mode with code 888888 when CMS is unreachable', async () => {
+        it('fails cleanly and logs to console without fake fallback when CMS is unreachable', async () => {
+            const consoleErrorSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {})
             // Mock network failure when contacting CMS
             globalThis.fetch = vi
                 .fn()
@@ -135,12 +142,11 @@ describe('Device Activation & M2M Token Authentication', () => {
                 '888888',
                 'https://fotolism-cms.vercel.app'
             )
-            expect(result.success).toBe(true)
-            expect(result.data?.device_token).toBe('jb_tok_dev_888888_test')
-            expect(result.data?.kiosk_id).toBe('kiosk_01')
-            expect(cloudSyncService.getBearerToken()).toBe(
-                'jb_tok_dev_888888_test'
-            )
+            expect(result.success).toBe(false)
+            expect(result.data).toBeUndefined()
+            expect(cloudSyncService.getBearerToken()).toBeNull()
+            expect(cloudSyncService.getKioskId()).toBe('')
+            expect(consoleErrorSpy).toHaveBeenCalled()
         })
     })
 

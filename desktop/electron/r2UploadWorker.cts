@@ -41,12 +41,13 @@ export interface WorkerStats {
 
 type ProgressListener = (event: UploadProgressEvent) => void
 
-const DEFAULT_CMS_URL =
+const DEFAULT_CMS_URL = (
     process.env.CMS_STAGING_URL ||
     process.env.CMS_URL ||
     process.env.VITE_CMS_STAGING_URL ||
     process.env.VITE_CMS_URL ||
-    'https://fotolism-cms.vercel.app'
+    ''
+).replace(/\/$/, '')
 
 /**
  * Worker đồng bộ dữ liệu Outbox lên Cloudflare R2 theo luồng stream.

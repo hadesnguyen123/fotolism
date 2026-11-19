@@ -4,6 +4,8 @@
  * tạo hash định danh 10 chữ số cho Cloudflare R2 gallery và sinh link/QR tải ảnh cho khách hàng.
  */
 
+import { ENV_CMS_URL } from './constants'
+
 /**
  * Chuẩn hóa mã PIN hoặc sessionId về mã PIN gốc (bỏ tiền tố session_ nếu có)
  */
@@ -49,13 +51,20 @@ export function hashPinTo10Digits(pinOrSessionId?: string | null): string {
     return combined.toString()
 }
 
-export const GALLERY_BASE_URL = 'https://fotolism-cms.vercel.app'
+export function resolveGalleryBaseUrl(): string {
+    const savedUrl =
+        typeof localStorage !== 'undefined'
+            ? localStorage.getItem('fotolism_cms_url')
+            : null
+    return (ENV_CMS_URL || savedUrl || '').replace(/\/$/, '')
+}
 
 export function buildGalleryUrl(
     pinOrSessionId?: string | null,
-    baseUrl: string = GALLERY_BASE_URL
+    baseUrl?: string
 ): string {
-    const cleanBase = (baseUrl || GALLERY_BASE_URL).replace(/\/$/, '')
+    const cleanBase = (baseUrl || resolveGalleryBaseUrl()).replace(/\/$/, '')
+    if (!cleanBase) return ''
     const hash = hashPinTo10Digits(pinOrSessionId)
     return `${cleanBase}/gallery/${hash}`
 }

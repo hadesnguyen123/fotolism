@@ -972,7 +972,7 @@
 
 .review-screen-pastel .selfbooth-review-minimal {
     min-height: 0;
-    margin-bottom: 110px;
+    margin-bottom: 180px;
 }
 
 @media (max-height: 800px) {
@@ -981,4 +981,20 @@
     .review-delivery-deck { gap: 12px; }
     .review-qr-card { min-height: 0; }
     .review-preview-panel { height: 48vh; }
+}
+
+/* Đẩy tiêu đề "Ảnh hoàn thiện" tách khỏi logo góc trái và cân giữa card QR trên giao diện dọc Selfbooth 9:16 */
+.selfbooth-fixed-9-16 .review-fixed-brand-logo {
+    top: 18px;
+    left: 24px;
+    width: clamp(112px, 24%, 156px);
+}
+
+.selfbooth-fixed-9-16 .review-header-pastel {
+    margin-top: clamp(88px, 9.5vh, 118px);
+    margin-bottom: 12px;
+}
+
+.selfbooth-fixed-9-16 .review-screen-pastel .selfbooth-review-minimal {
+    margin-bottom: 140px;
 }

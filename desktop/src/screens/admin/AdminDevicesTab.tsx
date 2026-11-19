@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { BeautyCameraView } from '../../components/BeautyCameraView'
-import { DEFAULT_PRINT_SCALE } from '../../lib/constants'
+import { DEFAULT_PRINT_SCALE, CANON_DAEMON_BASE_URL } from '../../lib/constants'
 
 export type HardwareSubTab = 'camera' | 'printer' | 'remote'
 
@@ -243,9 +243,9 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                             {/* Viewfinder 16:9 với WebGL Beauty Real-time đồng bộ */}
                             <div className="liveview-viewfinder-box">
                                 {cameraType === 'eos' ? (
-                                    isCameraOnline ? (
+                                    isCameraOnline && CANON_DAEMON_BASE_URL ? (
                                         <BeautyCameraView
-                                            mjpegUrl="http://127.0.0.1:8899/liveview"
+                                            mjpegUrl={`${CANON_DAEMON_BASE_URL}/liveview`}
                                             mirrorCamera={true}
                                             beautyEnabled={beautyEnabled}
                                             skinSmoothing={skinSmoothing}

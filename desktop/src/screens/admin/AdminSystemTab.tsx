@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { fotolismApi, isBrowser } from '../../lib/api'
+import { CANON_DAEMON_BASE_URL, ENV_CMS_URL } from '../../lib/constants'
 
 interface AdminSystemTabProps {
     daemonStatus: { running: boolean; url: string; state?: string } | null
@@ -152,7 +153,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                         className="btn-touch-outline"
                         onClick={() => {
                             alert(
-                                `Canon Daemon: ${isCameraOnline ? 'Hoạt động tốt tại 127.0.0.1:8899' : 'Chưa bật'}`
+                                `Canon Daemon: ${isCameraOnline ? `Hoạt động tốt tại ${CANON_DAEMON_BASE_URL || '(chưa cấu hình .env)'}` : 'Chưa bật'}`
                             )
                         }}
                     >
@@ -178,13 +179,16 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                     </div>
 
                     <div className="form-group-touch">
-                        <label className="form-label-touch">Port</label>
+                        <label className="form-label-touch">Endpoint (.env)</label>
                         <div className="input-with-icon-touch">
                             <Cpu size={20} strokeWidth={2} />
                             <input
                                 type="text"
                                 readOnly
-                                value="127.0.0.1:8899"
+                                value={
+                                    CANON_DAEMON_BASE_URL ||
+                                    'Chưa cấu hình VITE_CANON_DAEMON_URL'
+                                }
                                 className="form-input-touch-inner"
                             />
                         </div>
@@ -332,14 +336,11 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                         <label className="form-label-touch">CMS Base URL</label>
                         <input
                             type="text"
-                            value={
-                                deviceConfig?.cms_url ||
-                                'https://fotolism-cms.vercel.app'
-                            }
+                            value={deviceConfig?.cms_url || ENV_CMS_URL || ''}
                             onChange={(e) =>
                                 setDeviceConfig({
                                     ...(deviceConfig || {
-                                        kiosk_id: 'kiosk_01',
+                                        kiosk_id: '',
                                         device_token: '',
                                         branch_id: '',
                                     }),
@@ -347,7 +348,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                                 })
                             }
                             className="form-input-touch"
-                            placeholder="https://fotolism-cms.vercel.app"
+                            placeholder="Chưa cấu hình URL Cloud CMS (.env)"
                         />
                     </div>
 
@@ -391,11 +392,12 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                         <label className="form-label-touch">Tên Kiosk</label>
                         <input
                             type="text"
-                            value={deviceConfig?.kiosk_name || 'Kiosk #01'}
+                            value={deviceConfig?.kiosk_name || ''}
+                            placeholder="Chưa gán tên Kiosk"
                             onChange={(e) =>
                                 setDeviceConfig({
                                     ...(deviceConfig || {
-                                        kiosk_id: 'kiosk_01',
+                                        kiosk_id: '',
                                         device_token: '',
                                         branch_id: '',
                                     }),
@@ -410,11 +412,12 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                         <label className="form-label-touch">Chi nhánh</label>
                         <input
                             type="text"
-                            value={deviceConfig?.branch_name || 'Chi nhánh A'}
+                            value={deviceConfig?.branch_name || ''}
+                            placeholder="Chưa gán chi nhánh"
                             onChange={(e) =>
                                 setDeviceConfig({
                                     ...(deviceConfig || {
-                                        kiosk_id: 'kiosk_01',
+                                        kiosk_id: '',
                                         device_token: '',
                                         branch_id: '',
                                     }),
@@ -432,7 +435,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                         <input
                             type="text"
                             readOnly
-                            value={deviceConfig?.kiosk_id || 'kiosk_01'}
+                            value={deviceConfig?.kiosk_id || 'Chưa kích hoạt'}
                             className="form-input-touch readonly"
                         />
                     </div>
