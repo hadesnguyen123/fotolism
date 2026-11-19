@@ -15,7 +15,6 @@ import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Check } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { CANON_DAEMON_BASE_URL } from '../lib/constants'
-import { BW_CSS_FILTER } from '../config/bwFilter'
 import './SelfboothSetupScreen.css'
 
 // Bộ 3 filter riêng cho chế độ Selfbooth: Basic, B&W, Retro
@@ -30,7 +29,7 @@ const SELFBOOTH_FILTERS: ColorFilterItem[] = [
     {
         id: 'vintage_noir',
         name: 'B&W',
-        cssFilter: BW_CSS_FILTER,
+        cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)',
         tag: '',
         previewColor: '#262626',
     },
