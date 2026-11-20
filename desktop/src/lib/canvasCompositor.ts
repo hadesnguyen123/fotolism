@@ -18,6 +18,7 @@ import {
     DEFAULT_PRINT_SCALE,
     resolveAssetUrl,
 } from './constants'
+import { BW_PRESET } from '../config/bwFilter'
 
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
@@ -309,6 +310,87 @@ function applyRetroFilmLookToSlot(
 }
 
 /**
+ * Phủ độ mềm Negative Clarity và Vignette nhẹ theo preset Capture One cho ô ảnh B&W.
+ */
+function applyBwLookToSlot(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    drawX: number,
+    drawY: number,
+    drawW: number,
+    drawH: number,
+    cssFilter?: string
+) {
+    try {
+        const clarityAmt = BW_PRESET.clarity?.amount ?? 0
+        const sigmaRatio = BW_PRESET.clarity?.sigmaRatio ?? 0.008
+        if (
+            clarityAmt > 0 &&
+            typeof document !== 'undefined' &&
+            drawW > 0 &&
+            drawH > 0
+        ) {
+            const blurW = Math.max(32, Math.round(drawW / 4))
+            const blurH = Math.max(32, Math.round(drawH / 4))
+            const blurCanvas = document.createElement('canvas')
+            blurCanvas.width = blurW
+            blurCanvas.height = blurH
+            const bCtx = blurCanvas.getContext('2d')
+            if (bCtx) {
+                const baseFilter =
+                    cssFilter && cssFilter !== 'none' ? cssFilter : ''
+                const sigmaPx = Math.max(1, blurW * sigmaRatio)
+                bCtx.filter = `${baseFilter} blur(${sigmaPx.toFixed(1)}px)`.trim()
+                bCtx.drawImage(
+                    img,
+                    srcX,
+                    srcY,
+                    srcW,
+                    srcH,
+                    0,
+                    0,
+                    blurW,
+                    blurH
+                )
+                ctx.save()
+                ctx.globalAlpha = clarityAmt
+                ctx.drawImage(blurCanvas, drawX, drawY, drawW, drawH)
+                ctx.restore()
+            }
+        }
+
+        const vig = BW_PRESET.vignette
+        if (vig && typeof ctx.createRadialGradient === 'function') {
+            ctx.save()
+            const cx = drawX + drawW / 2
+            const cy = drawY + drawH / 2
+            const outerR = Math.hypot(drawW / 2, drawH / 2)
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR)
+            for (const stop of [0, 0.5, 0.75, 1]) {
+                // r^2 tương ứng tỉ lệ r/R^2 = stop^2 trên hệ số Capture One
+                const r2 = stop * stop
+                const gain = Math.max(
+                    vig.minGain,
+                    Math.min(vig.maxGain, 1 + vig.c1 * r2 + vig.c2 * r2 * r2)
+                )
+                const v = Math.round(gain * 255)
+                grad.addColorStop(stop, `rgb(${v}, ${v}, ${v})`)
+            }
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.fillStyle = grad
+            ctx.fillRect(drawX, drawY, drawW, drawH)
+            ctx.restore()
+        }
+    } catch (err) {
+        console.warn('Could not apply B&W look to slot:', err)
+    }
+}
+
+/**
  * Tạo bản vẽ Photobooth Strip Canvas chất lượng cao (300 DPI tương đương khổ in)
  * - 2x6 inch: 600 x 1800 px
  * - 4x6 inch: 1200 x 1800 px
@@ -512,6 +594,24 @@ export async function generateStripComposite(
                     (opts.filter.id === 'retro_90s' || opts.filter.hasGrain)
                 ) {
                     applyRetroFilmLookToSlot(
+                        ctx,
+                        img,
+                        finalSrcX,
+                        finalSrcY,
+                        finalSrcW,
+                        finalSrcH,
+                        drawX,
+                        drawY,
+                        drawW,
+                        drawH,
+                        opts.filter.cssFilter
+                    )
+                } else if (
+                    opts.filter &&
+                    (opts.filter.id === 'vintage_noir' ||
+                        opts.filter.id === 'monochrome')
+                ) {
+                    applyBwLookToSlot(
                         ctx,
                         img,
                         finalSrcX,

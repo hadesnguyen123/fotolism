@@ -488,6 +488,8 @@ def enhance_image(req: EnhanceRequest):
                     k_cfg.slimFace = float(np.clip(k_cfg.slimFace * scale, 0.0, 0.20))
                     k_cfg.bigEyes = float(np.clip(k_cfg.bigEyes * scale, 0.0, 0.20))
                     k_cfg.slimNose = float(np.clip(k_cfg.slimNose * scale, 0.0, 0.20))
+                    k_cfg.skinPlump = float(np.clip(k_cfg.skinPlump * scale, 0.0, 3.0))
+                    k_cfg.flashSparkleReduction = float(np.clip(k_cfg.flashSparkleReduction * scale, 0.0, 1.0))
                 final_img = korean_beauty_engine.process_image(styled_img, k_cfg, original_img=img)
             else:
                 final_img = apply_beauty_engine(

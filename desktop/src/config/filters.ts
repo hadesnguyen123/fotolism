@@ -1,4 +1,6 @@
 // ─── Bộ Lọc Màu (Color Filters) — Quy chuẩn chỉ gồm 3 bộ lọc cốt lõi ────────────
+import { BW_CSS_FILTER } from './bwFilter'
+
 export interface ColorFilterItem {
     id: string
     name: string
@@ -19,7 +21,7 @@ export const COLOR_FILTERS: ColorFilterItem[] = [
     {
         id: 'vintage_noir',
         name: 'B&W',
-        cssFilter: 'grayscale(100%) contrast(1.18) brightness(1.05)',
+        cssFilter: BW_CSS_FILTER,
         tag: '',
         previewColor: '#262626',
     },

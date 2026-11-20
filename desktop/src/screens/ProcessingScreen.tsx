@@ -36,18 +36,16 @@ import {
 } from '../lib/pinUtils'
 
 export default function ProcessingScreen() {
-    const {
-        session,
-        setCompositeStripUrl,
-        setGalleryUrl,
-        selectedFrameSize,
-        selectedLayout,
-        selectedTheme,
-        selectedFilter,
-        placedStickers,
-        eventConfig,
-        setScreen,
-    } = useAppStore()
+    const session = useAppStore((s) => s.session)
+    const setCompositeStripUrl = useAppStore((s) => s.setCompositeStripUrl)
+    const setGalleryUrl = useAppStore((s) => s.setGalleryUrl)
+    const selectedFrameSize = useAppStore((s) => s.selectedFrameSize)
+    const selectedLayout = useAppStore((s) => s.selectedLayout)
+    const selectedTheme = useAppStore((s) => s.selectedTheme)
+    const selectedFilter = useAppStore((s) => s.selectedFilter)
+    const placedStickers = useAppStore((s) => s.placedStickers)
+    const eventConfig = useAppStore((s) => s.eventConfig)
+    const setScreen = useAppStore((s) => s.setScreen)
 
     const [compositeDone, setCompositeDone] = useState(false)
     const [uploadDone, setUploadDone] = useState(false)
@@ -63,6 +61,9 @@ export default function ProcessingScreen() {
         typeof window !== 'undefined' && !(window as any).electronAPI
     const isSelfbooth = eventConfig.captureMode === 'selfbooth'
     const isStarted = useRef(false)
+    const isMountedRef = useRef(true)
+    const hasNavigatedRef = useRef(false)
+    const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     async function processMediaAndUpload() {
         try {
@@ -339,23 +340,41 @@ export default function ProcessingScreen() {
             }
 
             // ── BƯỚC 4: Chuyển Sang Màn Hình Review Cuối Cùng ──
-            setTimeout(() => {
-                setScreen('review')
-            }, 600)
+            if (isMountedRef.current && !hasNavigatedRef.current) {
+                hasNavigatedRef.current = true
+                if (navTimerRef.current) clearTimeout(navTimerRef.current)
+                navTimerRef.current = setTimeout(() => {
+                    if (isMountedRef.current) {
+                        setScreen('review')
+                    }
+                }, 600)
+            }
         } catch (err: any) {
             console.error('[ProcessingScreen] Process failed:', err)
-            setErrorMessage(err.message || 'Lỗi xử lý ảnh. Vui lòng thử lại.')
+            if (isMountedRef.current) {
+                setErrorMessage(err.message || 'Lỗi xử lý ảnh. Vui lòng thử lại.')
+            }
             useAppStore.getState().setMediaSyncError(err.message || 'Lỗi xử lý ảnh.')
         } finally {
-            setIsRetrying(false)
+            if (isMountedRef.current) {
+                setIsRetrying(false)
+            }
             useAppStore.getState().setIsSyncingMedia(false)
         }
     }
 
     useEffect(() => {
+        isMountedRef.current = true
         if (!isStarted.current) {
             isStarted.current = true
             processMediaAndUpload()
+        }
+        return () => {
+            isMountedRef.current = false
+            if (navTimerRef.current) {
+                clearTimeout(navTimerRef.current)
+                navTimerRef.current = null
+            }
         }
     }, [])
 

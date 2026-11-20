@@ -69,15 +69,36 @@ class KoreanBeautyConfig(BaseModel):
     @classmethod
     def white_pink_v2(cls):
         """Texture-first trial preset; independent of the established V1 values."""
-        return cls(presetId="white_pink_v2", skinSmoothing=.70, blemishRemoval=1.90,
-                   skinEvening=.60, skinTextureRetention=.60, skinBrightening=.55,
-                   rosyTone=.925, rosyBlush=.60, blushSpread=1.30,
-                   blushAdaptation=.85, softGlow=.13,
-                   eyeSharpening=0.,
-                   slimFace=.10, bigEyes=.06, slimNose=.06,
-                   darkCirclesReduction=0., skinYellowReduction=0.,
-                   protectGlasses=True, selectiveBlemish=True, selectiveSpotCorrection=True,
-                   globalSharpening=0., foundationCoverage=0.)
+        return cls(
+            presetId="white_pink_v2",
+            skinSmoothing=0.7,
+            blemishRemoval=1.9,
+            skinEvening=0.3,
+            skinTextureRetention=0.02,
+            skinBrightening=0.2,
+            rosyTone=0.925,
+            rosyBlush=0.5,
+            blushSpread=0.58,
+            blushAdaptation=0.85,
+            softGlow=0.0,
+            skinDiffuseLight=0.0,
+            skinYellowReduction=0.0,
+            foundationCoverage=0.0,
+            concealerStrength=0.51,
+            shineReduction=0.0,
+            darkCirclesReduction=0.0,
+            eyeSharpening=0.0,
+            globalSharpening=0.5,
+            slimFace=0.1,
+            bigEyes=0.06,
+            slimNose=0.075,
+            skinPlump=1.0,
+            flashSparkleReduction=0.7,
+            protectGlasses=True,
+            selectiveBlemish=True,
+            selectiveSpotCorrection=True,
+            redSpotCorrection=True,
+        )
 
     skinBrightening: float = Field(0.00, ge=0.0, le=1.0, description="Nâng sáng trắng hồng trong trẻo (0.00 bảo toàn ánh sáng đèn studio thật)")
     softGlow: float = Field(0.03, ge=0.0, le=1.0, description="Độ mềm và ánh sáng studio dịu dàng")
@@ -87,6 +108,8 @@ class KoreanBeautyConfig(BaseModel):
     slimFace: float = Field(0.04, ge=0.0, le=0.20, description="Cằm V-line 4% (3-5%)")
     bigEyes: float = Field(0.05, ge=0.0, le=0.20, description="Mắt to tự nhiên 5%")
     slimNose: float = Field(0.04, ge=0.0, le=0.20, description="Mũi nhỏ thanh thoát 4%")
+    skinPlump: float = Field(0.00, ge=0.0, le=3.0, description="Độ căng mịn, đàn hồi và bóng ẩm bề mặt da (0.0 - 3.0 để test cường độ cao)")
+    flashSparkleReduction: float = Field(0.00, ge=0.0, le=1.0, description="Khử hạt trắng li ti phản quang do flash trên má, mũi, cằm (giữ nguyên khối 3D và gọng kính)")
 
 
 class KoreanBeautyEngine:
@@ -283,15 +306,16 @@ class KoreanBeautyEngine:
         # Chỉ áp dụng ở vùng khuôn mặt trên đáy cằm (vertical < 0), vùng cổ bên dưới giữ 0.0 tuyệt đối
         active = (vertical > top) & (vertical < 0) & (widths > 3)
 
-        # Mouth Guard: Bảo vệ khuôn miệng và khóe môi không bị kéo méo khi cười
-        mouth_center = (pts[61] + pts[291]) * 0.5
+        # Mouth Guard: Bảo vệ toàn bộ khuôn miệng (kể cả khi chu môi hoặc cười) không bị kéo méo hay mờ viền
+        mouth_center = (pts[61] + pts[291] + pts[0] + pts[17]) * 0.25
         mouth_w = max(10.0, float(np.linalg.norm(pts[291] - pts[61])))
+        mouth_h = max(mouth_w * 0.55, float(np.linalg.norm(pts[17] - pts[0])) * 1.15)
         m_dx = xx - mouth_center[0]
         m_dy = yy - mouth_center[1]
         m_horiz = m_dx * axis[0] + m_dy * axis[1]
         m_vert = m_dx * down[0] + m_dy * down[1]
-        m_dist = (m_horiz / (mouth_w * 0.65)) ** 2 + (m_vert / (mouth_w * 0.45)) ** 2
-        mouth_guard = np.clip((m_dist - 0.50) / 0.60, 0.0, 1.0)
+        m_dist = (m_horiz / (mouth_w * 0.85)) ** 2 + (m_vert / (mouth_h * 0.85)) ** 2
+        mouth_guard = np.clip((m_dist - 1.0) / 0.85, 0.0, 1.0)
         mouth_guard = mouth_guard * mouth_guard * (3.0 - 2.0 * mouth_guard)
 
         weight = w_y * w_x * active * mouth_guard
@@ -543,6 +567,7 @@ class KoreanBeautyEngine:
         eyebrow_mask = np.zeros((h, w), dtype=np.float32) if collect_debug else None
         nose_mask = np.zeros((h, w), dtype=np.float32) if collect_debug else None
         jaw_mask = np.zeros((h, w), dtype=np.float32) if collect_debug else None
+        glasses_mask = np.zeros((h, w), dtype=np.float32) if collect_debug else None
 
         ycrcb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YCrCb)
         hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
@@ -558,7 +583,7 @@ class KoreanBeautyEngine:
             r_eye, l_eye, nose, m_r, m_l = lm
 
             pad_x = int(bw * (0.30 if continuous_skin else 0.18))
-            pad_y = int(bh * 0.18)
+            pad_y = int(bh * (0.28 if continuous_skin else 0.18))
             x1 = max(0, bx - pad_x)
             y1 = max(0, by - pad_y)
             x2 = min(w, bx + bw + pad_x)
@@ -570,12 +595,14 @@ class KoreanBeautyEngine:
             center = (int((bx + bw / 2) - x1), int((by + bh * 0.52) - y1))
             axes = (int(bw * 0.46), int(bh * 0.50))
             cv2.ellipse(face_roi, center, axes, 0, 0, 360, 255, -1)
-            dense=f.get('dense_landmarks')
+            dense = f.get('dense_landmarks')
+            if dense is None:
+                dense = f.get('reshape_landmarks')
             glasses_roi=np.zeros_like(face_roi)
             if dense is not None and len(dense)>=468:
-                oval=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109]
+                oval_pts = self.get_face_oval_points(dense)
                 face_roi.fill(0)
-                cv2.fillPoly(face_roi,[np.rint(dense[oval]-[x1,y1]).astype(np.int32)],255)
+                cv2.fillPoly(face_roi, [np.rint(oval_pts - [x1, y1]).astype(np.int32)], 255)
             face_oval = face_roi.copy()
 
             roi_ycrcb = ycrcb[y1:y2, x1:x2]
@@ -593,10 +620,11 @@ class KoreanBeautyEngine:
             is_skin = is_skin_ycrcb & is_not_red_fabric
             face_roi = cv2.bitwise_and(face_roi, face_roi, mask=is_skin.astype(np.uint8) * 255)
 
-            # Loại trừ nhãn cầu mắt chính xác hình elip
-            for eye_pt in [r_eye, l_eye]:
-                ex, ey = eye_pt[0] - x1, eye_pt[1] - y1
-                cv2.ellipse(face_roi, (ex, ey), (int(bw * 0.085), int(bh * 0.042)), 0, 0, 360, 0, -1)
+            # Loại trừ nhãn cầu mắt: chỉ dùng elip thô khi thiếu MediaPipe 468
+            if dense is None or len(dense) < 468:
+                for eye_pt in [r_eye, l_eye]:
+                    ex, ey = eye_pt[0] - x1, eye_pt[1] - y1
+                    cv2.ellipse(face_roi, (ex, ey), (int(bw * 0.085), int(bh * 0.042)), 0, 0, 360, 0, -1)
             if dense is not None and len(dense)>=468:
                 for ids in ([33,160,158,133,153,144],[362,385,387,263,373,380],
                             [70,63,105,66,107,55,65,52,53,46],[300,293,334,296,336,285,295,282,283,276]):
@@ -664,19 +692,44 @@ class KoreanBeautyEngine:
                         old, np.rint(np.clip(under_alpha, 0.0, 1.0) * 255.0).astype(np.uint8)
                     )
 
-            # Loại trừ môi
+            # Loại trừ môi theo đúng viền ngoài khép kín cả môi trên và môi dưới
             mouth_center = ((m_r + m_l) / 2).astype(int)
             mx, my = mouth_center[0] - x1, mouth_center[1] - y1
             mouth_w = int(np.linalg.norm(m_l - m_r) * 0.55)
             mouth_h = int(bh * 0.065)
-            cv2.ellipse(face_roi, (mx, my), (mouth_w, mouth_h), 0, 0, 360, 0, -1)
-            lip_ids=[61,146,91,181,84,17,314,405,321,375,291,308,324,318,402,317,14,87,178,88,95,78]
-            if dense is not None and len(dense)>=468:
-                cv2.fillPoly(face_roi,[np.rint(dense[lip_ids]-[x1,y1]).astype(np.int32)],0)
-                dense_lip=np.zeros_like(face_roi)
-                cv2.fillPoly(dense_lip,[np.rint(dense[lip_ids]-[x1,y1]).astype(np.int32)],255)
-                lip_alpha=cv2.GaussianBlur(dense_lip.astype(np.float32)/255.,(0,0),max(1.,bw*.006))
-                lip_mask[y1:y2,x1:x2]=np.maximum(lip_mask[y1:y2,x1:x2],lip_alpha)
+            mouth_angle = float(np.degrees(np.arctan2(m_l[1] - m_r[1], m_l[0] - m_r[0])))
+            if dense is None or len(dense) < 468:
+                cv2.ellipse(face_roi, (mx, my), (mouth_w, mouth_h), mouth_angle, 0, 360, 0, -1)
+            lip_ids = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
+            dense_lip = None
+            if dense is not None and len(dense) >= 468:
+                lip_poly = np.rint(dense[lip_ids] - [x1, y1]).astype(np.int32)
+                dense_lip_core = np.zeros_like(face_roi)
+                cv2.fillPoly(dense_lip_core, [lip_poly], 255)
+                # Mở rộng mượt ra ngoài viền MediaPipe để bao trọn phần viền môi mềm khi chu môi
+                lip_pad_px = max(3, int(round(bw * 0.018)))
+                k_lip_pad = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * lip_pad_px + 1, 2 * lip_pad_px + 1))
+                dense_lip = cv2.dilate(dense_lip_core, k_lip_pad)
+                # Bắt thêm viền sắc tố môi (đỏ/hồng) nối liền với polygon môi trong vành tìm kiếm hẹp
+                halo_px = max(5, int(round(bw * 0.032)))
+                k_halo = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * halo_px + 1, 2 * halo_px + 1))
+                lip_halo = cv2.dilate(dense_lip_core, k_halo) > 0
+                outer_ring = (cv2.dilate(lip_halo.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))) > 0) & (~lip_halo)
+                roi_a_tmp = lab[y1:y2, x1:x2, 1].astype(np.float32)
+                if np.count_nonzero(outer_ring) >= 16:
+                    ring_a = float(np.median(roi_a_tmp[outer_ring]))
+                    lip_pig = lip_halo & ((roi_a_tmp - ring_a) > 3.0)
+                    _, pig_cc = cv2.connectedComponents((lip_pig | (dense_lip_core > 0)).astype(np.uint8), connectivity=8)
+                    keep_ids = np.unique(pig_cc[dense_lip_core > 0])
+                    keep_ids = keep_ids[keep_ids != 0]
+                    if keep_ids.size:
+                        merged_lip = np.where((dense_lip > 0) | np.isin(pig_cc, keep_ids), 255, 0).astype(np.uint8)
+                        # Làm mượt nhẹ hình thái học để không tạo vết khấc trên đường viền môi
+                        dense_lip = cv2.morphologyEx(merged_lip, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+                face_roi[dense_lip > 0] = 0
+                lip_feather_core = cv2.GaussianBlur(dense_lip.astype(np.float32) / 255., (0, 0), max(1.2, bw * .006))
+                lip_alpha = np.maximum(dense_lip.astype(np.float32) / 255., lip_feather_core)
+                lip_mask[y1:y2, x1:x2] = np.maximum(lip_mask[y1:y2, x1:x2], lip_alpha)
 
             # Fill small segmentation holes only for low-frequency colour, not texture.
             colour_kernel = max(3, int(bw * 0.05) | 1)
@@ -708,17 +761,38 @@ class KoreanBeautyEngine:
                 colour_roi = cv2.bitwise_and(colour_roi, face_oval)
                 reference = np.median(roi_lab[face_oval > 0], axis=0) if np.any(face_oval) else np.array([128.,138.,128.])
                 chroma_distance = np.linalg.norm(roi_lab[...,1:] - reference[1:],axis=2)
-            for eye_pt in [r_eye, l_eye]:
-                ex, ey = eye_pt[0] - x1, eye_pt[1] - y1
-                cv2.ellipse(colour_roi, (ex, ey), (int(bw * 0.085), int(bh * 0.042)), 0, 0, 360, 0, -1)
-            if dense is not None and len(dense)>=468:
+            if dense is None or len(dense) < 468:
+                for eye_pt in [r_eye, l_eye]:
+                    ex, ey = eye_pt[0] - x1, eye_pt[1] - y1
+                    cv2.ellipse(colour_roi, (ex, ey), (int(bw * 0.085), int(bh * 0.042)), 0, 0, 360, 0, -1)
+            else:
                 for ids in ([33,160,158,133,153,144],[362,385,387,263,373,380],
                             [70,63,105,66,107,55,65,52,53,46],[300,293,334,296,336,285,295,282,283,276]):
                     cv2.fillPoly(colour_roi,[np.rint(dense[ids]-[x1,y1]).astype(np.int32)],0)
                 cv2.fillPoly(colour_roi,[np.rint(dense[lip_ids]-[x1,y1]).astype(np.int32)],0)
-            if protect_glasses:
-                colour_roi[glasses_roi>0]=0
-                face_roi[glasses_roi>0]=0
+            face_gray = gray[y1:y2, x1:x2]
+            gx = cv2.Sobel(face_gray, cv2.CV_32F, 1, 0, ksize=3)
+            gy = cv2.Sobel(face_gray, cv2.CV_32F, 0, 1, ksize=3)
+            sob_mag = cv2.magnitude(gx, gy)
+
+            glasses_belt = (glasses_roi > 0)
+            glasses_rim = np.zeros_like(glasses_roi)
+            glasses_glare = np.zeros_like(glasses_roi)
+            if protect_glasses and np.any(glasses_belt):
+                # Chỉ khóa cứng viền gọng thật sự sắc nét (sob_mag > 85); tránh bắt nhầm vân da hoặc gọng mũi mảnh
+                rim_mask = glasses_belt & (sob_mag > 85.0)
+                glare_mask = glasses_belt & (chroma_distance > 28.0) & (~rim_mask)
+                glasses_rim[rim_mask] = 255
+                glasses_glare[glare_mask] = 255
+                glasses_roi = glasses_rim
+                colour_roi[glasses_rim > 0] = 0
+                face_roi[glasses_rim > 0] = 0
+                if collect_debug and glasses_mask is not None:
+                    dbg_g = np.maximum(
+                        glasses_rim.astype(np.float32) / 255.0,
+                        (glasses_glare.astype(np.float32) / 255.0) * 0.40,
+                    )
+                    glasses_mask[y1:y2, x1:x2] = np.maximum(glasses_mask[y1:y2, x1:x2], dbg_g)
             if dense is not None and len(dense)>=468 and collect_debug:
                 nose_ids=[1,2,98,327,168,6,197,195,5,4]
                 temp=np.zeros_like(face_roi);cv2.fillPoly(temp,[np.rint(dense[nose_ids]-[x1,y1]).astype(np.int32)],255)
@@ -728,73 +802,163 @@ class KoreanBeautyEngine:
                 temp=np.zeros_like(face_roi);cv2.polylines(temp,[np.rint(dense[jaw_ids]-[x1,y1]).astype(np.int32)],False,255,max(1,int(bw*.012)))
                 jaw_feather=cv2.GaussianBlur(temp.astype(np.float32)/255.,(0,0),max(1.,bw*.006))
                 jaw_mask[y1:y2,x1:x2]=np.maximum(jaw_mask[y1:y2,x1:x2],jaw_feather)
-            # Colour protection should cover the lip, not the whole philtrum.
-            mouth_angle = float(np.degrees(np.arctan2(m_l[1]-m_r[1], m_l[0]-m_r[0])))
-            lip_region = np.zeros_like(colour_roi)
-            cv2.ellipse(lip_region, (mx, my), (mouth_w, max(2, int(bh * .055))), mouth_angle, 0, 360, 255, -1)
-            reference_a = float(np.median(roi_lab[...,1][seed])) if np.any(seed) else 138.
-            red_lip = np.clip((roi_lab[...,1]-reference_a-2.)/6., 0., 1.)
-            lip_protection = red_lip * (lip_region.astype(np.float32)/255.)
-            # A narrow central band also protects naturally pale lips/mouth line.
-            lip_core = np.zeros_like(colour_roi)
-            cv2.ellipse(lip_core, (mx, my), (mouth_w, max(2, int(bh*.018))), mouth_angle, 0, 360, 255, -1)
-            lip_protection = np.maximum(lip_protection, lip_core.astype(np.float32)/255.)
-            lip_protection = cv2.GaussianBlur(lip_protection, (0,0), max(.7,bw*.004))
-            if continuous_skin:
-                # YuNet mouth corners delimit a search area, not the lip contour.
-                # Refine with local pigment; do not protect a solid band of philtrum.
-                mouth_axis=(m_l-m_r).astype(np.float32)
-                mouth_width=max(1.,float(np.linalg.norm(mouth_axis)))
-                mouth_axis/=mouth_width
-                down=np.array([-mouth_axis[1],mouth_axis[0]],np.float32)
-                yy_l,xx_l=np.mgrid[y1:y2,x1:x2]
-                dx_l=(xx_l-mouth_center[0])*mouth_axis[0]+(yy_l-mouth_center[1])*mouth_axis[1]
-                dy_l=(xx_l-mouth_center[0])*down[0]+(yy_l-mouth_center[1])*down[1]
-                side_samples=(np.abs(dx_l)>mouth_width*.65)&(np.abs(dx_l)<mouth_width*.95)&(dy_l<-mouth_width*.08)&(dy_l>-mouth_width*.35)&seed
-                local_a=float(np.median(roi_lab[...,1][side_samples])) if np.count_nonzero(side_samples)>=16 else reference_a
-                pigment=np.clip((roi_lab[...,1]-local_a-3.)/8.,0.,1.)
-                pigment=pigment*pigment*(3.-2.*pigment)
-                search_lip=(dx_l/(mouth_width*.62))**2+((dy_l-mouth_width*.12)/max(2.,bh*.085))**2<1.
-                candidate=(pigment>.08)&search_lip
-                _,components=cv2.connectedComponents(candidate.astype(np.uint8),connectivity=8)
-                anchors=(pigment>.55)&search_lip&(np.abs(dx_l)<mouth_width*.48)&(dy_l>-mouth_width*.08)
-                chosen=np.unique(components[anchors]);chosen=chosen[chosen!=0]
-                if chosen.size:
-                    refined=pigment*np.isin(components,chosen)
-                    # Smooth confidence, then intersect original pigment to avoid
-                    # tint/skin protection bleeding over the visible lip border.
-                    refined=cv2.GaussianBlur(refined,(0,0),max(.6,bw*.002))*np.clip(pigment*2.,0.,1.)
-                else:
-                    # Ambiguous pale/occluded lips: retain conservative protection.
-                    refined=lip_protection
-                lip_protection=np.clip(refined,0.,1.)
-                lip_mask[y1:y2,x1:x2]=np.maximum(lip_mask[y1:y2,x1:x2],lip_protection)
+            # Chỉ dùng tìm kiếm môi fallback theo 5 điểm YuNet khi thiếu dense landmarks;
+            # khi có MediaPipe 468 đã có `dense_lip` bám chuẩn môi thật, tránh mốc miệng YuNet bị lệch lên mũi.
+            lip_protection = np.zeros_like(colour_roi, dtype=np.float32)
+            if dense_lip is None:
+                # Colour protection should cover the lip, not the whole philtrum.
+                lip_region = np.zeros_like(colour_roi)
+                cv2.ellipse(lip_region, (mx, my), (mouth_w, max(2, int(bh * .055))), mouth_angle, 0, 360, 255, -1)
+                reference_a = float(np.median(roi_lab[...,1][seed])) if np.any(seed) else 138.
+                red_lip = np.clip((roi_lab[...,1]-reference_a-2.)/6., 0., 1.)
+                lip_protection = red_lip * (lip_region.astype(np.float32)/255.)
+                # A narrow central band also protects naturally pale lips/mouth line.
+                lip_core = np.zeros_like(colour_roi)
+                cv2.ellipse(lip_core, (mx, my), (mouth_w, max(2, int(bh*.018))), mouth_angle, 0, 360, 255, -1)
+                lip_protection = np.maximum(lip_protection, lip_core.astype(np.float32)/255.)
+                lip_protection = cv2.GaussianBlur(lip_protection, (0,0), max(.7,bw*.004))
+                if continuous_skin:
+                    # YuNet mouth corners delimit a search area, not the lip contour.
+                    # Refine with local pigment; do not protect a solid band of philtrum.
+                    mouth_axis=(m_l-m_r).astype(np.float32)
+                    mouth_width=max(1.,float(np.linalg.norm(mouth_axis)))
+                    mouth_axis/=mouth_width
+                    down=np.array([-mouth_axis[1],mouth_axis[0]],np.float32)
+                    yy_l,xx_l=np.mgrid[y1:y2,x1:x2]
+                    dx_l=(xx_l-mouth_center[0])*mouth_axis[0]+(yy_l-mouth_center[1])*mouth_axis[1]
+                    dy_l=(xx_l-mouth_center[0])*down[0]+(yy_l-mouth_center[1])*down[1]
+                    side_samples=(np.abs(dx_l)>mouth_width*.65)&(np.abs(dx_l)<mouth_width*.95)&(dy_l<-mouth_width*.08)&(dy_l>-mouth_width*.35)&seed
+                    local_a=float(np.median(roi_lab[...,1][side_samples])) if np.count_nonzero(side_samples)>=16 else reference_a
+                    pigment=np.clip((roi_lab[...,1]-local_a-3.)/8.,0.,1.)
+                    pigment=pigment*pigment*(3.-2.*pigment)
+                    search_lip=(dx_l/(mouth_width*.62))**2+((dy_l-mouth_width*.12)/max(2.,bh*.085))**2<1.
+                    candidate=(pigment>.08)&search_lip
+                    _,components=cv2.connectedComponents(candidate.astype(np.uint8),connectivity=8)
+                    anchors=(pigment>.55)&search_lip&(np.abs(dx_l)<mouth_width*.48)&(dy_l>-mouth_width*.08)
+                    chosen=np.unique(components[anchors]);chosen=chosen[chosen!=0]
+                    if chosen.size:
+                        refined=pigment*np.isin(components,chosen)
+                        # Smooth confidence, then intersect original pigment to avoid
+                        # tint/skin protection bleeding over the visible lip border.
+                        refined=cv2.GaussianBlur(refined,(0,0),max(.6,bw*.002))*np.clip(pigment*2.,0.,1.)
+                    else:
+                        # Ambiguous pale/occluded lips: retain conservative protection.
+                        refined=lip_protection
+                    lip_protection=np.clip(refined,0.,1.)
+                    lip_mask[y1:y2,x1:x2]=np.maximum(lip_mask[y1:y2,x1:x2],lip_protection)
             # Feather inward: Gaussian tails must not tint adjacent hair/background.
             distance = cv2.distanceTransform(colour_roi, cv2.DIST_L2, 3)
             colour_soft = np.clip(distance / max(2.0, bw * .025), 0., 1.)
             colour_soft = colour_soft * colour_soft * (3. - 2. * colour_soft)
             colour_soft *= 1. - lip_protection
             if dense is not None and len(dense)>=468:
-                # Dense geometry provides a continuous face boundary. Color
-                # agreement is a soft confidence, not a binary per-pixel cut,
-                # so pores and natural shading do not create holes in the mask.
-                dense_skin=face_oval.copy()
-                for ids in ([33,160,158,133,153,144],[362,385,387,263,373,380],
-                            [70,63,105,66,107,55,65,52,53,46],[300,293,334,296,336,285,295,282,283,276],lip_ids):
-                    cv2.fillPoly(dense_skin,[np.rint(dense[ids]-[x1,y1]).astype(np.int32)],0)
-                if protect_glasses:
-                    dense_skin[glasses_roi>0]=0
-                geom=(dense_skin>0).astype(np.uint8)
-                geom_dist=cv2.distanceTransform(geom,cv2.DIST_L2,3)
-                edge_alpha=np.clip(geom_dist/max(2.,bw*.025),0.,1.)
-                edge_alpha=edge_alpha*edge_alpha*(3.-2.*edge_alpha)
-                chroma_conf=np.clip((38.-chroma_distance)/22.,0.,1.)
-                light_conf=np.clip((roi_lab[...,0]-95.)/30.,0.,1.)
-                colour_soft=edge_alpha*chroma_conf*light_conf
-                face_gray=gray[y1:y2,x1:x2]
-                gx=cv2.Sobel(face_gray,cv2.CV_32F,1,0,ksize=3)
-                gy=cv2.Sobel(face_gray,cv2.CV_32F,0,1,ksize=3)
-                strong_edge=np.clip((cv2.magnitude(gx,gy)-72.)/55.,0.,1.)
+                # Tách riêng biên môi (feather hẹp bw*0.006) để da sát miệng vẫn căng mịn mà không lẹm vào môi.
+                dense_skin = face_oval.copy()
+                # Mở rộng dải trán trên lên sát chân tóc (mốc 10 của MediaPipe thường dừng ở ~2/3 trán),
+                # khóa chặt theo liên thông màu da và chặn cạnh tóc mái/vành mũ.
+                fore_arc_ids = [54, 103, 67, 109, 10, 338, 297, 332, 284]
+                arc_pts = dense[fore_arc_ids].astype(np.float32)
+                eye_axis_f = (dense[263] - dense[33]).astype(np.float32)
+                eye_axis_len = max(1.0, float(np.linalg.norm(eye_axis_f)))
+                eye_u = eye_axis_f / eye_axis_len
+                face_up = np.array([eye_u[1], -eye_u[0]], dtype=np.float32)
+                if face_up[1] > 0:
+                    face_up *= -1.0
+                face_h_px = max(float(bh), float(np.linalg.norm(dense[152] - dense[10])))
+                arc_taper = np.array([0.15, 0.55, 0.85, 1.0, 1.0, 1.0, 0.85, 0.55, 0.15], dtype=np.float32)[:, None]
+                shifted_arc = arc_pts + face_up[None, :] * (face_h_px * 0.13) * arc_taper
+                fore_cap_poly = np.vstack((shifted_arc, arc_pts[::-1])) - np.array([x1, y1], dtype=np.float32)
+                fore_cap_mask = np.zeros_like(face_oval)
+                cv2.fillPoly(fore_cap_mask, [np.rint(fore_cap_poly).astype(np.int32)], 255)
+                fore_zone = (fore_cap_mask > 0) & (face_oval == 0)
+
+                # Dải trán bóng râm ngoài oval (~2.5% chiều cao mặt, giữ rộng hai góc thái dương) dùng Sobel làm mượt (5x5, sigma=1.2)
+                # để không bị vài sợi tóc tơ 1-2px cắt rãnh ở góc trán trên, đồng thời khóa L<68 & gradient<16.5 nhằm chặn mặt mũ.
+                blur_fore = cv2.GaussianBlur(face_gray, (5, 5), 1.2)
+                bgx = cv2.Sobel(blur_fore, cv2.CV_32F, 1, 0, ksize=3)
+                bgy = cv2.Sobel(blur_fore, cv2.CV_32F, 0, 1, ksize=3)
+                shadow_sob = cv2.magnitude(bgx, bgy)
+
+                shadow_taper = np.array([0.50, 0.85, 0.95, 1.0, 1.0, 1.0, 0.95, 0.85, 0.50], dtype=np.float32)[:, None]
+                shadow_arc = arc_pts + face_up[None, :] * (face_h_px * 0.025) * shadow_taper
+                fore_shadow_poly = np.vstack((shadow_arc, arc_pts[::-1])) - np.array([x1, y1], dtype=np.float32)
+                fore_shadow_mask = np.zeros_like(face_oval)
+                cv2.fillPoly(fore_shadow_mask, [np.rint(fore_shadow_poly).astype(np.int32)], 255)
+                fore_shadow_zone = (fore_shadow_mask > 0) & (face_oval == 0)
+
+                lit_fore_ok = (
+                    (chroma_distance < 13.0)
+                    & (roi_lab[..., 0] >= 90.0)
+                    & (sob_mag < 68.0)
+                    & is_not_red_fabric
+                )
+                shadow_fore_ok = (
+                    fore_shadow_zone
+                    & (chroma_distance < 10.0)
+                    & (roi_lab[..., 0] >= 33.0)
+                    & (roi_lab[..., 0] < 68.0)
+                    & (shadow_sob < 16.5)
+                    & is_not_red_fabric
+                )
+                fore_ok = lit_fore_ok | shadow_fore_ok
+                fore_seed = (face_oval > 0) & (chroma_distance < 18.0) & (roi_lab[..., 0] >= 36.0)
+                _, fore_cc = cv2.connectedComponents((fore_seed | (fore_zone & fore_ok)).astype(np.uint8), connectivity=8)
+                keep_f = np.unique(fore_cc[fore_seed])
+                keep_f = keep_f[keep_f != 0]
+                if keep_f.size:
+                    fore_connected = np.isin(fore_cc, keep_f) & fore_zone
+                    dense_skin[fore_connected] = 255
+                    k_f = max(3, int(round(bw * 0.015)) | 1)
+                    dense_skin = cv2.morphologyEx(
+                        dense_skin,
+                        cv2.MORPH_CLOSE,
+                        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_f, k_f)),
+                    )
+                    dense_skin[~((face_oval > 0) | fore_zone)] = 0
+
+                outer_dist = cv2.distanceTransform((dense_skin > 0).astype(np.uint8), cv2.DIST_L2, 3)
+                # Feather hẹp (~1.5% bề rộng mặt) vì bao lồi face_oval + trán đã ôm sát mép ngoài
+                outer_alpha = np.clip(outer_dist / max(2.0, bw * 0.015), 0.0, 1.0)
+                outer_alpha = outer_alpha * outer_alpha * (3.0 - 2.0 * outer_alpha)
+
+                # Chỉ khóa 0% đúng tròng mắt + viền mi mảnh (~2-3px) và lông mày; vùng da hốc mắt xung quanh vẫn giữ lực nhẹ
+                eye_brow_cut = np.ones_like(dense_skin)
+                eye_cut_only = np.zeros_like(dense_skin)
+                for ids in ([33, 160, 158, 133, 153, 144], [362, 385, 387, 263, 373, 380]):
+                    cv2.fillPoly(eye_cut_only, [np.rint(dense[ids] - [x1, y1]).astype(np.int32)], 255)
+                k_lash = max(3, int(round(bw * 0.008)) | 1)
+                eye_cut_only = cv2.dilate(eye_cut_only, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_lash, k_lash)))
+                eye_brow_cut[eye_cut_only > 0] = 0
+                for ids in ([70, 63, 105, 66, 107, 55, 65, 52, 53, 46], [300, 293, 334, 296, 336, 285, 295, 282, 283, 276]):
+                    cv2.fillPoly(eye_brow_cut, [np.rint(dense[ids] - [x1, y1]).astype(np.int32)], 0)
+                eye_dist = cv2.distanceTransform((eye_brow_cut > 0).astype(np.uint8), cv2.DIST_L2, 3)
+                eye_alpha = np.clip(eye_dist / max(2.0, bw * 0.006), 0.0, 1.0)
+                eye_alpha = eye_alpha * eye_alpha * (3.0 - 2.0 * eye_alpha)
+
+                # Hạ ngưỡng L* để xử lý nhẹ cả vùng góc trán/da bóng râm tối (L >= 32..48), giữ tóc đen L<=20 ở 0
+                chroma_conf = np.clip((30.0 - chroma_distance) / 16.0, 0.0, 1.0)
+                light_conf = np.clip((roi_lab[..., 0] - 20.0) / 28.0, 0.0, 1.0)
+                colour_soft = outer_alpha * eye_alpha * chroma_conf * light_conf
+
+                # Giảm lực mềm (giữ ~60% xử lý da) cho vùng bầu mắt/dưới mắt/tròng kính, và khóa sát 0% tại viền gọng kính
+                if np.any(glasses_belt):
+                    socket_soft = cv2.GaussianBlur(glasses_belt.astype(np.float32), (0, 0), max(2.0, bw * 0.025))
+                    colour_soft *= 1.0 - 0.40 * socket_soft
+                if protect_glasses and np.any(glasses_rim > 0):
+                    rim_soft = cv2.GaussianBlur(glasses_rim.astype(np.float32) / 255.0, (0, 0), max(1.0, bw * 0.006))
+                    colour_soft *= 1.0 - np.clip(rim_soft * 1.10, 0.0, 1.0)
+                if protect_glasses and np.any(glasses_glare > 0):
+                    glare_soft = cv2.GaussianBlur(glasses_glare.astype(np.float32) / 255.0, (0, 0), max(1.0, bw * 0.008))
+                    colour_soft *= 1.0 - 0.35 * glare_soft
+                if dense_lip is not None:
+                    lip_dist_out = cv2.distanceTransform((dense_lip == 0).astype(np.uint8), cv2.DIST_L2, 3)
+                    lip_feather = max(3.5, bw * .016)
+                    lip_t = np.clip(1.0 - lip_dist_out / lip_feather, 0., 1.)
+                    lip_guard = lip_t * lip_t * (3. - 2. * lip_t)
+                    colour_soft *= 1. - lip_guard
+                else:
+                    colour_soft *= 1. - lip_protection
+                strong_edge=np.clip((sob_mag-72.)/55.,0.,1.)
                 strong_edge=cv2.dilate(strong_edge,np.ones((3,3),np.uint8))
                 strong_edge=cv2.GaussianBlur(strong_edge,(0,0),1.2)
                 colour_soft*=1.-.80*strong_edge
@@ -876,21 +1040,25 @@ class KoreanBeautyEngine:
                 l_feathered = cv2.GaussianBlur(l_final.astype(np.float32), (9, 9), 2.5)
                 lip_mask[ly1:ly2, lx1:lx2] = np.maximum(lip_mask[ly1:ly2, lx1:lx2], l_feathered)
 
-            # 4. Eye Detail Sharpening Mask
-            for eye_pt in [r_eye, l_eye]:
-                ex, ey = eye_pt[0], eye_pt[1]
-                erx, ery = int(bw * 0.09), int(bh * 0.045)
-                ex1, ex2 = max(0, ex - erx), min(w, ex + erx)
-                ey1, ey2 = max(0, ey - ery), min(h, ey + ery)
-                if ex2 > ex1 and ey2 > ey1:
-                    egray = gray[ey1:ey2, ex1:ex2]
-                    elap = np.clip((np.abs(cv2.Laplacian(egray, cv2.CV_32F)) - 10.0) / 20.0, 0.0, 1.0)
-                    eye_sharp_mask[ey1:ey2, ex1:ex2] = np.maximum(eye_sharp_mask[ey1:ey2, ex1:ex2], elap)
-            if dense is not None and len(dense)>=468 and collect_debug:
-                for ids in ([33,160,158,133,153,144],[362,385,387,263,373,380]):
-                    eye=np.zeros((h,w),np.uint8)
-                    cv2.polylines(eye,[np.rint(dense[ids]).astype(np.int32)],True,255,max(2,int(bw*.012)))
-                    eye_sharp_mask=np.maximum(eye_sharp_mask,cv2.GaussianBlur(eye.astype(np.float32)/255.,(0,0),max(1.,bw*.004)))
+            # 4. Eye Detail Sharpening Mask: bám đúng vành mắt MediaPipe khi có dense landmarks để không phủ lên bọng mắt
+            if dense is not None and len(dense) >= 468:
+                for ids in ([33, 160, 158, 133, 153, 144], [362, 385, 387, 263, 373, 380]):
+                    eye = np.zeros((h, w), np.uint8)
+                    cv2.polylines(eye, [np.rint(dense[ids]).astype(np.int32)], True, 255, max(2, int(bw * 0.012)))
+                    eye_sharp_mask = np.maximum(
+                        eye_sharp_mask,
+                        cv2.GaussianBlur(eye.astype(np.float32) / 255.0, (0, 0), max(1.0, bw * 0.004)),
+                    )
+            else:
+                for eye_pt in [r_eye, l_eye]:
+                    ex, ey = eye_pt[0], eye_pt[1]
+                    erx, ery = int(bw * 0.09), int(bh * 0.045)
+                    ex1, ex2 = max(0, ex - erx), min(w, ex + erx)
+                    ey1, ey2 = max(0, ey - ery), min(h, ey + ery)
+                    if ex2 > ex1 and ey2 > ey1:
+                        egray = gray[ey1:ey2, ex1:ex2]
+                        elap = np.clip((np.abs(cv2.Laplacian(egray, cv2.CV_32F)) - 10.0) / 20.0, 0.0, 1.0)
+                        eye_sharp_mask[ey1:ey2, ex1:ex2] = np.maximum(eye_sharp_mask[ey1:ey2, ex1:ex2], elap)
 
         self.last_timings['mask_ms'] = self.last_timings.get('mask_ms', 0.) + (time.perf_counter()-mask_started)*1000.
         return {
@@ -904,8 +1072,79 @@ class KoreanBeautyEngine:
             "eyebrows": cv2.GaussianBlur(eyebrow_mask,(0,0),1.2) if collect_debug else None,
             "nose": nose_mask,
             "jaw": jaw_mask,
-            "cheeks": blush_mask
+            "cheeks": blush_mask,
+            "glasses": glasses_mask,
         }
+
+    _BASE_OVAL_IDS = [
+        10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+        397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
+        172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+    ]
+    # Bổ sung vòng gò má/hàm ngoài để bao lồi 2D ôm sát mép má khi mặt hơi nghiêng hoặc má bầu
+    _OUTER_CHEEK_IDS = [
+        301, 264, 447, 366, 401, 435, 367, 364, 394, 395, 369, 345, 352, 376, 433,
+        71,  34,  227, 137, 177, 215, 138, 135, 169, 170, 140, 116, 123, 147, 213,
+    ]
+    _OVAL_HULL_IDS = list(dict.fromkeys(_BASE_OVAL_IDS + _OUTER_CHEEK_IDS))
+
+    @classmethod
+    def get_face_oval_points(cls, dense: np.ndarray) -> np.ndarray:
+        """Trả về đa giác bao khuôn mặt sát má ngoài từ bao lồi của oval chuẩn và các mốc gò má ngoài."""
+        hull = cv2.convexHull(dense[cls._OVAL_HULL_IDS].astype(np.float32))
+        return hull.reshape(-1, 2)
+
+    @classmethod
+    def extract_faces_tracking_meta(cls, faces: List[Dict[str, Any]], img_w: int, img_h: int) -> List[Dict[str, Any]]:
+        """Trích xuất tọa độ chuẩn hóa [0..1] của khung mặt YuNet và các đường viền giải phẫu MediaPipe."""
+        if img_w <= 0 or img_h <= 0:
+            return []
+        inv_w = 1.0 / float(img_w)
+        inv_h = 1.0 / float(img_h)
+        contour_ids = {
+            "lipsOuter": [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146],
+            "leftEye": [33, 160, 158, 133, 153, 144],
+            "rightEye": [362, 385, 387, 263, 373, 380],
+            "leftBrow": [70, 63, 105, 66, 107, 55, 65, 52, 53, 46],
+            "rightBrow": [300, 293, 334, 296, 336, 285, 295, 282, 283, 276],
+        }
+        result: List[Dict[str, Any]] = []
+        for idx, f in enumerate(faces):
+            bx, by, bw, bh = f["box"]
+            lm = f["landmarks"]
+            dense = f.get("dense_landmarks")
+            if dense is None:
+                dense = f.get("reshape_landmarks")
+            has_dense = dense is not None and len(dense) >= 468
+            contours: Dict[str, List[List[float]]] = {}
+            if has_dense:
+                oval_pts = cls.get_face_oval_points(dense)
+                contours["oval"] = [
+                    [round(float(pt[0]) * inv_w, 5), round(float(pt[1]) * inv_h, 5)]
+                    for pt in oval_pts
+                ]
+                for key, ids in contour_ids.items():
+                    contours[key] = [
+                        [round(float(dense[i][0]) * inv_w, 5), round(float(dense[i][1]) * inv_h, 5)]
+                        for i in ids
+                    ]
+            result.append({
+                "index": idx,
+                "box": [
+                    round(float(bx) * inv_w, 5),
+                    round(float(by) * inv_h, 5),
+                    round(float(bw) * inv_w, 5),
+                    round(float(bh) * inv_h, 5),
+                ],
+                "conf": round(float(f.get("conf", 0.0)), 4),
+                "landmarks5": [
+                    [round(float(pt[0]) * inv_w, 5), round(float(pt[1]) * inv_h, 5)]
+                    for pt in lm
+                ],
+                "hasDense": bool(has_dense),
+                "contours": contours,
+            })
+        return result
 
     @staticmethod
     def _fast_gaussian_blur(src: np.ndarray, sigma: float) -> np.ndarray:
@@ -932,8 +1171,9 @@ class KoreanBeautyEngine:
         self,
         img_bgr: np.ndarray,
         cfg: Optional[KoreanBeautyConfig] = None,
-        original_img: Optional[np.ndarray] = None
-    ) -> np.ndarray:
+        original_img: Optional[np.ndarray] = None,
+        return_debug: bool = False,
+    ) -> Any:
         """
         Thực thi toàn bộ pipeline Korean Soft Beauty:
         Retouching da vi mô + Trang điểm tự nhiên + Nâng sáng trong trẻo.
@@ -945,6 +1185,8 @@ class KoreanBeautyEngine:
         clean_bg = original_img if original_img is not None else img_bgr
 
         if not cfg.enabled:
+            if return_debug:
+                return clean_bg.copy(), {"facesMeta": [], "masks": None}
             return clean_bg.copy()
 
         t0 = time.perf_counter()
@@ -958,6 +1200,8 @@ class KoreanBeautyEngine:
         self.last_timings['face_count']=len(faces)
         if len(faces) == 0:
             logger.info("Không phát hiện khuôn mặt; giữ nguyên ảnh gốc.")
+            if return_debug:
+                return clean_bg.copy(), {"facesMeta": [], "masks": None}
             return clean_bg.copy()
         if cfg.presetId == 'white_pink_v2':
             dense_started=time.perf_counter()
@@ -965,10 +1209,12 @@ class KoreanBeautyEngine:
             self.attach_dense_landmarks(faces,dense)
             for face in faces:
                 if 'dense_landmarks' in face:
-                    face['reshape_landmarks']=face.pop('dense_landmarks')
+                    face['reshape_landmarks']=face['dense_landmarks']
             self.last_timings['landmarker_ms']=(time.perf_counter()-dense_started)*1000.
             self.last_timings['dense_face_count']=sum('reshape_landmarks' in f for f in faces)
             logger.info('V2 MediaPipe reshape: %s/%s faces; YuNet geometry fallback for unmatched faces',self.last_timings['dense_face_count'],len(faces))
+
+        faces_meta = self.extract_faces_tracking_meta(faces, w, h) if return_debug else None
 
         # Xử lý theo cụm ROI quanh khuôn mặt ở mọi độ phân giải để loại bỏ phông nền thừa
         if len(faces) > 0:
@@ -1011,8 +1257,13 @@ class KoreanBeautyEngine:
                     roi_img = img_bgr[ry1:ry2, rx1:rx2]
                     roi_clean = clean_bg[ry1:ry2, rx1:rx2]
                     r_face = _make_roi_face(faces[idx], rx1, ry1)
+                    if return_debug:
+                        proc_roi, mask_roi, sub_debug = self._process_core(
+                            roi_img, [r_face], cfg, roi_clean, return_mask=True, collect_debug=True
+                        )
+                        return rx1, ry1, rx2, ry2, proc_roi, mask_roi, sub_debug
                     proc_roi, mask_roi = self._process_core(roi_img, [r_face], cfg, roi_clean, return_mask=True)
-                    return rx1, ry1, rx2, ry2, proc_roi, mask_roi
+                    return rx1, ry1, rx2, ry2, proc_roi, mask_roi, None
 
                 ux1 = min(b[0] for b in raw_boxes)
                 uy1 = min(b[1] for b in raw_boxes)
@@ -1027,12 +1278,20 @@ class KoreanBeautyEngine:
                 out_img = clean_bg.copy()
                 num_acc = np.zeros((uh, uw, 3), dtype=np.float32)
                 den_acc = np.zeros((uh, uw), dtype=np.float32)
-                for rx1, ry1, rx2, ry2, proc_roi, mask_roi in roi_results:
+                full_debug = (
+                    {k: np.zeros((h, w), dtype=np.float32) for k in ("skin", "blush", "lip", "protect")}
+                    if return_debug
+                    else None
+                )
+                for rx1, ry1, rx2, ry2, proc_roi, mask_roi, sub_debug in roi_results:
                     dx1, dy1 = rx1 - ux1, ry1 - uy1
                     dx2, dy2 = rx2 - ux1, ry2 - uy1
                     delta_roi = proc_roi.astype(np.float32) - clean_bg[ry1:ry2, rx1:rx2].astype(np.float32)
                     num_acc[dy1:dy2, dx1:dx2] += delta_roi * mask_roi[..., np.newaxis]
                     den_acc[dy1:dy2, dx1:dx2] += mask_roi
+                    if full_debug is not None and sub_debug is not None:
+                        for k, arr in sub_debug.items():
+                            full_debug[k][ry1:ry2, rx1:rx2] = np.maximum(full_debug[k][ry1:ry2, rx1:rx2], arr)
 
                 active = den_acc > 1e-4
                 if np.any(active):
@@ -1042,6 +1301,8 @@ class KoreanBeautyEngine:
 
                 self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
                 logger.info(f"Hoàn tất Korean Soft Beauty ({len(faces)} faces parallel) trong {self.last_timings['total_ms']:.1f}ms.")
+                if return_debug:
+                    return out_img, {"facesMeta": faces_meta, "masks": full_debug}
                 return out_img
 
             rx1, ry1, rx2, ry2, idx = raw_boxes[0]
@@ -1049,11 +1310,26 @@ class KoreanBeautyEngine:
                 out_img = clean_bg.copy()
                 roi_img = img_bgr[ry1:ry2, rx1:rx2]
                 roi_clean = clean_bg[ry1:ry2, rx1:rx2]
+                if return_debug:
+                    proc_roi, sub_debug = self._process_core(
+                        roi_img, [_make_roi_face(faces[idx], rx1, ry1)], cfg, roi_clean, collect_debug=True
+                    )
+                    out_img[ry1:ry2, rx1:rx2] = proc_roi
+                    full_debug = {k: np.zeros((h, w), dtype=np.float32) for k in ("skin", "blush", "lip", "protect")}
+                    for k, arr in sub_debug.items():
+                        full_debug[k][ry1:ry2, rx1:rx2] = arr
+                    self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
+                    logger.info(f"Hoàn tất Korean Soft Beauty (1 ROI) trong {self.last_timings['total_ms']:.1f}ms.")
+                    return out_img, {"facesMeta": faces_meta, "masks": full_debug}
                 out_img[ry1:ry2, rx1:rx2] = self._process_core(roi_img, [_make_roi_face(faces[idx], rx1, ry1)], cfg, roi_clean)
                 self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
                 logger.info(f"Hoàn tất Korean Soft Beauty (1 ROI) trong {self.last_timings['total_ms']:.1f}ms.")
                 return out_img
 
+        if return_debug:
+            result, full_debug = self._process_core(img_bgr, faces, cfg, clean_bg, collect_debug=True)
+            self.last_timings['total_ms'] = (time.perf_counter() - t0) * 1000.
+            return result, {"facesMeta": faces_meta, "masks": full_debug}
         result=self._process_core(img_bgr, faces, cfg, clean_bg)
         self.last_timings['total_ms']=(time.perf_counter()-t0)*1000.
         return result
@@ -1470,13 +1746,223 @@ class KoreanBeautyEngine:
             region[take] = adjust[take]
         after_lab -= corrections
 
+    def apply_skin_plumping(
+        self,
+        img_bgr: np.ndarray,
+        skin_mask: np.ndarray,
+        lip_mask: np.ndarray,
+        wire_prot: np.ndarray,
+        eye_sharp_mask: np.ndarray,
+        faces: List[Dict[str, Any]],
+        plump: float,
+    ) -> np.ndarray:
+        """
+        Làm căng mịn và tăng độ đàn hồi bề mặt da (không làm bệt mờ và không tạo vết đốm lỗ chân lông):
+        - Dùng ngưỡng cạnh mạnh (strong_rim) thay cho wire_prot để tránh khoét lỗ li ti trên da trán/má.
+        - Lấp đầy rãnh lõm/lỗ chân lông đơn điệu theo mặt phẳng bilateral (không đảo ngược điểm tối thành đốm).
+        - Bù căng vùng chuyển tiếp nông và tăng nhẹ độ căng bóng khối 3D tự nhiên.
+        """
+        if plump <= 0.001 or not faces:
+            return img_bgr
+
+        base_mask = skin_mask * (1.0 - np.clip(lip_mask * 1.5 + eye_sharp_mask, 0.0, 1.0))
+        ys, xs = np.where(base_mask > 0.01)
+        if ys.size == 0:
+            return img_bgr
+
+        h, w = img_bgr.shape[:2]
+        avg_bw = float(np.mean([f["box"][2] for f in faces]))
+        pad = max(12, int(avg_bw * 0.08))
+        y0, y1 = max(0, int(ys.min()) - pad), min(h, int(ys.max()) + pad + 1)
+        x0, x1 = max(0, int(xs.min()) - pad), min(w, int(xs.max()) + pad + 1)
+
+        patch = img_bgr[y0:y1, x0:x1]
+        ph, pw = patch.shape[:2]
+        if ph < 8 or pw < 8:
+            return img_bgr
+
+        # Chỉ bảo vệ cạnh cấu trúc thật sự mạnh (gọng kính, cánh mũi, chân mi), bỏ qua lỗ chân lông
+        gray_p = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        gx_p = cv2.Sobel(gray_p, cv2.CV_32F, 1, 0, ksize=3)
+        gy_p = cv2.Sobel(gray_p, cv2.CV_32F, 0, 1, ksize=3)
+        strong_rim = np.clip((cv2.magnitude(gx_p, gy_p) - 72.0) / 48.0, 0.0, 1.0)
+        strong_rim = cv2.GaussianBlur(cv2.dilate(strong_rim, np.ones((3, 3), np.uint8)), (0, 0), 1.2)
+        weight = base_mask[y0:y1, x0:x1] * (1.0 - 0.85 * strong_rim)
+
+        lab = cv2.cvtColor(patch, cv2.COLOR_BGR2LAB).astype(np.float32)
+        L, A, B = lab[..., 0], lab[..., 1], lab[..., 2]
+
+        # 1. Mặt phẳng căng theo cấu trúc khối (Bilateral giữ nguyên ranh giới giải phẫu)
+        p_cap = min(plump, 2.5)
+        sigma_color = 20.0 + 12.0 * p_cap
+        sigma_space = max(3.5, avg_bw * (0.022 + 0.012 * p_cap))
+        scale = min(1.0, 720.0 / max(ph, pw))
+        if scale < 1.0:
+            sw, sh = max(8, int(round(pw * scale))), max(8, int(round(ph * scale)))
+            lab_s = cv2.resize(lab, (sw, sh), interpolation=cv2.INTER_AREA)
+            bilat_s = cv2.bilateralFilter(lab_s, 0, sigma_color, max(2.0, sigma_space * scale))
+            bilat_lab = cv2.resize(bilat_s, (pw, ph), interpolation=cv2.INTER_LINEAR)
+        else:
+            bilat_lab = cv2.bilateralFilter(lab, 0, sigma_color, sigma_space)
+
+        L_bilat = bilat_lab[..., 0]
+        # Lấp đầy các rãnh lõm đơn điệu (saturate mượt thay vì cắt đứt gây vết đốm)
+        valley_fill = np.minimum(np.maximum(0.0, L_bilat - L), 22.0)
+        peak_soften = np.minimum(np.maximum(0.0, L - L_bilat), 18.0)
+
+        fill_strength = min(0.95, plump * 0.48)
+        peak_strength = min(0.60, plump * 0.20)
+        L_taut = L + valley_fill * fill_strength - peak_soften * peak_strength
+
+        # 2. Bù căng vùng chuyển tiếp nông theo nền da lân cận (không bỏ sót điểm tối tạo đốm)
+        broad_sigma = max(4.0, avg_bw * 0.045)
+        num = self._fast_gaussian_blur(L_taut * weight, broad_sigma)
+        den = np.maximum(self._fast_gaussian_blur(weight, broad_sigma), 1e-5)
+        L_broad = num / den
+        dip = np.minimum(np.maximum(0.0, L_broad - L_taut), 14.0)
+        L_taut += dip * min(0.55, 0.18 * plump)
+
+        # 3. Độ căng bóng khối 3D tự nhiên (Dewy Plump Sheen đều trên bề mặt đã làm căng)
+        sheen_band = np.clip((L_taut - 142.0) / 38.0, 0.0, 1.0) * np.clip((246.0 - L_taut) / 28.0, 0.0, 1.0)
+        L_taut += sheen_band * (2.8 * min(plump, 2.5))
+
+        # 4. Làm đều nhẹ sắc độ da hỗ trợ độ căng mịn
+        chroma_blend = min(0.55, 0.18 * plump)
+        A_out = A + (bilat_lab[..., 1] - A) * chroma_blend
+        B_out = B + (bilat_lab[..., 2] - B) * chroma_blend
+
+        lab_out = cv2.merge([
+            np.clip(L_taut, 0.0, 255.0),
+            np.clip(A_out, 0.0, 255.0),
+            np.clip(B_out, 0.0, 255.0),
+        ])
+        plumped_patch = cv2.cvtColor(np.rint(lab_out).astype(np.uint8), cv2.COLOR_LAB2BGR).astype(np.float32)
+
+        w3 = weight[..., None]
+        out = img_bgr.copy()
+        out[y0:y1, x0:x1] = np.clip(np.round(plumped_patch * w3 + patch.astype(np.float32) * (1.0 - w3)), 0, 255).astype(np.uint8)
+        return out
+
+    def suppress_flash_sparkles(
+        self,
+        img_bgr: np.ndarray,
+        faces: List[Dict[str, Any]],
+        strength: float,
+        skin_mask: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        """
+        Khử các hạt trắng phản quang li ti (1-3px) do flash đánh thẳng trên vùng da:
+        - Khi có `skin_mask`, khóa chặt phạm vi xử lý đúng trên vùng da (bao gồm trán cao,
+          tránh lan sang cổ, tóc mái hay ốp điện thoại ở bước hậu kỳ 12.5).
+        - Chỉ ghi đè pixel thực sự có `eff_w > 0`, bảo toàn nguyên vẹn RGB ngoài hạt flash.
+        """
+        if strength <= 0.001 or not faces:
+            return img_bgr
+
+        h, w = img_bgr.shape[:2]
+        if skin_mask is not None:
+            face_mask = np.clip(skin_mask.astype(np.float32), 0.0, 1.0)
+        else:
+            face_mask = np.zeros((h, w), dtype=np.float32)
+            lip_ids = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
+            eye_brow_ids = (
+                [33, 160, 158, 133, 153, 144],
+                [362, 385, 387, 263, 373, 380],
+                [70, 63, 105, 66, 107, 55, 65, 52, 53, 46],
+                [300, 293, 334, 296, 336, 285, 295, 282, 283, 276],
+            )
+
+            for f in faces:
+                bx, by, bw, bh = map(int, f["box"])
+                dense = f.get("dense_landmarks")
+                if dense is None:
+                    dense = f.get("reshape_landmarks")
+                x0, y0 = max(0, bx - int(bw * 0.35)), max(0, by - int(bh * 0.25))
+                x1, y1 = min(w, bx + int(bw * 1.35)), min(h, by + int(bh * 1.50))
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                roi = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
+                if dense is not None and len(dense) >= 468:
+                    oval_pts = self.get_face_oval_points(dense)
+                    cv2.fillPoly(roi, [np.rint(oval_pts - [x0, y0]).astype(np.int32)], 255)
+                    for ids in eye_brow_ids:
+                        cv2.fillPoly(roi, [np.rint(dense[ids] - [x0, y0]).astype(np.int32)], 0)
+                    lip_poly = np.rint(dense[lip_ids] - [x0, y0]).astype(np.int32)
+                    lip_pad = max(2, int(round(bw * 0.015)))
+                    lip_roi = np.zeros_like(roi)
+                    cv2.fillPoly(lip_roi, [lip_poly], 255)
+                    lip_roi = cv2.dilate(lip_roi, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * lip_pad + 1, 2 * lip_pad + 1)))
+                    roi[lip_roi > 0] = 0
+                else:
+                    cx, cy = int(bx + bw * 0.5 - x0), int(by + bh * 0.52 - y0)
+                    cv2.ellipse(roi, (cx, cy), (max(1, int(bw * 0.48)), max(1, int(bh * 0.52))), 0, 0, 360, 255, -1)
+                    lm = f["landmarks"]
+                    for ep in [lm[0], lm[1]]:
+                        cv2.ellipse(roi, (int(ep[0] - x0), int(ep[1] - y0)), (max(2, int(bw * 0.12)), max(2, int(bh * 0.06))), 0, 0, 360, 0, -1)
+                    mc = ((lm[3] + lm[4]) * 0.5).astype(int)
+                    cv2.ellipse(roi, (int(mc[0] - x0), int(mc[1] - y0)), (max(2, int(bw * 0.24)), max(2, int(bh * 0.11))), 0, 0, 360, 0, -1)
+
+                feathered = cv2.GaussianBlur(roi.astype(np.float32) / 255.0, (0, 0), max(1.5, bw * 0.012))
+                face_mask[y0:y1, x0:x1] = np.maximum(face_mask[y0:y1, x0:x1], feathered)
+
+        ys, xs = np.where(face_mask > 0.02)
+        if ys.size == 0:
+            return img_bgr
+
+        avg_bw = float(np.mean([f["box"][2] for f in faces]))
+        k = max(5, min(15, int(round(avg_bw * 0.020)) | 1))
+        pad = max(8, k)
+        y0, y1 = max(0, int(ys.min()) - pad), min(h, int(ys.max()) + pad + 1)
+        x0, x1 = max(0, int(xs.min()) - pad), min(w, int(xs.max()) + pad + 1)
+
+        patch = img_bgr[y0:y1, x0:x1]
+        gray_p = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        gx = cv2.Sobel(gray_p, cv2.CV_32F, 1, 0, ksize=3, scale=0.125)
+        gy = cv2.Sobel(gray_p, cv2.CV_32F, 0, 1, ksize=3, scale=0.125)
+        sob = cv2.magnitude(gx, gy)
+        # Hạt flash li ti trên da tối có gradient cạnh cục bộ; nâng nhẹ ngưỡng rim_guard để không chặn nhầm hạt sáng trên trán
+        rim_guard = np.clip((sob - 24.0) / 14.0, 0.0, 1.0)
+        rim_guard = cv2.GaussianBlur(cv2.dilate(rim_guard, np.ones((3, 3), np.uint8)), (0, 0), 1.0)
+
+        lab = cv2.cvtColor(patch, cv2.COLOR_BGR2LAB)
+        L_u8, A_u8, B_u8 = cv2.split(lab)
+        L_med = cv2.medianBlur(L_u8, k).astype(np.float32)
+        A_med = cv2.medianBlur(A_u8, k).astype(np.float32)
+        B_med = cv2.medianBlur(B_u8, k).astype(np.float32)
+
+        L_f = L_u8.astype(np.float32)
+        A_f = A_u8.astype(np.float32)
+        B_f = B_u8.astype(np.float32)
+
+        excess = np.maximum(0.0, L_f - L_med)
+        sparkle_raw = np.clip((excess - 2.5) / 5.0, 0.0, 1.0)
+        # Giữ nguyên đỉnh hạt sáng thay vì làm mờ làm hụt trọng số ngay tâm hạt 1-2px
+        sparkle_w = np.maximum(sparkle_raw, cv2.GaussianBlur(sparkle_raw, (3, 3), 0.7))
+        eff_w = sparkle_w * float(np.clip(strength, 0.0, 1.0)) * face_mask[y0:y1, x0:x1] * (1.0 - rim_guard)
+
+        L_out = L_f - np.minimum(excess, 55.0) * eff_w
+        A_out = A_f + (A_med - A_f) * eff_w
+        B_out = B_f + (B_med - B_f) * eff_w
+
+        cleaned_lab = cv2.merge([
+            np.clip(L_out, 0.0, 255.0),
+            np.clip(A_out, 0.0, 255.0),
+            np.clip(B_out, 0.0, 255.0),
+        ])
+        cleaned_bgr = cv2.cvtColor(np.rint(cleaned_lab).astype(np.uint8), cv2.COLOR_LAB2BGR)
+        active_px = (eff_w > 1e-4)[..., None]
+        out = img_bgr.copy()
+        out[y0:y1, x0:x1] = np.where(active_px, cleaned_bgr, patch)
+        return out
+
     def _process_core(
         self,
         img_bgr: np.ndarray,
         faces: List[Dict[str, Any]],
         cfg: KoreanBeautyConfig,
         clean_bg: np.ndarray,
-        return_mask: bool = False
+        return_mask: bool = False,
+        collect_debug: bool = False,
     ):
         t0 = time.time()
         h, w, _ = img_bgr.shape
@@ -1492,6 +1978,10 @@ class KoreanBeautyEngine:
             protect_glasses=cfg.protectGlasses,
             pose_aware=cfg.presetId=='white_pink_v2'
         )
+
+        # 1.6. Khử hạt trắng li ti phản quang flash trên da trước khi tạo high_mask / Frequency Separation
+        if cfg.flashSparkleReduction > 0.001:
+            proc_img = self.suppress_flash_sparkles(proc_img, faces, cfg.flashSparkleReduction)
 
         # Tính toán kernel size tương thích tỉ lệ giải phẫu (Scale-adaptive Kernels)
         avg_bw = float(np.mean([f["box"][2] for f in faces]))
@@ -1522,8 +2012,10 @@ class KoreanBeautyEngine:
             local_var = cv2.GaussianBlur((gray_f - local_base)**2, (k_med, k_med), 0)
         smooth_adaptive = np.clip(local_var / 35.0, 0.35, 1.0)[..., np.newaxis]
 
-        # Skin Evening & Blemish Compression
-        evening_fac = np.clip(cfg.skinEvening * cfg.skinSmoothing, 0.0, 0.95) * smooth_adaptive
+        # Tách riêng làm mịn cấu trúc trong `white_pink_v2` (dùng `skinSmoothing * 0.30` giữ nguyên lực mặc định,
+        # để `skinEvening` chỉ phụ trách đều màu A/B ở bước 8 thay vì nhân chéo vào độ mịn).
+        smooth_base = (cfg.skinSmoothing * 0.30) if cfg.presetId == 'white_pink_v2' else (cfg.skinEvening * cfg.skinSmoothing)
+        evening_fac = np.clip(smooth_base, 0.0, 0.95) * smooth_adaptive
         mid_evening = mid_freq * (1.0 - evening_fac)
 
         tau = 16.0 / (1.0 + 3.0 * cfg.blemishRemoval)
@@ -1548,6 +2040,7 @@ class KoreanBeautyEngine:
             cfg.blushSpread * (0.80 if cfg.presetId == 'white_pink' else 1.0),
             cheekbone_strength=.55 if cfg.presetId in ('white_pink', 'white_pink_v2') else 0.,
             protect_glasses=cfg.protectGlasses and cfg.presetId=='white_pink_v2',
+            collect_debug=collect_debug,
             continuous_skin=cfg.presetId=='white_pink_v2')
         skin_mask = masks["skin"]
         blush_mask = masks["blush"]
@@ -1561,7 +2054,7 @@ class KoreanBeautyEngine:
             # Smooth luminance detail only. A shared integer RGB offset preserves
             # colour differences exactly; remove the broad illumination change.
             raw_luma=cv2.cvtColor(retouched_face.astype(np.float32),cv2.COLOR_BGR2GRAY)-gray.astype(np.float32)
-            support=skin_mask*(1.-wire_prot)
+            support=skin_mask*(1.-wire_prot)*(1.-lip_mask)
             sigma=max(2.,avg_bw*.06)
             broad=self._fast_gaussian_blur(raw_luma*support,sigma)
             norm=self._fast_gaussian_blur(support,sigma)
@@ -1571,7 +2064,7 @@ class KoreanBeautyEngine:
             offset=np.minimum(offset,255-proc_img.max(axis=2).astype(np.int16))
             blended=(proc_img.astype(np.int16)+offset[...,None]).astype(np.uint8)
         else:
-            mask_3c = skin_mask[..., np.newaxis]
+            mask_3c = (skin_mask * (1.0 - lip_mask))[..., np.newaxis]
             blended = retouched_face * mask_3c + proc_img.astype(np.float32) * (1.0 - mask_3c)
             blended = np.clip(blended, 0, 255).astype(np.uint8)
 
@@ -1589,7 +2082,7 @@ class KoreanBeautyEngine:
 
         # Brightness-based candidates; this is not a semantic mole/acne classifier.
         blemish_w = np.clip((dark_deficit - 2.0) / 4.0, 0.0, 1.0) * np.clip((45.0 - dark_deficit) / 12.0, 0.0, 1.0)
-        lift = np.minimum(dark_deficit, 32.0) * (cfg.blemishRemoval * 0.88 * blemish_w) * skin_mask * (1.0 - wire_prot)
+        lift = np.minimum(dark_deficit, 32.0) * (cfg.blemishRemoval * 0.88 * blemish_w) * skin_mask * (1.0 - wire_prot) * (1.0 - lip_mask)
         if cfg.selectiveBlemish:
             # Keep strong dark marks/strands and anatomical edges from being lifted.
             gx = cv2.Sobel(gray_bl, cv2.CV_32F, 1, 0, ksize=3, scale=0.125)
@@ -1619,6 +2112,8 @@ class KoreanBeautyEngine:
             ue_l, ue_a, ue_b = cv2.split(ue_lab)
             for f in faces:
                 dense = f.get("dense_landmarks")
+                if dense is None:
+                    dense = f.get("reshape_landmarks")
                 if dense is None or len(dense) < 468:
                     continue
                 bx, by, bw, bh = map(int, f["box"])
@@ -1729,7 +2224,7 @@ class KoreanBeautyEngine:
 
         # 8. Korean Porcelain Tone, Anti-Redness & Virtual Makeup (CIELAB)
         # Tone uses a separate smooth mask; detail processing above retains edge protection.
-        skin_mask = masks["colour"]
+        skin_mask = masks["colour"] * (1.0 - lip_mask)
         before_colour_bgr = blended.copy()
         lab = cv2.cvtColor(blended, cv2.COLOR_BGR2LAB).astype(np.float32)
         colour_roundtrip = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
@@ -1832,7 +2327,7 @@ class KoreanBeautyEngine:
         # Colour operations already contain their feather weights. Preserve their
         # delta separately so final background compositing does not square alpha.
         colour_delta = blended.astype(np.float32) - colour_roundtrip.astype(np.float32)
-        colour_support = np.clip(skin_mask + blush_mask + lip_mask + neck_support, 0., 1.) > 1e-4
+        colour_support = np.clip(skin_mask + blush_mask + neck_support, 0., 1.) > 1e-4
         colour_delta[~colour_support] = 0.
         blended = before_colour_bgr
 
@@ -1850,15 +2345,16 @@ class KoreanBeautyEngine:
             local_max = cv2.dilate(blended, np.ones((3,3), np.uint8)).astype(np.float32)
             blended = np.rint(np.clip(sharpened, local_min, local_max)).astype(np.uint8)
 
-        # 10. Global Sharpening (nếu được bật tường minh)
+        # 10. Global Sharpening (nếu được bật tường minh; giảm tác động lên vùng da khi đang bật khử hạt flash)
         if cfg.globalSharpening > 0:
             k_sharp = np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]], dtype=np.float32)
             lap_g = cv2.filter2D(blended, cv2.CV_32F, k_sharp)
-            blended = np.clip(blended.astype(np.float32) + lap_g * (cfg.globalSharpening * 0.15), 0, 255).astype(np.uint8)
+            skin_damp = 1.0 - 0.80 * float(np.clip(cfg.flashSparkleReduction, 0.0, 1.0)) * skin_mask * (1.0 - eye_sharp_mask)
+            blended = np.clip(blended.astype(np.float32) + lap_g * (cfg.globalSharpening * 0.15 * skin_damp[..., None]), 0, 255).astype(np.uint8)
 
         # 11. Bảo Toàn Tuyệt Đối Màu Nền Gốc (Background Color & Object Preservation)
-        # Hợp nhất toàn bộ mặt nạ giải phẫu và biến dạng đã can thiệp
-        treatment_mask = np.clip(masks["skin"] + skin_mask + blush_mask + lip_mask + eye_sharp_mask + reshape_mask + neck_support, 0.0, 1.0)
+        # Hợp nhất toàn bộ mặt nạ giải phẫu và biến dạng đã can thiệp (không cộng lip_mask để bảo vệ môi 100%)
+        treatment_mask = np.clip(masks["skin"] + skin_mask + blush_mask + eye_sharp_mask + reshape_mask + neck_support, 0.0, 1.0)
         if dense_under_eye:
             # The legacy skin mask intentionally excludes eye-protection regions.
             # Include only the dedicated lower-lid geometry in final compositing,
@@ -1877,14 +2373,48 @@ class KoreanBeautyEngine:
         bg_float = clean_bg.astype(np.float32)
         blended = np.clip(np.round(blended.astype(np.float32) * mask_3c + bg_float * (1.0 - mask_3c) + colour_delta), 0, 255).astype(np.uint8)
 
+        # 12. Căng mịn bề mặt da (Skin Plumping — bảo toàn lip_mask và chi tiết cạnh)
+        if cfg.skinPlump > 0.001:
+            blended = self.apply_skin_plumping(
+                blended,
+                skin_mask=skin_mask,
+                lip_mask=lip_mask,
+                wire_prot=wire_prot,
+                eye_sharp_mask=eye_sharp_mask,
+                faces=faces,
+                plump=cfg.skinPlump,
+            )
+
         # Cam kết sai lệch RGB ngoài vùng xử lý bằng tuyệt đối 0.0 trước khi nén JPEG
         outside_zone = (treatment_mask <= 1e-4)
         blended[outside_zone] = clean_bg[outside_zone]
 
+        # 12.5. Lượt hoàn thiện khử hạt trắng flash khóa chặt theo skin_mask (không lẹm ngoài vùng da)
+        if cfg.flashSparkleReduction > 0.001:
+            blended = self.suppress_flash_sparkles(blended, faces, cfg.flashSparkleReduction, skin_mask=skin_mask)
+
         duration = time.time() - t0
         logger.info(f"Korean Soft Beauty V3 (Reshaping 4.5% + Retouch) xử lý thành công trong {duration:.2f}s.")
+        debug_masks = None
+        if collect_debug:
+            under_f = masks["under_eye"].astype(np.float32) / 255.0
+            glasses_f = masks.get("glasses")
+            if glasses_f is None:
+                glasses_f = np.zeros_like(eye_sharp_mask)
+            protect_f = np.clip(np.maximum.reduce([eye_sharp_mask, under_f, glasses_f]), 0.0, 1.0)
+            skin_viz = np.clip(np.maximum(skin_mask, neck_support), 0.0, 1.0)
+            debug_masks = {
+                "skin": skin_viz,
+                "blush": np.clip(blush_mask, 0.0, 1.0),
+                "lip": np.clip(lip_mask, 0.0, 1.0),
+                "protect": protect_f,
+            }
+        if return_mask and collect_debug:
+            return blended, treatment_mask, debug_masks
         if return_mask:
             return blended, treatment_mask
+        if collect_debug:
+            return blended, debug_masks
         return blended
 
 

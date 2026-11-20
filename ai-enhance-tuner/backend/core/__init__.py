@@ -1,1 +1,0 @@
-# JoyBooth Core Package

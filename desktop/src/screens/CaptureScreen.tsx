@@ -1415,10 +1415,13 @@ export default function CaptureScreen() {
 
     // Kết thúc phiên chụp Selfbooth: Lưu toàn bộ ảnh và chuyển thẳng sang màn hình quét QR lấy ảnh
     async function handleFinishSelfboothToReview() {
+        if (isProceedingRef.current) return
+        isProceedingRef.current = true
         setIsSelfboothRunning(false)
 
+        try {
         // Nếu khách chưa kịp chụp ảnh nào trước khi hết giờ, tự động bắt 1 ảnh từ camera để không bị rỗng
-        let finalPhotos = [...selfboothLibrary]
+        let finalPhotos = [...selfboothLibraryRef.current]
         if (finalPhotos.length === 0) {
             const snap = grabVideoFrame()
             if (snap) {
@@ -1545,6 +1548,9 @@ export default function CaptureScreen() {
 
         // Selfbooth Flow: Bỏ màn chọn ảnh ghép frame, chuyển thẳng sang màn processing đẩy ảnh và QR
         setScreen('processing')
+        } finally {
+            isProceedingRef.current = false
+        }
     }
 
     useEffect(() => {

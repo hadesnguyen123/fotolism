@@ -3,6 +3,7 @@ Fotolism AI Beauty Engine — Style LUT Manager & Cache
 Quản lý, lưu bộ nhớ đệm (cache) và nạp bảng tra cứu màu (LUT) của các Style.
 Hỗ trợ kiểm tra mtime (file modification time) để tự động nạp lại khi file thay đổi trên đĩa.
 """
+import json
 import logging
 import math
 from pathlib import Path
@@ -21,6 +22,9 @@ class LUTManager:
         self.data_dir = data_dir
         # Cache cấu trúc: { style_id: { "mtime": float, "path": Path, "luts": (lut_b, lut_g, lut_r) } }
         self._cache: Dict[str, Dict[str, Any]] = {}
+        # Cache riêng cho B&W preset Capture One và bản đồ vignette theo kích thước (h, w)
+        self._bw_cache: Optional[Dict[str, Any]] = None
+        self._bw_vig_cache: Dict[Tuple[int, int], np.ndarray] = {}
         # Identity fallback LUT
         self._identity = np.arange(256, dtype=np.uint8)
 
@@ -97,6 +101,54 @@ class LUTManager:
         graded_r = cv2.LUT(img_bgr[..., 2], lut_r)
         return cv2.merge([graded_b, graded_g, graded_r])
 
+    def _get_bw_preset(self) -> Dict[str, Any]:
+        """Nạp và cache cấu hình B&W Capture One (tự động nạp lại khi file JSON đổi mtime)."""
+        preset_path = self.data_dir / "bw-preset.json"
+        mtime = preset_path.stat().st_mtime
+        if self._bw_cache and self._bw_cache["mtime"] == mtime:
+            return self._bw_cache
+
+        data = json.loads(preset_path.read_text(encoding="utf-8"))
+        # cv2.transform nhận kernel theo thứ tự kênh BGR
+        rgb_w = data["rgbWeights"]
+        kernel_bgr = np.array([[rgb_w[2], rgb_w[1], rgb_w[0]]], dtype=np.float32)
+        curve = np.asarray(data["toneCurve"], dtype=np.float32)
+        lut_256 = np.rint(
+            np.clip(
+                np.interp(np.linspace(0.0, 1.0, 256), np.linspace(0.0, 1.0, len(curve)), curve),
+                0.0,
+                1.0,
+            ) * 255.0
+        ).astype(np.uint8)
+
+        self._bw_cache = {
+            "mtime": mtime,
+            "kernel_bgr": kernel_bgr,
+            "lut_256": lut_256,
+            "vignette": data.get("vignette"),
+            "clarity": data.get("clarity"),
+        }
+        self._bw_vig_cache.clear()
+        return self._bw_cache
+
+    def _get_bw_vignette_u16(self, h: int, w: int, vig_cfg: Dict[str, Any]) -> np.ndarray:
+        """Tạo và cache bản đồ vignette fixed-point Q8 theo kích thước (H, W)."""
+        cached = self._bw_vig_cache.get((h, w))
+        if cached is not None:
+            return cached
+        yy, xx = np.ogrid[:h, :w]
+        nx = (xx - w * 0.5) / (w * 0.5)
+        ny = (yy - h * 0.5) / (h * 0.5)
+        r2 = (nx * nx + ny * ny) * 0.5
+        gain = np.clip(
+            1.0 + float(vig_cfg["c1"]) * r2 + float(vig_cfg["c2"]) * (r2 ** 2),
+            float(vig_cfg.get("minGain", 0.7)),
+            float(vig_cfg.get("maxGain", 1.05)),
+        )
+        vig_u16 = np.rint(gain * 256.0).astype(np.uint16)
+        self._bw_vig_cache[(h, w)] = vig_u16
+        return vig_u16
+
     def apply_post_filter(self, img_bgr: np.ndarray, style_id: str) -> np.ndarray:
         """Áp dụng bộ lọc màu (Basic / B&W / Retro) sau bước AI Enhance."""
         sid = (style_id or "").strip().lower()
@@ -104,11 +156,28 @@ class LUTManager:
             return img_bgr
 
         if sid in ("bw", "b&w", "vintage_noir", "monochrome"):
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-            gray = np.clip((gray - 0.5) * 1.18 + 0.5, 0.0, 1.0)
-            gray = np.clip(gray * 1.05, 0.0, 1.0)
-            out_gray = (gray * 255.0).astype(np.uint8)
-            return cv2.cvtColor(out_gray, cv2.COLOR_GRAY2BGR)
+            # Dùng chung preset Capture One với frontend SVG/Canvas (trộn kênh + tone curve + vignette + clarity âm).
+            bw = self._get_bw_preset()
+            gray = cv2.transform(img_bgr, bw["kernel_bgr"])
+            out = cv2.LUT(gray, bw["lut_256"])
+
+            h, w = out.shape[:2]
+            vig_cfg = bw.get("vignette")
+            if vig_cfg:
+                vig_u16 = self._get_bw_vignette_u16(h, w, vig_cfg)
+                out = np.clip((out.astype(np.uint16) * vig_u16) >> 8, 0, 255).astype(np.uint8)
+
+            clarity_cfg = bw.get("clarity")
+            if clarity_cfg and float(clarity_cfg.get("amount", 0.0)) > 0.0 and w >= 16 and h >= 16:
+                amt = float(clarity_cfg["amount"])
+                sigma_ratio = float(clarity_cfg.get("sigmaRatio", 0.008))
+                small_w, small_h = max(8, w // 4), max(8, h // 4)
+                small = cv2.resize(out, (small_w, small_h), interpolation=cv2.INTER_AREA)
+                blur_s = cv2.GaussianBlur(small, (0, 0), max(0.5, sigma_ratio * small_w))
+                blur = cv2.resize(blur_s, (w, h), interpolation=cv2.INTER_LINEAR)
+                out = cv2.addWeighted(out, 1.0 - amt, blur, amt, 0.0)
+
+            return cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
 
         if sid in ("retro", "retro_90s", "vintage"):
             # Chuyển BGR -> RGB [0..1] để khớp chuẩn ma trận CSS sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)

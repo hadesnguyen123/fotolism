@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DEFAULT_ACCOUNT_NUMBER, DEFAULT_BANK_BIN } from '../../lib/constants';
 import { generateVietQrSvgDataUrl } from '../../lib/vietqr';
 import { BRAND_LOGO_SRC } from '../../lib/brandLogo';
+import { BW_CSS_FILTER } from '../../config/bwFilter';
 import './fonts.css';
 import './reference.css';
 
@@ -228,7 +229,7 @@ export const FILTER_OPTIONS: FilterOption[] = [
     ringColor: '#151312',
     checkColor: '#f6f3e8',
     selectedSvg: `${REFERENCE_ASSET_BASE}f_mono_selected.svg`,
-    cssFilter: 'grayscale(100%) contrast(1.08)',
+    cssFilter: BW_CSS_FILTER,
   },
   {
     id: 'warm-brown',
