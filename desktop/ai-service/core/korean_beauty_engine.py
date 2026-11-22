@@ -14,6 +14,7 @@ Dedicated pipeline for Korean Studio Soft Portrait Beauty:
 """
 import logging
 import os
+import sys
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -23,12 +24,15 @@ from typing import Optional, List, Dict, Any, Tuple
 import cv2
 import numpy as np
 from pydantic import BaseModel, Field
+from core.config import RESOURCE_DIR
 from core.selective_spot_correction import correct_selective_spots
 
 logger = logging.getLogger("ai_service.korean_beauty")
 
-MODEL_PATH = Path(__file__).resolve().parent.parent / "data" / "face_detection_yunet_2023mar.onnx"
+MODEL_PATH = RESOURCE_DIR / "data" / "face_detection_yunet_2023mar.onnx"
 _DENSE_MODEL_CANDIDATES = [
+    Path(sys.executable).resolve().parent.parent / "mediapipe" / "models" / "face_landmarker.task",
+    RESOURCE_DIR / "mediapipe" / "models" / "face_landmarker.task",
     Path(__file__).resolve().parents[2] / "mediapipe" / "models" / "face_landmarker.task",
     Path(__file__).resolve().parents[2] / "public" / "mediapipe" / "models" / "face_landmarker.task",
 ]

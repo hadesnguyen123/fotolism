@@ -2,7 +2,7 @@
   "name": "fotolism-desktop",
   "productName": "fotolism",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-Powered Photobooth Software",
   "type": "module",
   "author": "fotolism team",
@@ -19,9 +19,10 @@
     "dev:photobooth": "concurrently -n vite,ai,electron -c cyan,magenta,yellow \"npm run dev:vite:photobooth\" \"npm run dev:ai\" \"npm run dev:electron:photobooth\"",
     "dev:selfbooth": "concurrently -n vite,ai,electron -c cyan,magenta,yellow \"npm run dev:vite:selfbooth\" \"npm run dev:ai\" \"npm run dev:electron:selfbooth\"",
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
+    "build:ai": "cd ai-service && python -m PyInstaller --noconfirm fotolism_ai_service.spec",
     "build:mac": "npm run build && electron-builder --mac --publish never",
-    "build:win": "npm run build && electron-builder --win --publish never",
-    "release:win": "npm run build && electron-builder --win --publish always",
+    "build:win": "npm run build:ai && npm run build && electron-builder --win --publish never",
+    "release:win": "npm run build:ai && npm run build && electron-builder --win --publish always",
     "preview": "vite preview",
     "lint": "oxlint src",
     "test": "vitest run"
@@ -83,13 +84,8 @@
         ]
       },
       {
-        "from": "ai-service",
-        "to": "ai-service",
-        "filter": [
-          "**/*",
-          "!**/__pycache__/**",
-          "!**/*.pyc"
-        ]
+        "from": "ai-service/dist/fotolism_ai_service",
+        "to": "ai-service"
       },
       {
         "from": "public/mediapipe/models/face_landmarker.task",

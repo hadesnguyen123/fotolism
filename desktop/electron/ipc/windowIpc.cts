@@ -46,6 +46,49 @@ export async function checkAiService(): Promise<boolean> {
 export async function ensureAiService(): Promise<boolean> {
     if (await checkAiService()) return true
 
+    // Ưu tiên 1: Chạy binary tự chứa fotolism_ai_service.exe (bản cài All-in-one, không cần Python)
+    const aiExePaths = [
+        ...(process.resourcesPath
+            ? [path.join(process.resourcesPath, 'ai-service/fotolism_ai_service.exe')]
+            : []),
+        path.join(
+            __dirname,
+            '../../ai-service/dist/fotolism_ai_service/fotolism_ai_service.exe'
+        ),
+    ]
+    const aiExe = aiExePaths.find((p) => fs.existsSync(p))
+
+    if (aiExe) {
+        try {
+            console.log(`[AI Service] Spawning bundled binary: ${aiExe}`)
+            aiServiceProc = spawn(aiExe, [], {
+                cwd: path.dirname(aiExe),
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true,
+                env: {
+                    ...process.env,
+                    PYTHONIOENCODING: 'utf-8',
+                },
+            })
+            aiServiceProc.unref()
+
+            for (let i = 0; i < 40; i++) {
+                await new Promise((r) => setTimeout(r, 250))
+                if (await checkAiService()) {
+                    console.log(
+                        `[AI Service] Bundled binary connected & listening on port ${AI_SERVICE_PORT}`
+                    )
+                    return true
+                }
+            }
+        } catch (err: any) {
+            console.warn('[AI Service] Bundled binary spawn error:', err.message)
+        }
+        return false
+    }
+
+    // Ưu tiên 2 (Dev / fallback): chạy main.py bằng Python cục bộ
     const aiScriptPaths = [
         ...(process.resourcesPath
             ? [path.join(process.resourcesPath, 'ai-service/main.py')]
@@ -58,12 +101,11 @@ export async function ensureAiService(): Promise<boolean> {
     ]
     const aiScript = aiScriptPaths.find((p) => fs.existsSync(p))
     if (!aiScript) {
-        console.warn('[AI Service] main.py not found in desktop/ai-service')
+        console.warn('[AI Service] Neither bundled exe nor main.py found')
         return false
     }
 
     const aiDir = path.dirname(aiScript)
-    // Ưu tiên Python trong venv cố định trên máy Kiosk để tách biệt runtime khỏi bộ cài .exe
     const pythonCandidates = [
         process.env.FOTOLISM_PYTHON_PATH,
         'C:\\Fotolism\\ai-env\\Scripts\\python.exe',
@@ -86,8 +128,8 @@ export async function ensureAiService(): Promise<boolean> {
         })
         aiServiceProc.unref()
 
-        for (let i = 0; i < 15; i++) {
-            await new Promise((r) => setTimeout(r, 200))
+        for (let i = 0; i < 30; i++) {
+            await new Promise((r) => setTimeout(r, 250))
             if (await checkAiService()) {
                 console.log(
                     `[AI Service] Connected & listening on port ${AI_SERVICE_PORT}`

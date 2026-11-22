@@ -11,11 +11,12 @@ from typing import Optional, Tuple, Dict, Any
 import numpy as np
 import cv2
 
+from core.config import RESOURCE_DIR
 from core.vintage_v2 import apply_fast_film_grain_u8, apply_vintage_v2
 
 logger = logging.getLogger("ai_service.lut_manager")
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = RESOURCE_DIR / "data"
 
 _PROCEDURAL_STYLES = (
     "none",

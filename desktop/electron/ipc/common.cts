@@ -37,9 +37,9 @@ export const DEVICE_QUERY_TIMEOUT_MS = 3000
 /** Mã định danh phần cứng (Vendor ID) của Canon qua cổng USB. */
 export const CANON_VENDOR_ID = 'VID_04A9'
 
-/** Địa chỉ & cổng lắng nghe của Canon EDSDK Native Daemon (đọc từ .env). */
+/** Địa chỉ & cổng lắng nghe của Canon EDSDK Native Daemon (mặc định localhost:8899 nếu không có .env). */
 export const CANON_DAEMON_URL = (
-    process.env.CANON_DAEMON_URL || ''
+    process.env.CANON_DAEMON_URL || 'http://127.0.0.1:8899'
 ).replace(/\/$/, '')
 export const CANON_DAEMON_PORT = Number(
     (() => {
@@ -51,11 +51,10 @@ export const CANON_DAEMON_PORT = Number(
     })()
 )
 
-/** Địa chỉ & cổng lắng nghe của Python FastAPI AI Service (đọc từ .env). */
-export const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || '').replace(
-    /\/$/,
-    ''
-)
+/** Địa chỉ & cổng lắng nghe của Python FastAPI AI Service (mặc định localhost:8000 nếu không có .env). */
+export const AI_SERVICE_URL = (
+    process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000'
+).replace(/\/$/, '')
 export const AI_SERVICE_PORT = Number(
     (() => {
         try {

@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 import cv2
 import numpy as np
 
-from core.config import STORAGE
+from core.config import STORAGE, RESOURCE_DIR
 from core.lut_manager import lut_manager
 from core.vintage_v2 import VintageV2Config
 from core.white_balance import balance_from_reference
@@ -36,7 +36,7 @@ from core.korean_beauty_engine import korean_beauty_engine, KoreanBeautyConfig
 logger = logging.getLogger("ai_service.enhance")
 router = APIRouter()
 
-MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "face_detection_yunet_2023mar.onnx"
+MODEL_PATH = RESOURCE_DIR / "data" / "face_detection_yunet_2023mar.onnx"
 
 class EnhanceRequest(BaseModel):
     imagePath: str

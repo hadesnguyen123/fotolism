@@ -1,9 +1,18 @@
 import os
+import sys
+import tempfile
 from pathlib import Path
 
-# Thư mục gốc project và dữ liệu
+# Thư mục gốc project (dev) và thư mục tài nguyên chỉ đọc (PyInstaller _MEIPASS hoặc dev)
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)) if IS_FROZEN else BASE_DIR
+# Thư mục ghi dữ liệu tạm: khi đóng gói đặt vào LOCALAPPDATA để tránh lỗi quyền ghi trong Program Files
+DATA_DIR = (
+    Path(os.getenv("LOCALAPPDATA") or tempfile.gettempdir()) / "fotolism-ai-data"
+    if IS_FROZEN
+    else BASE_DIR / "data"
+)
 
 STORAGE = {
     "raw": DATA_DIR / "raw",
