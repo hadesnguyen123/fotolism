@@ -6,7 +6,8 @@
  * Phụ thuộc: electron, path, các module IPC trong ./ipc/.
  */
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import {
     registerCameraIpc,
@@ -21,6 +22,7 @@ import {
     ensureAiService,
     stopAiService,
 } from './ipc/windowIpc.cjs'
+import { checkAndInstallStartupUpdate } from './autoUpdater.cjs'
 
 // ─── FOTOLISM ELECTRON BACKEND CONFIGURATION ─────────────────────────────────
 try {
@@ -34,6 +36,38 @@ const isDev = process.env.NODE_ENV === 'development'
 const KIOSK_MODE = process.env.VITE_KIOSK_MODE
 const VITE_DEV_SERVER_URL =
     process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173'
+
+/**
+ * Đọc chế độ Kiosk đã chọn khi cài đặt (từ `resources/kiosk-mode.json`) hoặc từ biến môi trường dev.
+ */
+function resolveInstalledKioskMode(): 'photobooth' | 'selfbooth' | undefined {
+    if (KIOSK_MODE === 'photobooth' || KIOSK_MODE === 'selfbooth') {
+        return KIOSK_MODE
+    }
+    const candidates = [
+        ...(process.resourcesPath
+            ? [join(process.resourcesPath, 'kiosk-mode.json')]
+            : []),
+        join(app.getAppPath(), 'kiosk-mode.json'),
+    ]
+    for (const filePath of candidates) {
+        try {
+            if (!existsSync(filePath)) continue
+            const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as {
+                captureMode?: string
+            }
+            if (
+                parsed.captureMode === 'photobooth' ||
+                parsed.captureMode === 'selfbooth'
+            ) {
+                return parsed.captureMode
+            }
+        } catch {
+            // Bỏ qua file cấu hình lỗi định dạng
+        }
+    }
+    return undefined
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -94,6 +128,9 @@ function createWindow() {
 }
 
 // ─── Register All Modular IPC Subsystems ────────────────────────────────────
+ipcMain.on('app:get-kiosk-mode', (event) => {
+    event.returnValue = resolveInstalledKioskMode() ?? null
+})
 registerCameraIpc()
 registerPrinterIpc(() => mainWindow)
 registerStorageIpc()
@@ -113,7 +150,14 @@ if (!gotTheLock) {
         }
     })
 
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
+        // Kiểm tra & tự cài bản cập nhật mới từ GitHub Releases trước khi vào màn hình Kiosk
+        const isInstallingUpdate = await checkAndInstallStartupUpdate(() => {
+            stopCanonDaemon()
+            stopAiService()
+        })
+        if (isInstallingUpdate) return
+
         createWindow()
         // Khởi động Canon Daemon Persistent và AI Service trong nền ngay khi mở ứng dụng
         ensureCanonDaemon().catch((err) =>

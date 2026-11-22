@@ -20,13 +20,15 @@
     "dev:selfbooth": "concurrently -n vite,ai,electron -c cyan,magenta,yellow \"npm run dev:vite:selfbooth\" \"npm run dev:ai\" \"npm run dev:electron:selfbooth\"",
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
     "build:mac": "npm run build && electron-builder --mac --publish never",
-    "build:win": "npm run build && electron-builder --win",
+    "build:win": "npm run build && electron-builder --win --publish never",
+    "release:win": "npm run build && electron-builder --win --publish always",
     "preview": "vite preview",
     "lint": "oxlint src",
     "test": "vitest run"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.1.0",
+    "electron-updater": "^6.8.11",
     "lucide-react": "^1.61.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
@@ -57,6 +59,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "hadesnguyen123",
+        "repo": "fotolism-releases"
+      }
+    ],
     "files": [
       "dist/**",
       "dist-electron/**"
@@ -98,7 +107,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [

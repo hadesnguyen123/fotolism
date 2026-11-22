@@ -25,6 +25,12 @@ export interface EdsdkCapturePayload {
 }
 
 const api = {
+    // ── App / Installer Mode ─────────────────────────────────────────────────
+    app: {
+        getKioskMode: (): 'photobooth' | 'selfbooth' | null =>
+            ipcRenderer.sendSync('app:get-kiosk-mode'),
+    },
+
     // ── AI ───────────────────────────────────────────────────────────────────
     ai: {
         enhance: (

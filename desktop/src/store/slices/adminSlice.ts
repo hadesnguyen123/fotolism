@@ -55,6 +55,32 @@ export interface EventConfig {
     adminPin: string
 }
 
+/**
+ * Xác định chế độ Kiosk mặc định theo thứ tự ưu tiên:
+ * 1) Biến môi trường dev (`VITE_KIOSK_MODE`)
+ * 2) File cấu hình do bộ cài Windows tạo ra (`resources/kiosk-mode.json` qua Electron preload)
+ */
+function getEffectiveInstalledKioskMode(): CaptureMode | undefined {
+    const envMode = import.meta.env.VITE_KIOSK_MODE
+    if (envMode === 'photobooth' || envMode === 'selfbooth') {
+        return envMode
+    }
+    try {
+        if (typeof window !== 'undefined') {
+            const getKioskMode = (window as any)?.fotolism?.app?.getKioskMode
+            if (typeof getKioskMode === 'function') {
+                const installedMode = getKioskMode()
+                if (installedMode === 'photobooth' || installedMode === 'selfbooth') {
+                    return installedMode
+                }
+            }
+        }
+    } catch {
+        // Bỏ qua khi chạy thuần trình duyệt web không có Electron bridge
+    }
+    return undefined
+}
+
 export const DEFAULT_EVENT_CONFIG: EventConfig = {
     eventName: DEFAULT_EVENT_NAME,
     eventLogo: null,
@@ -65,7 +91,7 @@ export const DEFAULT_EVENT_CONFIG: EventConfig = {
     printCopies: 2,
     qrEnabled: true,
     captureMode:
-        import.meta.env.VITE_KIOSK_MODE === 'selfbooth'
+        getEffectiveInstalledKioskMode() === 'selfbooth'
             ? 'selfbooth'
             : 'photobooth',
     selfboothDurationSeconds: DEFAULT_SELFBOOTH_DURATION_SECONDS,
@@ -96,9 +122,9 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
                 : null
         if (raw) {
             const parsed = JSON.parse(raw)
-            const envMode = import.meta.env.VITE_KIOSK_MODE
-            if (envMode === 'photobooth' || envMode === 'selfbooth') {
-                parsed.captureMode = envMode
+            const installedMode = getEffectiveInstalledKioskMode()
+            if (installedMode === 'photobooth' || installedMode === 'selfbooth') {
+                parsed.captureMode = installedMode
             }
             // Remove retired provider settings without changing other saved options.
             const retiredKeys = Object.keys(parsed).filter((key) => key.startsWith('gdrive'))

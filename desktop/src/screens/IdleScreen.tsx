@@ -330,6 +330,29 @@ export default function IdleScreen() {
                 }}
                 onSubmit={(code) => handleVerifyUnlock(code)}
             />
+            <button
+                className="idle-admin-btn"
+                id="idle-admin-btn"
+                style={{
+                    position: 'fixed',
+                    top: 16,
+                    right: 16,
+                    zIndex: 50,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 8,
+                    cursor: 'pointer',
+                    color: 'rgba(130, 120, 108, 0.5)',
+                }}
+                onClick={(e) => {
+                    e.stopPropagation()
+                    setScreen('admin')
+                }}
+                title="Cài đặt hệ thống"
+                aria-label="Cài đặt hệ thống"
+            >
+                <Settings size={22} strokeWidth={1.8} />
+            </button>
     </>
 
     return (

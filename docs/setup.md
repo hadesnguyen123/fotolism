@@ -119,10 +119,29 @@ Nguyên tắc tách **Lớp nền cố định (setup 1 lần)** và **Lớp ứ
      C:\Fotolism\ai-env\Scripts\pip install -r "C:\Program Files\fotolism\resources\ai-service\requirements.txt"
      ```
 
-#### Phương án B: Tự động cập nhật từ xa (Auto-Update / OTA — phù hợp > 5 máy)
-1. Cài `electron-updater` trong `desktop/` và thêm block `publish` vào `desktop/package.json` (trỏ tới **Cloudflare R2** — tận dụng hạ tầng R2 có sẵn của Fotolism — hoặc **GitHub Releases**).
-2. Khi chạy `npm run build:win -- --publish always`, `electron-builder` sẽ sinh 3 file: `fotolism Setup x.y.z.exe`, `*.blockmap`, `latest.yml`.
-3. Trong Electron Main Process: chỉ gọi `autoUpdater.checkForUpdatesAndNotify()` khi Kiosk đang ở màn hình **Idle** (không có phiên chụp) hoặc theo khung giờ bảo trì ban đêm; trước khi gọi `quitAndInstall()`, chủ động kill `fotolism_canon_daemon.exe` và `aiServiceProc`.
+#### Phương án B: Tự động cập nhật qua GitHub Releases (Đã tích hợp sẵn)
+Hệ thống đã tích hợp `electron-updater` trong `desktop/electron/autoUpdater.cts` và cấu hình `build.publish` trỏ tới GitHub Releases:
+
+1. **Cách hoạt động trên máy Kiosk:**
+   - Ngay khi vừa mở app (trước khi vào màn hình Kiosk), app tự kiểm tra GitHub Releases (tối đa 6 giây — nếu mất mạng sẽ tự bỏ qua và vào Kiosk offline bình thường).
+   - Nếu có bản mới: hiện thanh tiến trình tải → tự tắt `fotolism_canon_daemon.exe` & `ai-service` → cài đè âm thầm → tự mở lại phiên bản mới.
+   - Muốn tạm tắt auto-update trên 1 máy nào đó, thêm `DISABLE_AUTO_UPDATE=true` vào `%APPDATA%\fotolism\.env`.
+
+2. **Cách phát hành bản mới trên máy Dev:**
+   - Tạo Personal Access Token trên GitHub có quyền `repo` (hoặc `public_repo` nếu dùng repo release public) và gán biến môi trường `GH_TOKEN`:
+     ```powershell
+     $env:GH_TOKEN="ghp_xxxxxxxxxxxx"
+     ```
+   - Tăng `version` trong `desktop/package.json` (ví dụ `0.1.0` → `0.1.1`) rồi chạy:
+     ```powershell
+     cd desktop
+     npm run release:win
+     ```
+   - Lệnh này sẽ tự build và đẩy `fotolism Setup x.y.z.exe`, `*.blockmap`, `latest.yml` lên GitHub Releases. Vào trang Releases trên GitHub bấm **Publish release** (nếu đang ở trạng thái Draft).
+
+3. **Repo Release Public:**
+   - Hiện `desktop/package.json` đã trỏ sẵn tới repo Public `hadesnguyen123/fotolism-releases` (chỉ chứa file bản build, tách biệt hoàn toàn với source code Private).
+   - Máy Kiosk **không cần đặt `GH_TOKEN`** trong `.env`; chỉ máy Dev cần `GH_TOKEN` (quyền `public_repo`) khi chạy `npm run release:win`.
 
 ### 3 lưu ý bắt buộc khi xóa tính năng cũ
 1. **Tắt sạch tiến trình con trước khi cài đè:** Tránh lỗi Windows khóa file `fotolism_canon_daemon.exe` hoặc `ai-service`.
