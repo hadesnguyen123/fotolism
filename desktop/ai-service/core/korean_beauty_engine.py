@@ -28,7 +28,11 @@ from core.selective_spot_correction import correct_selective_spots
 logger = logging.getLogger("ai_service.korean_beauty")
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "data" / "face_detection_yunet_2023mar.onnx"
-DENSE_MODEL_PATH = Path(__file__).resolve().parents[2] / "public" / "mediapipe" / "models" / "face_landmarker.task"
+_DENSE_MODEL_CANDIDATES = [
+    Path(__file__).resolve().parents[2] / "mediapipe" / "models" / "face_landmarker.task",
+    Path(__file__).resolve().parents[2] / "public" / "mediapipe" / "models" / "face_landmarker.task",
+]
+DENSE_MODEL_PATH = next((p for p in _DENSE_MODEL_CANDIDATES if p.is_file()), _DENSE_MODEL_CANDIDATES[-1])
 _dense_lock = threading.Lock()
 _dense_landmarker = None
 _dense_model_mtime = None
@@ -56,26 +60,15 @@ class KoreanBeautyConfig(BaseModel):
     concealerStrength: float = Field(0.40, ge=0.0, le=1.0)
 
     @classmethod
-    def white_pink(cls):
-        return cls(presetId="white_pink", skinSmoothing=1.0, blemishRemoval=0.90,
-                   skinEvening=0.50, skinTextureRetention=0.60, skinBrightening=0.55,
-                   blushSpread=1.25, blushAdaptation=0.40, skinDiffuseLight=0.30,
-                   skinYellowReduction=0.20,
-                   rosyTone=0.60, rosyBlush=0.65, softGlow=0.0,
-                   eyeSharpening=0.08,
-                   slimFace=0.04, bigEyes=0.10, slimNose=0.10, selectiveBlemish=True,
-                   shineReduction=0.30, protectGlasses=True)
-
-    @classmethod
     def white_pink_v2(cls):
-        """Texture-first trial preset; independent of the established V1 values."""
+        """Preset làm đẹp chính thức của Fotolism (bảo toàn ánh sáng thật, skinBrightening=0)."""
         return cls(
             presetId="white_pink_v2",
             skinSmoothing=0.7,
             blemishRemoval=1.9,
             skinEvening=0.3,
             skinTextureRetention=0.02,
-            skinBrightening=0.2,
+            skinBrightening=0.0,
             rosyTone=0.925,
             rosyBlush=0.5,
             blushSpread=0.58,
@@ -117,7 +110,38 @@ class KoreanBeautyEngine:
         self.model_path = model_path or MODEL_PATH
         self._detector_cache = threading.local()
         self._dense_cache = threading.local()
+        self._mask_state = threading.local()
         self.last_timings = {}
+
+    def build_fast_skin_mask(self, shape_hw: Tuple[int, int]) -> Optional[np.ndarray]:
+        """Tạo mặt nạ da mềm ở độ phân giải proxy từ kết quả nhận diện gần nhất (chi phí < 1 ms)."""
+        cached = getattr(self._mask_state, "last_faces", None)
+        if not cached:
+            return None
+        src_w, src_h, polys, ellipses = cached
+        h, w = shape_hw
+        if h <= 0 or w <= 0 or (not polys and not ellipses):
+            return None
+        scale = min(1.0, 256.0 / float(max(h, w)))
+        pw, ph = max(16, int(round(w * scale))), max(16, int(round(h * scale)))
+        sx, sy = pw / float(max(1, src_w)), ph / float(max(1, src_h))
+        mask = np.zeros((ph, pw), dtype=np.float32)
+        for pts in polys:
+            scaled = np.rint(pts * np.array([sx, sy], dtype=np.float32)).astype(np.int32)
+            cv2.fillPoly(mask, [scaled], 1.0)
+        for cx, cy, ax, ay in ellipses:
+            cv2.ellipse(
+                mask,
+                (int(round(cx * sx)), int(round(cy * sy))),
+                (max(2, int(round(ax * sx))), max(2, int(round(ay * sy)))),
+                0.0,
+                0.0,
+                360.0,
+                1.0,
+                -1,
+            )
+        k = max(9, (min(ph, pw) // 16) | 1)
+        return np.clip(cv2.GaussianBlur(mask, (k, k), 0), 0.0, 1.0)
 
     def detect_faces(self, img_bgr: np.ndarray) -> List[Dict[str, Any]]:
         """Nhận diện khuôn mặt và 5 điểm Landmark giải phẫu bằng YuNet tỉ lệ chuẩn."""
@@ -559,8 +583,10 @@ class KoreanBeautyEngine:
         h, w, _ = img_bgr.shape
         full_skin_mask = np.zeros((h, w), dtype=np.float32)
         full_colour_mask = np.zeros((h, w), dtype=np.float32)
+        full_tone_mask = np.zeros((h, w), dtype=np.float32)
         blush_mask = np.zeros((h, w), dtype=np.float32)
         lip_mask = np.zeros((h, w), dtype=np.float32)
+        lip_tone_mask = np.zeros((h, w), dtype=np.float32)
         eye_sharp_mask = np.zeros((h, w), dtype=np.float32)
         under_eye_mask = np.zeros((h, w), dtype=np.uint8)
         eye_region_mask = np.zeros((h, w), dtype=np.float32) if collect_debug else None
@@ -731,6 +757,26 @@ class KoreanBeautyEngine:
                 lip_alpha = np.maximum(dense_lip.astype(np.float32) / 255., lip_feather_core)
                 lip_mask[y1:y2, x1:x2] = np.maximum(lip_mask[y1:y2, x1:x2], lip_alpha)
 
+                # Mặt nạ bảo vệ môi riêng cho kênh sáng L / đều màu quanh miệng (PA 1 + Redness-Gated):
+                # giữ chặt lõi trong môi và chỉ giữ vùng đệm ngoài theo sắc tố son đỏ thật, tránh thâm viền da quanh môi.
+                core_erode_px = max(2, int(round(bw * 0.005)))
+                k_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * core_erode_px + 1, 2 * core_erode_px + 1))
+                lip_tone_core = cv2.erode(dense_lip_core, k_erode)
+                if np.count_nonzero(outer_ring) >= 16:
+                    lip_red_gate = np.clip((roi_a_tmp - ring_a - 2.0) / 4.5, 0.0, 1.0)
+                else:
+                    lip_red_gate = (dense_lip_core > 0).astype(np.float32)
+                lip_tone_raw = np.where(
+                    lip_tone_core > 0,
+                    1.0,
+                    np.where(dense_lip > 0, lip_red_gate, 0.0),
+                ).astype(np.float32)
+                lip_tone_blur = cv2.GaussianBlur(lip_tone_raw, (0, 0), max(1.2, bw * 0.004))
+                lip_tone_local = np.clip(np.maximum((lip_tone_core > 0).astype(np.float32), lip_tone_blur), 0.0, 1.0)
+                lip_tone_mask[y1:y2, x1:x2] = np.maximum(lip_tone_mask[y1:y2, x1:x2], lip_tone_local)
+            else:
+                lip_tone_local = None
+
             # Fill small segmentation holes only for low-frequency colour, not texture.
             colour_kernel = max(3, int(bw * 0.05) | 1)
             colour_roi = cv2.morphologyEx(face_roi, cv2.MORPH_CLOSE,
@@ -846,11 +892,13 @@ class KoreanBeautyEngine:
                         refined=lip_protection
                     lip_protection=np.clip(refined,0.,1.)
                     lip_mask[y1:y2,x1:x2]=np.maximum(lip_mask[y1:y2,x1:x2],lip_protection)
+                    lip_tone_mask[y1:y2,x1:x2]=np.maximum(lip_tone_mask[y1:y2,x1:x2],lip_protection)
             # Feather inward: Gaussian tails must not tint adjacent hair/background.
             distance = cv2.distanceTransform(colour_roi, cv2.DIST_L2, 3)
             colour_soft = np.clip(distance / max(2.0, bw * .025), 0., 1.)
             colour_soft = colour_soft * colour_soft * (3. - 2. * colour_soft)
             colour_soft *= 1. - lip_protection
+            tone_soft = colour_soft.copy()
             if dense is not None and len(dense)>=468:
                 # Tách riêng biên môi (feather hẹp bw*0.006) để da sát miệng vẫn căng mịn mà không lẹm vào môi.
                 dense_skin = face_oval.copy()
@@ -950,24 +998,32 @@ class KoreanBeautyEngine:
                 if protect_glasses and np.any(glasses_glare > 0):
                     glare_soft = cv2.GaussianBlur(glasses_glare.astype(np.float32) / 255.0, (0, 0), max(1.0, bw * 0.008))
                     colour_soft *= 1.0 - 0.35 * glare_soft
+                colour_soft_tone = colour_soft.copy()
                 if dense_lip is not None:
                     lip_dist_out = cv2.distanceTransform((dense_lip == 0).astype(np.uint8), cv2.DIST_L2, 3)
                     lip_feather = max(3.5, bw * .016)
                     lip_t = np.clip(1.0 - lip_dist_out / lip_feather, 0., 1.)
                     lip_guard = lip_t * lip_t * (3. - 2. * lip_t)
                     colour_soft *= 1. - lip_guard
+                    colour_soft_tone *= 1. - lip_tone_local
                 else:
                     colour_soft *= 1. - lip_protection
+                    colour_soft_tone *= 1. - lip_protection
                 strong_edge=np.clip((sob_mag-72.)/55.,0.,1.)
                 strong_edge=cv2.dilate(strong_edge,np.ones((3,3),np.uint8))
                 strong_edge=cv2.GaussianBlur(strong_edge,(0,0),1.2)
                 colour_soft*=1.-.80*strong_edge
+                colour_soft_tone*=1.-.80*strong_edge
+                tone_soft = colour_soft_tone
             # Fade added colour before the lower search boundary; do not leave
             # a narrow bright strip where the geometric search stops on the neck.
             yy = np.arange(y1, y2, dtype=np.float32)[:, None]
             lower = np.clip((yy - (by + bh * .90)) / max(1., bh * .14), 0., 1.)
-            colour_soft *= 1. - lower * lower * (3. - 2. * lower)
+            lower_fade = 1. - lower * lower * (3. - 2. * lower)
+            colour_soft *= lower_fade
+            tone_soft *= lower_fade
             full_colour_mask[y1:y2, x1:x2] = np.maximum(full_colour_mask[y1:y2, x1:x2], colour_soft)
+            full_tone_mask[y1:y2, x1:x2] = np.maximum(full_tone_mask[y1:y2, x1:x2], tone_soft)
 
             # Keep thin high-frequency boundaries (lashes, eyewear rims) out
             # of the skin composite; dense geometry bounds hair and backdrop.
@@ -1064,8 +1120,10 @@ class KoreanBeautyEngine:
         return {
             "skin": full_skin_mask,
             "colour": full_colour_mask,
+            "tone_skin": full_tone_mask,
             "blush": blush_mask,
             "lip": lip_mask,
+            "lip_tone": lip_tone_mask,
             "eye_sharp": eye_sharp_mask,
             "eyes": cv2.GaussianBlur(eye_region_mask,(0,0),1.2) if collect_debug else None,
             "under_eye": under_eye_mask,
@@ -1184,6 +1242,7 @@ class KoreanBeautyEngine:
 
         clean_bg = original_img if original_img is not None else img_bgr
 
+        self._mask_state.last_faces = None
         if not cfg.enabled:
             if return_debug:
                 return clean_bg.copy(), {"facesMeta": [], "masks": None}
@@ -1213,6 +1272,17 @@ class KoreanBeautyEngine:
             self.last_timings['landmarker_ms']=(time.perf_counter()-dense_started)*1000.
             self.last_timings['dense_face_count']=sum('reshape_landmarks' in f for f in faces)
             logger.info('V2 MediaPipe reshape: %s/%s faces; YuNet geometry fallback for unmatched faces',self.last_timings['dense_face_count'],len(faces))
+
+        # Lưu đa giác/ellipse khuôn mặt nhẹ cho bộ lọc hậu kỳ tái sử dụng không cần detect lại
+        cached_polys = []
+        cached_ellipses = []
+        for f in faces:
+            if f.get("dense_landmarks") is not None:
+                cached_polys.append(self.get_face_oval_points(f["dense_landmarks"]).astype(np.float32))
+            else:
+                fx, fy, fw, fh = f["box"]
+                cached_ellipses.append((float(fx + fw * 0.5), float(fy + fh * 0.52), float(fw * 0.44), float(fh * 0.50)))
+        self._mask_state.last_faces = (w, h, cached_polys, cached_ellipses)
 
         faces_meta = self.extract_faces_tracking_meta(faces, w, h) if return_debug else None
 
@@ -1371,10 +1441,7 @@ class KoreanBeautyEngine:
         # D. Virtual Makeup: Rosy Blush (gò má quả táo Zygomaticus)
         # Reduce blush smoothly on already rosy skin while preserving slider sensitivity.
         if cfg.rosyBlush > 0.001 and np.sum(blush_mask) > 0:
-            if cfg.presetId == 'white_pink':
-                # Broad local adaptation avoids one red cheek controlling every face.
-                redness = np.clip((A_surround-132.0)/16.0,0,1)
-            elif cfg.presetId == 'white_pink_v2':
+            if cfg.presetId == 'white_pink_v2':
                 # Local adaptation prevents one cheek/person setting the blush
                 # strength for all faces; use the harmonized skin before makeup.
                 local_a=cv2.GaussianBlur(A,(0,0),max(3.,min(A.shape)*.015))
@@ -2023,10 +2090,6 @@ class KoreanBeautyEngine:
 
         clarity_mod = np.clip(-cfg.softGlow * 30.0 / 300.0, -0.15, 0.15)
         mid_final = mid_blemish * (1.0 + clarity_mod)
-        if cfg.presetId == 'white_pink':
-            # Retain broad anatomical shading rather than compressing every
-            # mid-frequency feature as though it were a blemish.
-            mid_final = mid_final * .65 + mid_freq * .35
 
         # Tái hòa nhập vân da thật vi mô (bảo toàn 60% high-frequency texture nguyên bản, chống da nhựa)
         tex_retention = float(np.clip(cfg.skinTextureRetention, 0.0, 1.0))
@@ -2037,8 +2100,8 @@ class KoreanBeautyEngine:
 
         # 4. Trích xuất Anatomical Masks
         masks = self.generate_anatomical_masks(proc_img, faces, wire_prot,
-            cfg.blushSpread * (0.80 if cfg.presetId == 'white_pink' else 1.0),
-            cheekbone_strength=.55 if cfg.presetId in ('white_pink', 'white_pink_v2') else 0.,
+            cfg.blushSpread,
+            cheekbone_strength=.55 if cfg.presetId == 'white_pink_v2' else 0.,
             protect_glasses=cfg.protectGlasses and cfg.presetId=='white_pink_v2',
             collect_debug=collect_debug,
             continuous_skin=cfg.presetId=='white_pink_v2')
@@ -2225,10 +2288,13 @@ class KoreanBeautyEngine:
         # 8. Korean Porcelain Tone, Anti-Redness & Virtual Makeup (CIELAB)
         # Tone uses a separate smooth mask; detail processing above retains edge protection.
         skin_mask = masks["colour"] * (1.0 - lip_mask)
+        # PA 1: Không trừ kép ở kênh nâng sáng L / đều màu quanh miệng, kết hợp lip_tone bám theo sắc tố son thật
+        tone_skin_mask = masks.get("tone_skin", skin_mask)
+        lip_tone_mask = masks.get("lip_tone", lip_mask)
         before_colour_bgr = blended.copy()
         lab = cv2.cvtColor(blended, cv2.COLOR_BGR2LAB).astype(np.float32)
         colour_roundtrip = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
-        harmonized_tone = cfg.presetId in ('white_pink', 'white_pink_v2')
+        harmonized_tone = cfg.presetId == 'white_pink_v2'
         tone_before = lab.copy() if harmonized_tone else None
         neck_support = np.zeros((h,w),np.float32)
         L, A, B = lab[..., 0], lab[..., 1], lab[..., 2]
@@ -2248,11 +2314,11 @@ class KoreanBeautyEngine:
             broad_light = self._fast_gaussian_blur(tone_before[..., 0], max(2., avg_bw * .09))
             depth_weight = .70 + .30 * np.clip((broad_light - 130.) / 70., 0., 1.)
             bright_curve = np.clip(1.0 - np.abs(broad_light - 170.0) / 75.0, 0., 1.) * depth_weight
-        L += bright_curve * (cfg.skinBrightening * 36.0) * skin_mask * (1.0 - high_mask[..., 0])
+        L += bright_curve * (cfg.skinBrightening * 36.0) * tone_skin_mask * (1.0 - high_mask[..., 0])
         if cfg.skinDiffuseLight > 0:
             local_light = self._fast_gaussian_blur(L, max(2., 0.15 * (k_large - 1) + 0.5))
             shadow_lift = np.clip(local_light - L, 0.0, 8.0)
-            L += shadow_lift * cfg.skinDiffuseLight * skin_mask * (1.0 - wire_prot)
+            L += shadow_lift * cfg.skinDiffuseLight * tone_skin_mask * (1.0 - wire_prot)
 
         # B. Tinh chỉnh sắc da: giảm vàng sạm mà KHÔNG tăng đỏ toàn mặt
         if cfg.presetId != 'white_pink_v2':
@@ -2269,13 +2335,13 @@ class KoreanBeautyEngine:
 
         # Lift green/neutral skin gently toward pink; leave already rosy skin alone.
         pink_deficit = np.clip(138.0 - A, 0.0, 6.0)
-        A += pink_deficit * cfg.rosyTone * skin_mask * (1.0 - high_mask[..., 0])
+        A += pink_deficit * cfg.rosyTone * tone_skin_mask * (1.0 - high_mask[..., 0])
 
         if cfg.presetId != 'white_pink_v2':
             self.apply_rosy_blush(lab,cfg,blush_mask,A_surround)
 
         if tone_before is not None:
-            self.harmonize_face_tone(tone_before,lab,proc_img,faces,skin_mask)
+            self.harmonize_face_tone(tone_before,lab,proc_img,faces,tone_skin_mask)
             # Smooth only the ADDED light around nose/philtrum. Original shadows,
             # pores and facial hair remain in tone_before without reconstruction.
             sigma = max(1., avg_bw*.045)
@@ -2297,7 +2363,7 @@ class KoreanBeautyEngine:
                 zone = np.clip(1. - d, 0., 1.)
                 zone = zone * zone * (3. - 2. * zone)
                 added = lab[zy0:zy1, zx0:zx1, 0] - tone_before[zy0:zy1, zx0:zx1, 0]
-                weight = skin_mask[zy0:zy1, zx0:zx1].astype(np.float32)
+                weight = tone_skin_mask[zy0:zy1, zx0:zx1].astype(np.float32)
                 field = self._fast_gaussian_blur(added * weight, sigma)
                 norm = self._fast_gaussian_blur(weight, sigma)
                 correction = np.clip(field / np.maximum(norm, 1e-5) - added, -5., 5.)
@@ -2307,11 +2373,11 @@ class KoreanBeautyEngine:
             neck_lift = self.brighten_neck_toward_face(lab,proc_img,faces,wire_prot)
             if cfg.presetId == 'white_pink_v2':
                 neck_support = (neck_lift > 1e-4).astype(np.float32)
-            self.soften_nose_wing_shadow(lab, tone_before, faces, skin_mask)
+            self.soften_nose_wing_shadow(lab, tone_before, faces, tone_skin_mask)
 
         if cfg.presetId == 'white_pink_v2':
-            self.harmonize_local_skin(lab,faces,skin_mask,lip_mask)
-            self.lift_outer_cheeks(lab,faces,skin_mask,lip_mask)
+            self.harmonize_local_skin(lab,faces,tone_skin_mask,lip_tone_mask)
+            self.lift_outer_cheeks(lab,faces,tone_skin_mask,lip_tone_mask)
             self.apply_rosy_blush(lab,cfg,blush_mask,A_surround)
 
 
@@ -2327,7 +2393,7 @@ class KoreanBeautyEngine:
         # Colour operations already contain their feather weights. Preserve their
         # delta separately so final background compositing does not square alpha.
         colour_delta = blended.astype(np.float32) - colour_roundtrip.astype(np.float32)
-        colour_support = np.clip(skin_mask + blush_mask + neck_support, 0., 1.) > 1e-4
+        colour_support = np.clip(skin_mask + tone_skin_mask + blush_mask + neck_support, 0., 1.) > 1e-4
         colour_delta[~colour_support] = 0.
         blended = before_colour_bgr
 
@@ -2336,9 +2402,6 @@ class KoreanBeautyEngine:
             k_sharp = np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]], dtype=np.float32)
             lap_c = cv2.filter2D(blended, cv2.CV_32F, k_sharp)
             lap_clamped = np.clip(lap_c, -16.0, 16.0)
-            if cfg.presetId == 'white_pink':
-                # Reinforce only existing eye detail, without painting new lashes.
-                lap_clamped *= 1.35
             sharpened = blended.astype(np.float32) + lap_clamped * (cfg.eyeSharpening * 1.4 * eye_sharp_mask[..., np.newaxis])
             # Keep sharpened pixels inside existing local extrema to avoid halos.
             local_min = cv2.erode(blended, np.ones((3,3), np.uint8)).astype(np.float32)
@@ -2354,7 +2417,7 @@ class KoreanBeautyEngine:
 
         # 11. Bảo Toàn Tuyệt Đối Màu Nền Gốc (Background Color & Object Preservation)
         # Hợp nhất toàn bộ mặt nạ giải phẫu và biến dạng đã can thiệp (không cộng lip_mask để bảo vệ môi 100%)
-        treatment_mask = np.clip(masks["skin"] + skin_mask + blush_mask + eye_sharp_mask + reshape_mask + neck_support, 0.0, 1.0)
+        treatment_mask = np.clip(masks["skin"] + skin_mask + tone_skin_mask + blush_mask + eye_sharp_mask + reshape_mask + neck_support, 0.0, 1.0)
         if dense_under_eye:
             # The legacy skin mask intentionally excludes eye-protection regions.
             # Include only the dedicated lower-lid geometry in final compositing,

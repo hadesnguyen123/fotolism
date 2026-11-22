@@ -163,15 +163,6 @@ const api = {
             ipcRenderer.invoke('overhead:status'),
     },
 
-    // ── Config ───────────────────────────────────────────────────────────────
-    config: {
-        get: (key: string): IpcResponse =>
-            ipcRenderer.invoke('config:get', key),
-
-        set: (key: string, value: unknown): IpcResponse =>
-            ipcRenderer.invoke('config:set', { key, value }),
-    },
-
     // ── Device Provisioning (device_config.json) ──────────────────────────────
     device: {
         getConfig: (): IpcResponse<any> =>

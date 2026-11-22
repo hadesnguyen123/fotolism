@@ -15,6 +15,7 @@ import { FrameCarousel } from '../components/theme/FrameCarousel'
 import { FilterSelectorDeck } from '../components/theme/FilterSelectorDeck'
 import { InteractiveStripPreview } from '../components/theme/InteractiveStripPreview'
 import type { SlotOffset } from '../lib/canvasCompositor'
+import { renderFilteredPreviewUrl } from '../lib/vintageV2Filter'
 import './ThemeSelectScreen.css'
 
 export default function ThemeSelectScreen() {
@@ -84,6 +85,57 @@ export default function ThemeSelectScreen() {
                   rawPath: '',
                   compositedPath: '',
               }))
+
+    // Kết xuất bản xem trước B&W / Vintage V2 trực tiếp bằng WebGL2/Canvas 3D LUT + grain 0.2 (0 gọi AI lần 2)
+    const [filteredPreviewState, setFilteredPreviewState] = useState<{
+        filterId: string
+        urls: string[]
+    } | null>(null)
+    const isPhotoboothMode = eventConfig.captureMode !== 'selfbooth'
+
+    useEffect(() => {
+        const fid = selectedFilter?.id || 'normal'
+        if (!isPhotoboothMode || fid === 'normal' || photos.length === 0) {
+            return
+        }
+        let cancelled = false
+        const targetPhotos = photos.slice(0, photosCount)
+        Promise.all(
+            targetPhotos.map((p) =>
+                renderFilteredPreviewUrl(
+                    p.enhancedPath || p.compositedPath || p.rawPath || '',
+                    fid
+                )
+            )
+        ).then((urls) => {
+            if (cancelled) return
+            const valid = urls.every((u): u is string => Boolean(u))
+            if (valid) {
+                setFilteredPreviewState({ filterId: fid, urls: urls as string[] })
+            }
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [isPhotoboothMode, selectedFilter?.id, photos, photosCount])
+
+    const useRealFilteredPreview =
+        isPhotoboothMode &&
+        selectedFilter?.id !== 'normal' &&
+        Boolean(filteredPreviewState) &&
+        filteredPreviewState?.filterId === selectedFilter?.id &&
+        filteredPreviewState?.urls.length === displayedPhotos.length
+
+    const previewPhotos = useRealFilteredPreview
+        ? displayedPhotos.map((p, idx) => ({
+              ...p,
+              compositedPath: filteredPreviewState!.urls[idx] || p.compositedPath,
+          }))
+        : displayedPhotos
+
+    const previewFilter = useRealFilteredPreview
+        ? { ...selectedFilter, cssFilter: 'none', hasGrain: false }
+        : selectedFilter
     const isGrid =
         selectedLayout.strip === false ||
         selectedLayout.previewType === '4_grid' ||
@@ -93,8 +145,8 @@ export default function ThemeSelectScreen() {
         (selectedLayout.cols !== undefined && selectedLayout.cols > 1)
 
     const is2x6 = (selectedTheme?.frameSize || selectedFrameSize) === '2x6'
-    const totalW = selectedTheme?.canvasWidth || (is2x6 ? 600 : 1200)
-    const totalH = selectedTheme?.canvasHeight || 1800
+    const totalW = selectedTheme?.canvasWidth || (is2x6 ? 1200 : 2400)
+    const totalH = selectedTheme?.canvasHeight || 3600
 
     const initialOffsets =
         session?.slotOffsets ||
@@ -129,10 +181,13 @@ export default function ThemeSelectScreen() {
         const cols = selectedLayout.cols || (is2x6 ? 1 : 2)
         const rows =
             selectedLayout.rows || Math.max(1, Math.ceil(totalSlots / cols))
-        const footerHeight = selectedTheme?.hideFooter ? 0 : 150
-        const padX = is2x6 ? 36 : 50
-        const padTop = 40
-        const gap = 20
+        const dpiScale = totalH / 1800
+        const footerHeight = selectedTheme?.hideFooter
+            ? 0
+            : Math.round(150 * dpiScale)
+        const padX = Math.round((is2x6 ? 36 : 50) * dpiScale)
+        const padTop = Math.round(40 * dpiScale)
+        const gap = Math.round(20 * dpiScale)
         const availableHeight = totalH - padTop - footerHeight
         const defW = (totalW - padX * 2 - gap * (cols - 1)) / cols
         const defH = (availableHeight - gap * (rows - 1)) / rows
@@ -549,10 +604,10 @@ export default function ThemeSelectScreen() {
             <InteractiveStripPreview
                 selectedFrameSize={selectedFrameSize}
                 selectedTheme={selectedTheme}
-                selectedFilter={selectedFilter}
+                selectedFilter={previewFilter}
                 is2x6={is2x6}
                 frameSlots={frameSlots}
-                photos={displayedPhotos}
+                photos={previewPhotos}
                 slotOffsets={slotOffsets}
                 activeDragIndex={activeDragIndex}
                 eventName={eventConfig.eventName}

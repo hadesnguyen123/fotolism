@@ -11,7 +11,7 @@ import {
     generateStripComposite,
     preparePrintImageForDNP,
 } from '../lib/canvasCompositor'
-import { fotolismApi, mockApi } from '../lib/api'
+import { fotolismApi, isBrowser as isBrowserEnv, mockApi } from '../lib/api'
 import { cloudSyncService } from '../services/cloudSyncService'
 import {
     DEFAULT_PRINT_SCALE,
@@ -57,8 +57,7 @@ export default function ProcessingScreen() {
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [isRetrying, setIsRetrying] = useState(false)
 
-    const isBrowser =
-        typeof window !== 'undefined' && !(window as any).electronAPI
+    const isBrowser = isBrowserEnv
     const isSelfbooth = eventConfig.captureMode === 'selfbooth'
     const isStarted = useRef(false)
     const isMountedRef = useRef(true)
@@ -82,14 +81,14 @@ export default function ProcessingScreen() {
                 // Selfbooth: Không ghép khung in ấn, chuẩn bị kho ảnh chụp tự do
                 setCompositeDone(true)
             } else {
-                // Photobooth: Ghép Khung Ảnh Thành Phẩm (Composite Strip)
+                // Photobooth: Ghép Khung Ảnh Thành Phẩm 1 lần từ ảnh `enhancedPath` (`natural`) và WebGL2/Canvas filter
                 const photoUrls = photos
-                    .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
+                    .map((p) => p.enhancedPath || p.compositedPath || p.rawPath)
                     .filter(Boolean)
                 console.log(
                     '[ProcessingScreen] Generating final composite strip with',
                     photoUrls.length,
-                    'photos...'
+                    'photos (filter=' + (selectedFilter?.id || 'normal') + ')...'
                 )
                 const effectiveOffsets =
                     session?.slotOffsets ||

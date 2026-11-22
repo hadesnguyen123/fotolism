@@ -28,10 +28,7 @@ import {
 } from '../components/BeautyCameraView'
 import { CaptureAspectGuide } from '../components/capture/CaptureAspectGuide'
 import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
-import {
-    cropImageToAspect,
-    generateStripComposite,
-} from '../lib/canvasCompositor'
+import { cropImageToAspect } from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
@@ -68,9 +65,6 @@ export default function CaptureScreen() {
         session,
         setScreen,
         setSessionPhotos,
-        setCompositeStripUrl,
-        selectedTheme,
-        placedStickers,
         countdownSeconds,
         setCountdownSeconds,
         selectedLayout,
@@ -131,17 +125,17 @@ export default function CaptureScreen() {
         }
     }, [beautyEnabled, skinSmoothing, setBeautyEnabled, setSkinSmoothing])
 
-    // Xác định tỉ lệ và kích thước ô chuẩn theo Single Source of Truth:
-    // - Khung 4 ảnh 2x6: 528 x 352 (tỉ lệ 3:2 = 1.5)
-    // - Khung 4 ảnh 4x6: 544 x 726 (tỉ lệ 272:363 ≈ 0.7493)
-    // - Khung 9 ảnh 4x6: 381 x 581 (tỉ lệ 381:581 ≈ 0.6558)
+    // Xác định tỉ lệ và kích thước ô chuẩn 600 DPI theo Single Source of Truth:
+    // - Khung 4 ảnh 2x6 (1200x3600): 1056 x 704 (tỉ lệ 3:2 = 1.5)
+    // - Khung 4 ảnh 4x6 (2400x3600): 1088 x 1452 (tỉ lệ 272:363 ≈ 0.7493)
+    // - Khung 9 ảnh 4x6 (2400x3600): 762 x 1162 (tỉ lệ 381:581 ≈ 0.6558)
     const is2x6 = selectedFrameSize === '2x6'
     const is9Grid = selectedLayout.photosCount === 9
     const targetSlotDimensions = is2x6
-        ? { w: 528, h: 352, label: '528×352' }
+        ? { w: 1056, h: 704, label: '1056×704' }
         : is9Grid
-          ? { w: 381, h: 581, label: '381×581' }
-          : { w: 544, h: 726, label: '544×726' }
+          ? { w: 762, h: 1162, label: '762×1162' }
+          : { w: 1088, h: 1452, label: '1088×1452' }
 
     // ── Tính toán khung vàng (Safe Area Viewfinder Guide) trong vùng Live View 3:2 ──
     // - Khung vàng sử dụng chính xác tỷ lệ của ô ảnh trong layout.
@@ -1065,34 +1059,6 @@ export default function CaptureScreen() {
                             )
                         )
                 }
-            }
-
-            // ── TỰ ĐỘNG TẠO DẢI ẢNH THÀNH PHẨM DỰ PHÒNG TRƯỚC KHI SANG FRAME & FILTER (KHÔNG CHẶN LUỒNG NẾU LỖI) ──
-            try {
-                const photoUrls = chosenPhotos
-                    .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
-                    .filter(Boolean)
-                if (photoUrls.length >= totalShots) {
-                    const initialStrip = await generateStripComposite({
-                        photos: photoUrls,
-                        frameSize: selectedFrameSize,
-                        layout: selectedLayout,
-                        theme: selectedTheme,
-                        stickers: placedStickers || [],
-                        filter: selectedFilter,
-                        eventName: eventConfig.eventName,
-                        eventDate: eventConfig.date,
-                        slotOffsets: [],
-                    })
-                    if (initialStrip) {
-                        setCompositeStripUrl(initialStrip)
-                    }
-                }
-            } catch (compErr) {
-                console.warn(
-                    '[CaptureScreen] Auto-generating initial composite warning:',
-                    compErr
-                )
             }
 
             setIsSessionActive(false)

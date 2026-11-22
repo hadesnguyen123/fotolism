@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
     Cpu,
-    FileText,
     Shield,
     Zap,
     Volume2,
@@ -16,10 +15,9 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { fotolismApi, isBrowser } from '../../lib/api'
-import { CANON_DAEMON_BASE_URL, ENV_CMS_URL } from '../../lib/constants'
+import { ENV_CMS_URL } from '../../lib/constants'
 
 interface AdminSystemTabProps {
-    daemonStatus: { running: boolean; url: string; state?: string } | null
     isNetworkOnline: boolean
     isPingingCms: boolean
     handlePingCms: () => void
@@ -29,7 +27,6 @@ interface AdminSystemTabProps {
 }
 
 export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
-    daemonStatus,
     isNetworkOnline,
     isPingingCms,
     handlePingCms,
@@ -48,7 +45,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
     const [heartbeatInterval, setHeartbeatInterval] = useState<number>(30)
 
     // Cloudflare R2 Upload Worker State
-    const [r2Concurrency, setR2Concurrency] = useState<number>(4)
     const [r2QueueStats, setR2QueueStats] = useState<{
         pending: number
         uploading: number
@@ -65,7 +61,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                 if (api?.storage?.getUploadStatus) {
                     const res = await api.storage.getUploadStatus()
                     if (res.success && res.data) {
-                        setR2Concurrency(res.data.concurrency || 4)
                         setR2QueueStats({
                             pending: res.data.pendingTasks || 0,
                             uploading: res.data.uploadingTasks || 0,
@@ -81,16 +76,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
         const timer = setInterval(loadR2Status, 4000)
         return () => clearInterval(timer)
     }, [])
-
-    const handleChangeConcurrency = async (val: number) => {
-        setR2Concurrency(val)
-        try {
-            const api = isBrowser ? null : fotolismApi
-            if (api?.storage?.setConcurrency) {
-                await api.storage.setConcurrency(val)
-            }
-        } catch {}
-    }
 
     const handleRetryFailedUploads = async () => {
         setIsRetryingUploads(true)
@@ -115,8 +100,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
         }
     }
 
-    const isCameraOnline = Boolean(daemonStatus?.running)
-
     return (
         <div className="tab-pane-content">
             {/* ── Tiêu Đề Tab Lớn (Không còn sub-tabs thừa theo đúng thiết kế ảnh 2) ── */}
@@ -124,98 +107,6 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                 <div className="pane-title-with-icon">
                     <Cpu size={28} strokeWidth={2.4} />
                     <h2 className="tab-pane-title">Hệ Thống</h2>
-                </div>
-            </div>
-
-            {/* ── Card 1: </> Tiến Trình Canon EDSDK ── */}
-            <div className="panel-card-touch">
-                <div className="panel-card-header">
-                    <div className="panel-title-group">
-                        <span className="code-symbol-touch">&lt;/&gt;</span>
-                        <span className="panel-title-text">
-                            Tiến Trình Canon EDSDK
-                        </span>
-                        <span
-                            className={`pill-badge ${isCameraOnline ? 'pill-green' : 'pill-amber'}`}
-                        >
-                            <span
-                                className={
-                                    isCameraOnline
-                                        ? 'badge-dot-green'
-                                        : 'badge-dot-amber'
-                                }
-                            />
-                            {isCameraOnline ? 'Đang chạy' : 'Chưa bật'}
-                        </span>
-                    </div>
-
-                    <button
-                        className="btn-touch-outline"
-                        onClick={() => {
-                            alert(
-                                `Canon Daemon: ${isCameraOnline ? `Hoạt động tốt tại ${CANON_DAEMON_BASE_URL || '(chưa cấu hình .env)'}` : 'Chưa bật'}`
-                            )
-                        }}
-                    >
-                        <Zap size={18} strokeWidth={2.2} />
-                        <span>Kiểm Tra Endpoint</span>
-                    </button>
-                </div>
-
-                <div className="system-grid-4col">
-                    <div className="form-group-touch">
-                        <label className="form-label-touch">
-                            File thực thi
-                        </label>
-                        <div className="input-with-icon-touch">
-                            <FileText size={20} strokeWidth={2} />
-                            <input
-                                type="text"
-                                readOnly
-                                value="fotolism_canon_daemon.exe"
-                                className="form-input-touch-inner"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-group-touch">
-                        <label className="form-label-touch">Endpoint (.env)</label>
-                        <div className="input-with-icon-touch">
-                            <Cpu size={20} strokeWidth={2} />
-                            <input
-                                type="text"
-                                readOnly
-                                value={
-                                    CANON_DAEMON_BASE_URL ||
-                                    'Chưa cấu hình VITE_CANON_DAEMON_URL'
-                                }
-                                className="form-input-touch-inner"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-group-touch">
-                        <label className="form-label-touch">
-                            Kiến trúc SDK
-                        </label>
-                        <div className="input-with-icon-touch">
-                            <Shield size={20} strokeWidth={2} />
-                            <input
-                                type="text"
-                                readOnly
-                                value="Canon EDSDK 64-bit"
-                                className="form-input-touch-inner"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-group-touch">
-                        <label className="form-label-touch">Hàng đợi</label>
-                        <select className="form-select-touch">
-                            <option>Single-Threaded</option>
-                            <option>Multi-Threaded</option>
-                        </select>
-                    </div>
                 </div>
             </div>
 
@@ -522,50 +413,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                     </div>
                 )}
 
-                <div
-                    className="system-grid-2col"
-                    style={{ marginBottom: '16px' }}
-                >
-                    <div className="form-group-touch">
-                        <label className="form-label-touch">
-                            Luồng Upload Đồng Thời (Concurrency)
-                        </label>
-                        <div
-                            style={{
-                                display: 'flex',
-                                gap: '8px',
-                                marginTop: '6px',
-                            }}
-                        >
-                            {[1, 2, 4, 8].map((c) => (
-                                <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => handleChangeConcurrency(c)}
-                                    className={`btn-touch-outline ${r2Concurrency === c ? 'active' : ''}`}
-                                    style={{
-                                        flex: 1,
-                                        padding: '8px 12px',
-                                        fontWeight: 'bold',
-                                        backgroundColor:
-                                            r2Concurrency === c
-                                                ? '#502A1D'
-                                                : '#ffffff',
-                                        color:
-                                            r2Concurrency === c
-                                                ? '#ffffff'
-                                                : '#502A1D',
-                                        borderColor: '#502A1D',
-                                        borderRadius: '10px',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    {c} {c === 4 ? '(Chuẩn)' : 'luồng'}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
+                <div style={{ marginBottom: '16px' }}>
                     <div className="form-group-touch">
                         <label className="form-label-touch">
                             Hàng Đợi Upload SQLite (Outbox)

@@ -5,7 +5,7 @@
  * Phụ thuộc: react, store/appStore, lib/canvasCompositor, lib/pinUtils, services/cloudSyncService.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
 import {
@@ -162,7 +162,7 @@ export default function ReviewScreen() {
                 // Sinh dải ảnh in hoàn chỉnh cho cả Photobooth và Selfbooth (fallback)
                 setIsGeneratingComposite(true)
                 const photoUrls = photos
-                    .map((p) => p.compositedPath || p.enhancedPath || p.rawPath)
+                    .map((p) => p.enhancedPath || p.compositedPath || p.rawPath)
                     .filter(Boolean)
                 const stripUrl = await generateStripComposite({
                     photos: photoUrls,
@@ -376,29 +376,34 @@ export default function ReviewScreen() {
         ]
     )
 
-    // ── Auto Return to Idle Timer (Cố định tối thiểu 120s / 2 phút cho tiến trình ngầm) ──
+    // ── Auto Return to Idle/Welcome Timer (Cố định tối thiểu 120s / 2 phút cho tiến trình ngầm) ──
     const [countdownToIdle, setCountdownToIdle] = useState<number>(() =>
         Math.max(120, eventConfig.idleTimeoutSeconds || 120)
     )
+    const hasFinishedRef = useRef<boolean>(false)
+    const handleFinishRef = useRef<(forceOnExpiry?: boolean) => void>(() => {})
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            setCountdownToIdle((prev) => {
-                if (prev <= 1) {
-                    // Nếu các tiến trình ngầm (đồng bộ media, nén composite) chưa hoàn tất, hoãn đếm ngược
-                    if (isSyncingMedia || isGeneratingComposite) {
-                        return 15
-                    }
-                    clearInterval(timer)
-                    handleFinish()
-                    return 0
+        if (countdownToIdle <= 0) {
+            if (isSyncingMedia || isGeneratingComposite) {
+                if (isSelfboothMode) {
+                    // Selfbooth hết hạn màn Review: bắt buộc cắt phiên và chuyển về màn welcome
+                    handleFinishRef.current(true)
+                    return
                 }
-                return prev - 1
-            })
+                setCountdownToIdle(15)
+                return
+            }
+            handleFinishRef.current(isSelfboothMode)
+            return
+        }
+
+        const timer = setTimeout(() => {
+            setCountdownToIdle((prev) => Math.max(0, prev - 1))
         }, 1000)
 
-        return () => clearInterval(timer)
-    }, [isSyncingMedia, isGeneratingComposite])
+        return () => clearTimeout(timer)
+    }, [countdownToIdle, isSyncingMedia, isGeneratingComposite, isSelfboothMode])
 
     // Dọn dẹp Object URL nhị phân khi unmount
     useEffect(() => {
@@ -411,16 +416,19 @@ export default function ReviewScreen() {
         }
     }, [compositeStripUrl])
 
-    function handleFinish() {
-        if (isSyncingMedia || isGeneratingComposite) {
+    function handleFinish(forceOnExpiry = false) {
+        if (hasFinishedRef.current) return
+        if (!forceOnExpiry && (isSyncingMedia || isGeneratingComposite)) {
             console.log('Background upload/sync is still active, waiting...')
             return
         }
+        hasFinishedRef.current = true
         markTicketCompleted()
         recordSessionToOutbox()
         clearSession()
-        setScreen('idle')
+        setScreen('welcome')
     }
+    handleFinishRef.current = handleFinish
 
     async function handlePrint() {
         // Lệnh in chỉ được thực hiện khi chưa in thành công và không trong tiến trình in
@@ -630,7 +638,7 @@ export default function ReviewScreen() {
                                         padding: '8px 24px',
                                         fontSize: '0.92rem',
                                     }}
-                                    onClick={handleFinish}
+                                    onClick={() => handleFinish()}
                                 >
                                     Kết thúc
                                 </button>
@@ -706,8 +714,8 @@ export default function ReviewScreen() {
                                     style={{
                                         position: 'relative',
                                         aspectRatio: is2x6
-                                            ? '600 / 1800'
-                                            : '1200 / 1800',
+                                            ? '1200 / 3600'
+                                            : '2400 / 3600',
                                         maxHeight: 'calc(100vh - 215px)',
                                         borderRadius: '14px',
                                         boxShadow:
@@ -932,7 +940,7 @@ export default function ReviewScreen() {
                         className={`kiosk-nav-btn btn-nav-next ${isSyncingMedia || isGeneratingComposite ? 'disabled' : ''}`}
                         id="finish-button"
                         disabled={isSyncingMedia || isGeneratingComposite}
-                        onClick={handleFinish}
+                        onClick={() => handleFinish()}
                         title={
                             isSyncingMedia
                                 ? 'Đang hoàn tất lưu ảnh ngầm...'

@@ -53,6 +53,14 @@ export async function ensureCanonDaemon(): Promise<boolean> {
     if (await checkCanonDaemon()) return true
 
     const daemonPaths = [
+        ...(process.resourcesPath
+            ? [
+                  path.join(
+                      process.resourcesPath,
+                      'canon-daemon/fotolism_canon_daemon.exe'
+                  ),
+              ]
+            : []),
         path.join(__dirname, '../fotolism_canon_daemon.exe'),
         path.join(__dirname, '../../electron/fotolism_canon_daemon.exe'),
         path.join(app.getAppPath(), 'electron/fotolism_canon_daemon.exe'),
@@ -67,6 +75,7 @@ export async function ensureCanonDaemon(): Promise<boolean> {
     try {
         console.log(`[Canon Daemon] Launching high-speed daemon: ${daemonExe}`)
         canonDaemonProc = spawn(daemonExe, [], {
+            cwd: path.dirname(daemonExe),
             detached: true,
             stdio: 'ignore',
             windowsHide: true,
@@ -539,6 +548,14 @@ export function registerCameraIpc(): void {
                     fs.mkdirSync(saveDir, { recursive: true })
 
                 const canonExePaths = [
+                    ...(process.resourcesPath
+                        ? [
+                              path.join(
+                                  process.resourcesPath,
+                                  'canon-daemon/fotolism_canon_capture.exe'
+                              ),
+                          ]
+                        : []),
                     path.join(__dirname, '../fotolism_canon_capture.exe'),
                     path.join(
                         __dirname,
@@ -552,6 +569,14 @@ export function registerCameraIpc(): void {
                 const canonExe = canonExePaths.find((p) => fs.existsSync(p))
 
                 const canonScriptPaths = [
+                    ...(process.resourcesPath
+                        ? [
+                              path.join(
+                                  process.resourcesPath,
+                                  'canon-daemon/canon_edsdk_capture.ps1'
+                              ),
+                          ]
+                        : []),
                     path.join(__dirname, '../canon_edsdk_capture.ps1'),
                     path.join(
                         __dirname,

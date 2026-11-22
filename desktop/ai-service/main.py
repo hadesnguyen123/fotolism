@@ -1,7 +1,7 @@
 """
 Ứng dụng FastAPI backend AI Service cục bộ phục vụ Kiosk Fotolism (cổng 8000).
-Cung cấp các API xử lý ảnh AI làm đẹp chuẩn Hàn Quốc, ghép khung ảnh in, tạo mã QR và cấu hình màu sắc.
-Phụ thuộc: fastapi, uvicorn, các router trong api.routes, core.database.
+Cung cấp các API xử lý ảnh AI làm đẹp chuẩn Hàn Quốc, ghép khung ảnh in và tạo mã QR.
+Phụ thuộc: fastapi, uvicorn, các router trong api.routes.
 """
 import sys
 from contextlib import asynccontextmanager
@@ -17,17 +17,15 @@ if sys.platform == "win32":
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import camera, enhance, composite, qr, print_job, config
-from core.database import init_db
+from api.routes import camera, enhance, composite, qr, print_job
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Quản lý vòng đời khởi động và dừng dịch vụ FastAPI: khởi tạo CSDL SQLite nội bộ cho AI Service.
+    Quản lý vòng đời khởi động và dừng dịch vụ FastAPI.
     """
     # Startup
-    await init_db()
     print("[AI Service] Fotolism AI Service ready on http://localhost:8000")
     yield
     # Shutdown
@@ -56,7 +54,6 @@ app.include_router(enhance.router,   prefix="/enhance",  tags=["AI Enhance"])
 app.include_router(composite.router, prefix="/composite",tags=["Frame Composite"])
 app.include_router(qr.router,        prefix="/qr",       tags=["QR & Sharing"])
 app.include_router(print_job.router, prefix="/print",    tags=["Print"])
-app.include_router(config.router,    prefix="/config",   tags=["Config"])
 
 
 @app.get("/health")

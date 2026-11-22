@@ -10,13 +10,23 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { exec } from 'child_process'
 
-// Nạp biến môi trường ngay khi khởi tạo IPC helper để mọi module backend đọc đúng từ .env
-try {
-    process.loadEnvFile?.(path.join(__dirname, '../../.env'))
-} catch {}
-try {
-    process.loadEnvFile?.(path.join(__dirname, '../../.env.local'))
-} catch {}
+// Nạp biến môi trường ngay khi khởi tạo IPC helper (ưu tiên cấu hình ngoài app.asar khi chạy bản đóng gói)
+const envCandidates = [
+    path.join(__dirname, '../../.env'),
+    path.join(__dirname, '../../.env.local'),
+    ...(process.resourcesPath
+        ? [path.join(process.resourcesPath, '.env')]
+        : []),
+    path.join(path.dirname(process.execPath), '.env'),
+    ...(app ? [path.join(app.getPath('userData'), '.env')] : []),
+]
+for (const envPath of envCandidates) {
+    try {
+        if (fs.existsSync(envPath)) {
+            process.loadEnvFile?.(envPath)
+        }
+    } catch {}
+}
 
 /** Thời gian chờ tối đa cho các lệnh thao tác phần cứng (ms). */
 export const HARDWARE_TIMEOUT_MS = 6000

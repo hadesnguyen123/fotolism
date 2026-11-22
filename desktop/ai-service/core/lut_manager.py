@@ -2,18 +2,41 @@
 Fotolism AI Beauty Engine — Style LUT Manager & Cache
 Quản lý, lưu bộ nhớ đệm (cache) và nạp bảng tra cứu màu (LUT) của các Style.
 Hỗ trợ kiểm tra mtime (file modification time) để tự động nạp lại khi file thay đổi trên đĩa.
+Phụ thuộc: cv2, numpy, core.vintage_v2.
 """
 import json
 import logging
-import math
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 import numpy as np
 import cv2
 
+from core.vintage_v2 import apply_fast_film_grain_u8, apply_vintage_v2
+
 logger = logging.getLogger("ai_service.lut_manager")
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+_PROCEDURAL_STYLES = (
+    "none",
+    "raw",
+    "original",
+    "natural",
+    "normal",
+    "basic",
+    "bw",
+    "b&w",
+    "vintage_noir",
+    "monochrome",
+    "retro",
+    "retro_90s",
+    "vintage",
+    "vintage_v2",
+    "vintage_brown",
+    "warm_film",
+    "retro_v2",
+)
+
 
 class LUTManager:
     """Quản lý bộ nhớ đệm LUT theo từng styleId, đường dẫn file và phiên bản mtime."""
@@ -30,7 +53,7 @@ class LUTManager:
 
     def resolve_style_path(self, style_id: str) -> Optional[Path]:
         """Tìm file LUT tương ứng với styleId."""
-        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
+        if not style_id or style_id.lower() in _PROCEDURAL_STYLES:
             return None
 
         # Danh sách đường dẫn ưu tiên kiểm tra
@@ -49,7 +72,7 @@ class LUTManager:
 
     def get_style_luts(self, style_id: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Lấy 3 kênh LUT (B, G, R) tương ứng với styleId, có cơ chế cache & auto-invalidation."""
-        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
+        if not style_id or style_id.lower() in _PROCEDURAL_STYLES:
             return self._identity, self._identity, self._identity
 
         lut_path = self.resolve_style_path(style_id)
@@ -88,11 +111,10 @@ class LUTManager:
 
     def apply_style(self, img_bgr: np.ndarray, style_id: str) -> np.ndarray:
         """Áp dụng Color Grading từ Style LUT lên ảnh."""
-        if not style_id or style_id.lower() in ("none", "raw", "original", "natural"):
+        if not style_id or style_id.lower() in _PROCEDURAL_STYLES:
             return img_bgr
 
         lut_b, lut_g, lut_r = self.get_style_luts(style_id)
-        # Kiểm tra nếu là identity thì bỏ qua
         if np.array_equal(lut_b, self._identity) and np.array_equal(lut_g, self._identity) and np.array_equal(lut_r, self._identity):
             return img_bgr
 
@@ -109,7 +131,6 @@ class LUTManager:
             return self._bw_cache
 
         data = json.loads(preset_path.read_text(encoding="utf-8"))
-        # cv2.transform nhận kernel theo thứ tự kênh BGR
         rgb_w = data["rgbWeights"]
         kernel_bgr = np.array([[rgb_w[2], rgb_w[1], rgb_w[0]]], dtype=np.float32)
         curve = np.asarray(data["toneCurve"], dtype=np.float32)
@@ -127,6 +148,7 @@ class LUTManager:
             "lut_256": lut_256,
             "vignette": data.get("vignette"),
             "clarity": data.get("clarity"),
+            "grain": float(data.get("grain", 0.2)),
         }
         self._bw_vig_cache.clear()
         return self._bw_cache
@@ -137,8 +159,8 @@ class LUTManager:
         if cached is not None:
             return cached
         yy, xx = np.ogrid[:h, :w]
-        nx = (xx - w * 0.5) / (w * 0.5)
-        ny = (yy - h * 0.5) / (h * 0.5)
+        nx = (xx - w * 0.5) / max(1.0, w * 0.5)
+        ny = (yy - h * 0.5) / max(1.0, h * 0.5)
         r2 = (nx * nx + ny * ny) * 0.5
         gain = np.clip(
             1.0 + float(vig_cfg["c1"]) * r2 + float(vig_cfg["c2"]) * (r2 ** 2),
@@ -149,27 +171,58 @@ class LUTManager:
         self._bw_vig_cache[(h, w)] = vig_u16
         return vig_u16
 
-    def apply_post_filter(self, img_bgr: np.ndarray, style_id: str) -> np.ndarray:
-        """Áp dụng bộ lọc màu (Basic / B&W / Retro) sau bước AI Enhance."""
+    def apply_post_filter(
+        self,
+        img_bgr: np.ndarray,
+        style_id: str,
+        bw_config: Optional[Dict[str, Any]] = None,
+        vintage_v2_config: Optional[Dict[str, Any]] = None,
+        skin_mask: Optional[np.ndarray] = None,
+        intensity: float = 1.0,
+    ) -> np.ndarray:
+        """Áp dụng bộ lọc màu (Basic / B&W / Retro Vintage V2) sau bước AI Enhance."""
         sid = (style_id or "").strip().lower()
-        if not sid or sid in ("none", "raw", "original", "natural", "normal", "basic"):
+        eff_intensity = float(np.clip(intensity, 0.0, 1.0))
+        if not sid or sid in ("none", "raw", "original", "natural", "normal", "basic") or eff_intensity <= 1e-4:
             return img_bgr
 
+        if sid in ("retro", "retro_90s", "vintage", "vintage_v2", "vintage_brown", "warm_film", "retro_v2"):
+            return apply_vintage_v2(
+                img_bgr,
+                config=vintage_v2_config,
+                skin_mask=skin_mask,
+                intensity=eff_intensity,
+            )
+
+        styled: Optional[np.ndarray] = None
         if sid in ("bw", "b&w", "vintage_noir", "monochrome"):
-            # Dùng chung preset Capture One với frontend SVG/Canvas (trộn kênh + tone curve + vignette + clarity âm).
             bw = self._get_bw_preset()
-            gray = cv2.transform(img_bgr, bw["kernel_bgr"])
+            cfg = bw_config or {}
+            rw = float(cfg.get("redWeight", float(bw["kernel_bgr"][0, 2])))
+            gw = float(cfg.get("greenWeight", float(bw["kernel_bgr"][0, 1])))
+            blw = float(cfg.get("blueWeight", float(bw["kernel_bgr"][0, 0])))
+            w_sum = rw + gw + blw
+            scale = (1.0 / w_sum) if abs(w_sum) > 1e-4 else 1.0
+            kernel_bgr = np.array([[blw * scale, gw * scale, rw * scale]], dtype=np.float32)
+
+            gray = cv2.transform(img_bgr, kernel_bgr)
             out = cv2.LUT(gray, bw["lut_256"])
 
             h, w = out.shape[:2]
+            vig_scale = float(cfg.get("vignette", 1.0))
             vig_cfg = bw.get("vignette")
-            if vig_cfg:
+            if vig_cfg and vig_scale > 1e-4:
                 vig_u16 = self._get_bw_vignette_u16(h, w, vig_cfg)
-                out = np.clip((out.astype(np.uint16) * vig_u16) >> 8, 0, 255).astype(np.uint8)
+                if abs(vig_scale - 1.0) <= 1e-4:
+                    out = np.clip((out.astype(np.uint16) * vig_u16) >> 8, 0, 255).astype(np.uint8)
+                else:
+                    gain = np.clip(1.0 + (vig_u16.astype(np.float32) / 256.0 - 1.0) * vig_scale, 0.25, 1.25)
+                    out = np.clip(out.astype(np.float32) * gain, 0, 255).astype(np.uint8)
 
-            clarity_cfg = bw.get("clarity")
-            if clarity_cfg and float(clarity_cfg.get("amount", 0.0)) > 0.0 and w >= 16 and h >= 16:
-                amt = float(clarity_cfg["amount"])
+            clarity_cfg = bw.get("clarity") or {}
+            amt = float(cfg.get("softClarity", clarity_cfg.get("amount", 0.0)))
+            if amt > 1e-4 and w >= 16 and h >= 16:
+                amt = float(np.clip(amt, 0.0, 0.45))
                 sigma_ratio = float(clarity_cfg.get("sigmaRatio", 0.008))
                 small_w, small_h = max(8, w // 4), max(8, h // 4)
                 small = cv2.resize(out, (small_w, small_h), interpolation=cv2.INTER_AREA)
@@ -177,36 +230,28 @@ class LUTManager:
                 blur = cv2.resize(blur_s, (w, h), interpolation=cv2.INTER_LINEAR)
                 out = cv2.addWeighted(out, 1.0 - amt, blur, amt, 0.0)
 
-            return cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+            contrast = float(cfg.get("contrast", 0.0))
+            blacks_fade = float(cfg.get("blacksFade", 0.0))
+            grain = float(cfg.get("grain", bw.get("grain", 0.2)))
+            if abs(contrast) > 1e-4 or blacks_fade > 1e-4:
+                f = out.astype(np.float32) / 255.0
+                if abs(contrast) > 1e-4:
+                    f = np.clip((f - 0.5) * (1.0 + contrast) + 0.5, 0.0, 1.0)
+                if blacks_fade > 1e-4:
+                    fade = blacks_fade * 0.25
+                    f = f * (1.0 - fade) + fade
+                out = np.rint(np.clip(f * 255.0, 0.0, 255.0)).astype(np.uint8)
 
-        if sid in ("retro", "retro_90s", "vintage"):
-            # Chuyển BGR -> RGB [0..1] để khớp chuẩn ma trận CSS sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)
-            rgb = img_bgr[:, :, ::-1].astype(np.float32) / 255.0
-            s = 0.38
-            sepia_mat = np.array([
-                [1 - 0.607 * s, 0.769 * s,     0.189 * s],
-                [0.349 * s,     1 - 0.314 * s, 0.168 * s],
-                [0.272 * s,     0.534 * s,     1 - 0.869 * s],
-            ], dtype=np.float32)
-            a = math.radians(-14.0)
-            c, si = math.cos(a), math.sin(a)
-            hue_mat = np.array([
-                [0.213 + 0.787 * c - 0.213 * si, 0.715 - 0.715 * c - 0.715 * si, 0.072 - 0.072 * c + 0.928 * si],
-                [0.213 - 0.213 * c + 0.143 * si, 0.715 + 0.285 * c + 0.140 * si, 0.072 - 0.072 * c - 0.283 * si],
-                [0.213 - 0.213 * c - 0.787 * si, 0.715 - 0.715 * c + 0.715 * si, 0.072 + 0.928 * c + 0.072 * si],
-            ], dtype=np.float32)
-            sat = 1.2
-            sat_mat = np.array([
-                [0.213 + 0.787 * sat, 0.715 - 0.715 * sat, 0.072 - 0.072 * sat],
-                [0.213 - 0.213 * sat, 0.715 + 0.285 * sat, 0.072 - 0.072 * sat],
-                [0.213 - 0.213 * sat, 0.715 - 0.715 * sat, 0.072 + 0.928 * sat],
-            ], dtype=np.float32)
-            combined_mat = sat_mat @ hue_mat @ sepia_mat
-            rgb = np.clip(rgb @ combined_mat.T, 0.0, 1.0)
-            rgb = np.clip(((rgb - 0.5) * 1.08 + 0.5) * 0.98, 0.0, 1.0)
-            return (rgb[:, :, ::-1] * 255.0).astype(np.uint8)
+            if grain > 1e-4:
+                out = apply_fast_film_grain_u8(out, grain * 0.14)
 
-        return img_bgr
+            styled = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+
+        if styled is None:
+            return img_bgr
+        if eff_intensity >= 0.999:
+            return styled
+        return cv2.addWeighted(img_bgr, 1.0 - eff_intensity, styled, eff_intensity, 0.0)
 
     def invalidate(self, style_id: Optional[str] = None):
         """Hủy bộ nhớ đệm."""
@@ -215,6 +260,6 @@ class LUTManager:
         else:
             self._cache.clear()
 
+
 # Singleton instance
 lut_manager = LUTManager()
-

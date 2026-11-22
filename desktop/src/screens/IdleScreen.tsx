@@ -27,6 +27,16 @@ export default function IdleScreen() {
         setCustomerInfo,
     } = useAppStore()
 
+    // Chế độ chụp đang được lựa chọn (mặc định là photobooth)
+    const [selectedMode, setSelectedMode] = useState<CaptureMode>('photobooth')
+
+    // Trạng thái Modal Nhập Mã Mở Khóa Máy
+    const [showPinModal, setShowPinModal] = useState(false)
+    const [pendingMode, setPendingMode] = useState<CaptureMode>('photobooth')
+    const [isVerifying, setIsVerifying] = useState(false)
+    const [pinError, setPinError] = useState<string | null>(null)
+    const [welcomeGuest, setWelcomeGuest] = useState<string | null>(null)
+
     // Reset toàn bộ phiên cũ khi trở về màn hình chính
     useEffect(() => {
         clearSession()
@@ -58,16 +68,6 @@ export default function IdleScreen() {
         setCustomerInfo,
         setScreen,
     ])
-
-    // Chế độ chụp đang được lựa chọn (mặc định là photobooth)
-    const [selectedMode, setSelectedMode] = useState<CaptureMode>('photobooth')
-
-    // Trạng thái Modal Nhập Mã Mở Khóa Máy
-    const [showPinModal, setShowPinModal] = useState(false)
-    const [pendingMode, setPendingMode] = useState<CaptureMode>('photobooth')
-    const [isVerifying, setIsVerifying] = useState(false)
-    const [pinError, setPinError] = useState<string | null>(null)
-    const [welcomeGuest, setWelcomeGuest] = useState<string | null>(null)
 
     function handleSelectMode(mode: CaptureMode) {
         setSelectedMode(mode)

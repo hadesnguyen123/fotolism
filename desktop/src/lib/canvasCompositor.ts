@@ -1,8 +1,8 @@
 /**
  * @file canvasCompositor.ts
- * Bộ xử lý kết xuất bố cục in ảnh (Canvas 2D Compositor) chuẩn 300 DPI:
+ * Bộ xử lý kết xuất bố cục in ảnh (Canvas 2D Compositor) chuẩn 600 DPI:
  * cắt crop căn chỉnh khuôn mặt thông minh, phủ lớp filter màu, dán sticker,
- * ghép dải ảnh kép (Strip 2x6 kép 1200x1800) hoặc khổ đơn (4x6 1800x1200) và bù tỷ lệ co giãn máy in DNP RX1HS.
+ * ghép dải ảnh đơn (Strip 2x6 1200x3600), ghép dải kép/khổ 4x6 (2400x3600 hoặc 3600x2400) và bù tỷ lệ co giãn máy in DNP RX1HS.
  * Phụ thuộc: HTML5 Canvas, store/appStore, constants.ts.
  */
 
@@ -18,7 +18,10 @@ import {
     DEFAULT_PRINT_SCALE,
     resolveAssetUrl,
 } from './constants'
-import { BW_PRESET } from '../config/bwFilter'
+import {
+    applyBwPostLookToRegion,
+    drawVintageV2Region,
+} from './vintageV2Filter'
 
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
@@ -75,7 +78,7 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Cắt crop ảnh về đúng tỉ lệ ô của khung (528x352, 544x726, 281x580)
+ * Cắt crop ảnh về đúng tỉ lệ ô của khung chuẩn 600 DPI (1056x704, 1088x1452, 762x1162)
  * Đồng bộ chính xác với khung vàng hiển thị trên Live View 16:9
  * Xử lý hoàn hảo sự khác biệt tỷ lệ giữa Live View 16:9 và ảnh gốc từ camera (3:2 hoặc 16:9)
  */
@@ -144,263 +147,17 @@ export async function cropImageToAspect(
 }
 
 /**
- * Bộ đệm cache grain pattern cho hiệu ứng hạt phim cổ điển Retro 90s
- */
-let cachedGrainPattern: CanvasPattern | null = null
-
-function getFilmGrainPattern(
-    targetCtx: CanvasRenderingContext2D
-): CanvasPattern | null {
-    if (cachedGrainPattern) return cachedGrainPattern
-    try {
-        if (typeof document === 'undefined') return null
-        const grainCanvas = document.createElement('canvas')
-        const size = 256
-        grainCanvas.width = size
-        grainCanvas.height = size
-        const gCtx = grainCanvas.getContext('2d')
-        if (!gCtx || typeof gCtx.createImageData !== 'function') return null
-
-        const imgData = gCtx.createImageData(size, size)
-        const data = imgData.data
-        for (let i = 0; i < data.length; i += 4) {
-            // Hạt noise đơn sắc (Monochromatic film grain)
-            const noise = (Math.random() - 0.5) * 255
-            if (noise > 0) {
-                data[i] = 255
-                data[i + 1] = 255
-                data[i + 2] = 255
-                data[i + 3] = Math.min(255, Math.floor(noise * 0.05))
-            } else {
-                data[i] = 0
-                data[i + 1] = 0
-                data[i + 2] = 0
-                data[i + 3] = Math.min(255, Math.floor(-noise * 0.05))
-            }
-        }
-        gCtx.putImageData(imgData, 0, 0)
-        if (typeof targetCtx.createPattern === 'function') {
-            cachedGrainPattern = targetCtx.createPattern(grainCanvas, 'repeat')
-        }
-        return cachedGrainPattern
-    } catch (err) {
-        console.warn('Could not generate film grain pattern:', err)
-        return null
-    }
-}
-
-function applyFilmGrainToSlot(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number
-) {
-    try {
-        const pattern = getFilmGrainPattern(ctx)
-        if (!pattern) return
-
-        ctx.save()
-        ctx.globalCompositeOperation = 'overlay'
-        ctx.fillStyle = pattern
-        ctx.fillRect(x, y, w, h)
-        ctx.restore()
-    } catch (err) {
-        console.warn('Could not apply film grain to slot:', err)
-    }
-}
-
-/**
- * Hiệu ứng Retro 90s: tông đào-hổ phách ấm, halation glow mềm, nâng shadow nâu gụ,
- * vignette ấm và hạt phim mịn.
- */
-function applyRetroFilmLookToSlot(
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    srcX: number,
-    srcY: number,
-    srcW: number,
-    srcH: number,
-    drawX: number,
-    drawY: number,
-    drawW: number,
-    drawH: number,
-    cssFilter?: string
-) {
-    try {
-        // 1. Làm ấm vùng sáng (70% warm peach-rose multiply tint)
-        ctx.save()
-        ctx.globalCompositeOperation = 'multiply'
-        ctx.fillStyle = 'rgba(255, 209, 191, 0.22)'
-        ctx.fillRect(drawX, drawY, drawW, drawH)
-        ctx.restore()
-
-        // 2. Soft Pro-Mist halation / bloom trên canvas thu nhỏ
-        if (typeof document !== 'undefined' && drawW > 0 && drawH > 0) {
-            const bloomW = Math.max(32, Math.round(drawW / 8))
-            const bloomH = Math.max(32, Math.round(drawH / 8))
-            const bloomCanvas = document.createElement('canvas')
-            bloomCanvas.width = bloomW
-            bloomCanvas.height = bloomH
-            const bCtx = bloomCanvas.getContext('2d')
-            if (bCtx) {
-                const baseFilter =
-                    cssFilter && cssFilter !== 'none' ? cssFilter : ''
-                bCtx.filter = `${baseFilter} blur(3px)`.trim()
-                bCtx.drawImage(
-                    img,
-                    srcX,
-                    srcY,
-                    srcW,
-                    srcH,
-                    0,
-                    0,
-                    bloomW,
-                    bloomH
-                )
-                bCtx.filter = 'none'
-                bCtx.globalCompositeOperation = 'multiply'
-                bCtx.fillStyle = 'rgb(255, 199, 173)'
-                bCtx.fillRect(0, 0, bloomW, bloomH)
-
-                ctx.save()
-                ctx.globalCompositeOperation = 'screen'
-                ctx.globalAlpha = 0.16
-                ctx.drawImage(bloomCanvas, drawX, drawY, drawW, drawH)
-                ctx.restore()
-            }
-        }
-
-        // 3. Nâng vùng tối sang nâu gụ ấm (70% mahogany shadow lift)
-        ctx.save()
-        ctx.globalCompositeOperation = 'screen'
-        ctx.fillStyle = 'rgba(23, 6, 6, 0.7)'
-        ctx.fillRect(drawX, drawY, drawW, drawH)
-        ctx.restore()
-
-        // 4. Vignette ấm nhẹ ở 4 góc
-        if (typeof ctx.createRadialGradient === 'function') {
-            ctx.save()
-            const cx = drawX + drawW / 2
-            const cy = drawY + drawH / 2
-            const innerR = Math.min(drawW, drawH) * 0.28
-            const outerR = Math.hypot(drawW / 2, drawH / 2) * 1.05
-            const grad = ctx.createRadialGradient(
-                cx,
-                cy,
-                innerR,
-                cx,
-                cy,
-                outerR
-            )
-            grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
-            grad.addColorStop(0.55, 'rgba(248, 234, 229, 0.96)')
-            grad.addColorStop(1, 'rgba(173, 154, 148, 1)')
-            ctx.globalCompositeOperation = 'multiply'
-            ctx.fillStyle = grad
-            ctx.fillRect(drawX, drawY, drawW, drawH)
-            ctx.restore()
-        }
-    } catch (err) {
-        console.warn('Could not apply retro look to slot:', err)
-    }
-
-    // 5. Hạt phim mịn
-    applyFilmGrainToSlot(ctx, drawX, drawY, drawW, drawH)
-}
-
-/**
- * Phủ độ mềm Negative Clarity và Vignette nhẹ theo preset Capture One cho ô ảnh B&W.
- */
-function applyBwLookToSlot(
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    srcX: number,
-    srcY: number,
-    srcW: number,
-    srcH: number,
-    drawX: number,
-    drawY: number,
-    drawW: number,
-    drawH: number,
-    cssFilter?: string
-) {
-    try {
-        const clarityAmt = BW_PRESET.clarity?.amount ?? 0
-        const sigmaRatio = BW_PRESET.clarity?.sigmaRatio ?? 0.008
-        if (
-            clarityAmt > 0 &&
-            typeof document !== 'undefined' &&
-            drawW > 0 &&
-            drawH > 0
-        ) {
-            const blurW = Math.max(32, Math.round(drawW / 4))
-            const blurH = Math.max(32, Math.round(drawH / 4))
-            const blurCanvas = document.createElement('canvas')
-            blurCanvas.width = blurW
-            blurCanvas.height = blurH
-            const bCtx = blurCanvas.getContext('2d')
-            if (bCtx) {
-                const baseFilter =
-                    cssFilter && cssFilter !== 'none' ? cssFilter : ''
-                const sigmaPx = Math.max(1, blurW * sigmaRatio)
-                bCtx.filter = `${baseFilter} blur(${sigmaPx.toFixed(1)}px)`.trim()
-                bCtx.drawImage(
-                    img,
-                    srcX,
-                    srcY,
-                    srcW,
-                    srcH,
-                    0,
-                    0,
-                    blurW,
-                    blurH
-                )
-                ctx.save()
-                ctx.globalAlpha = clarityAmt
-                ctx.drawImage(blurCanvas, drawX, drawY, drawW, drawH)
-                ctx.restore()
-            }
-        }
-
-        const vig = BW_PRESET.vignette
-        if (vig && typeof ctx.createRadialGradient === 'function') {
-            ctx.save()
-            const cx = drawX + drawW / 2
-            const cy = drawY + drawH / 2
-            const outerR = Math.hypot(drawW / 2, drawH / 2)
-            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR)
-            for (const stop of [0, 0.5, 0.75, 1]) {
-                // r^2 tương ứng tỉ lệ r/R^2 = stop^2 trên hệ số Capture One
-                const r2 = stop * stop
-                const gain = Math.max(
-                    vig.minGain,
-                    Math.min(vig.maxGain, 1 + vig.c1 * r2 + vig.c2 * r2 * r2)
-                )
-                const v = Math.round(gain * 255)
-                grad.addColorStop(stop, `rgb(${v}, ${v}, ${v})`)
-            }
-            ctx.globalCompositeOperation = 'multiply'
-            ctx.fillStyle = grad
-            ctx.fillRect(drawX, drawY, drawW, drawH)
-            ctx.restore()
-        }
-    } catch (err) {
-        console.warn('Could not apply B&W look to slot:', err)
-    }
-}
-
-/**
- * Tạo bản vẽ Photobooth Strip Canvas chất lượng cao (300 DPI tương đương khổ in)
- * - 2x6 inch: 600 x 1800 px
- * - 4x6 inch: 1200 x 1800 px
+ * Tạo bản vẽ Photobooth Strip Canvas chất lượng cao (600 DPI tương đương khổ in)
+ * - 2x6 inch (strip đơn): 1200 x 3600 px
+ * - 4x6 inch (hoặc 2x6 ghép đôi): 2400 x 3600 px
  */
 export async function generateStripComposite(
     opts: RenderOptions
 ): Promise<string> {
     const is2x6 = (opts.theme?.frameSize || opts.frameSize) === '2x6'
-    const width = opts.theme?.canvasWidth || (is2x6 ? 600 : 1200)
-    const height = opts.theme?.canvasHeight || 1800
+    const width = opts.theme?.canvasWidth || (is2x6 ? 1200 : 2400)
+    const height = opts.theme?.canvasHeight || 3600
+    const dpiScale = height / 1800
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -439,10 +196,10 @@ export async function generateStripComposite(
     const cols = opts.layout.cols || 1
     const rows = opts.layout.rows || Math.max(1, Math.ceil(totalSlots / cols))
 
-    const footerHeight = 150
-    const padX = is2x6 ? 36 : 50
-    const padTop = 40
-    const gap = 20
+    const footerHeight = Math.round(150 * dpiScale)
+    const padX = Math.round((is2x6 ? 36 : 50) * dpiScale)
+    const padTop = Math.round(40 * dpiScale)
+    const gap = Math.round(20 * dpiScale)
 
     const availableHeight = height - padTop - footerHeight
     const slotW = (width - padX * 2 - gap * (cols - 1)) / cols
@@ -465,9 +222,9 @@ export async function generateStripComposite(
         }
 
         // Các ô trong frame là ô vuông góc 90 độ (không bo tròn góc, không để hở khoảng trắng)
-        // Mở rộng viền nhẹ 2px (bleed) để ảnh ăn sâu xuống dưới lớp overlay đồ họa
+        // Mở rộng viền nhẹ theo tỷ lệ DPI (4px ở 600 DPI) để ảnh ăn sâu xuống dưới lớp overlay đồ họa
         ctx.save()
-        const bleed = opts.theme.overlayUrl ? 2 : 0
+        const bleed = opts.theme.overlayUrl ? Math.round(2 * dpiScale) : 0
         const drawX = sx - bleed
         const drawY = sy - bleed
         const drawW = curSlotW + bleed * 2
@@ -485,16 +242,16 @@ export async function generateStripComposite(
         if (photoSrc) {
             try {
                 const img = await loadImage(photoSrc)
-                // Áp dụng bộ lọc màu được chọn lên từng ảnh trong dải in
-                if (
-                    opts.filter &&
-                    opts.filter.cssFilter &&
-                    opts.filter.cssFilter !== 'none'
-                ) {
-                    ctx.filter = opts.filter.cssFilter
-                } else {
-                    ctx.filter = 'none'
-                }
+                const fid = opts.filter?.id || 'normal'
+                const isVintageV2 =
+                    fid === 'retro_90s' ||
+                    fid === 'retro' ||
+                    fid === 'vintage' ||
+                    fid === 'vintage_v2'
+                const isBw =
+                    fid === 'vintage_noir' ||
+                    fid === 'monochrome' ||
+                    fid === 'bw'
 
                 // Fit & Center crop chuẩn xác: Chống lỗi cắt xén 2 lần (Double Cropping)
                 // Đồng bộ 1:1 giữa Live View, Khung Vàng an toàn, và dải in thực tế
@@ -576,24 +333,9 @@ export async function generateStripComposite(
                     )
                 }
 
-                ctx.drawImage(
-                    img,
-                    finalSrcX,
-                    finalSrcY,
-                    finalSrcW,
-                    finalSrcH,
-                    drawX,
-                    drawY,
-                    drawW,
-                    drawH
-                )
-
-                // Phủ hiệu ứng phim cổ điển Retro (tông đào-nâu gụ ấm, halation, vignette, hạt mịn)
-                if (
-                    opts.filter &&
-                    (opts.filter.id === 'retro_90s' || opts.filter.hasGrain)
-                ) {
-                    applyRetroFilmLookToSlot(
+                if (isVintageV2) {
+                    ctx.filter = 'none'
+                    drawVintageV2Region(
                         ctx,
                         img,
                         finalSrcX,
@@ -603,15 +345,27 @@ export async function generateStripComposite(
                         drawX,
                         drawY,
                         drawW,
-                        drawH,
-                        opts.filter.cssFilter
+                        drawH
                     )
-                } else if (
-                    opts.filter &&
-                    (opts.filter.id === 'vintage_noir' ||
-                        opts.filter.id === 'monochrome')
-                ) {
-                    applyBwLookToSlot(
+                } else if (isBw) {
+                    ctx.filter =
+                        opts.filter?.cssFilter &&
+                        opts.filter.cssFilter !== 'none'
+                            ? opts.filter.cssFilter
+                            : 'none'
+                    ctx.drawImage(
+                        img,
+                        finalSrcX,
+                        finalSrcY,
+                        finalSrcW,
+                        finalSrcH,
+                        drawX,
+                        drawY,
+                        drawW,
+                        drawH
+                    )
+                    ctx.filter = 'none'
+                    applyBwPostLookToRegion(
                         ctx,
                         img,
                         finalSrcX,
@@ -622,7 +376,20 @@ export async function generateStripComposite(
                         drawY,
                         drawW,
                         drawH,
-                        opts.filter.cssFilter
+                        opts.filter?.cssFilter
+                    )
+                } else {
+                    ctx.filter = 'none'
+                    ctx.drawImage(
+                        img,
+                        finalSrcX,
+                        finalSrcY,
+                        finalSrcW,
+                        finalSrcH,
+                        drawX,
+                        drawY,
+                        drawW,
+                        drawH
                     )
                 }
             } catch (err) {
@@ -649,7 +416,7 @@ export async function generateStripComposite(
         ctx.rotate((st.rotation * Math.PI) / 180)
         ctx.scale(scale, scale)
         ctx.font =
-            '56px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif'
+            `${Math.round(56 * dpiScale)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(st.icon, 0, 0)
@@ -676,22 +443,22 @@ export async function generateStripComposite(
         ctx.textBaseline = 'middle'
 
         // Tiêu đề sự kiện
-        ctx.font = '800 28px "Google Sans Flex", "Inter", sans-serif'
-        ctx.letterSpacing = '1px'
+        ctx.font = `800 ${Math.round(28 * dpiScale)}px "Google Sans Flex", "Inter", sans-serif`
+        ctx.letterSpacing = `${Math.max(1, Math.round(dpiScale))}px`
         ctx.fillText(
             opts.eventName || DEFAULT_EVENT_NAME,
             width / 2,
-            height - 85
+            height - Math.round(85 * dpiScale)
         )
 
         // Ngày tháng & Bộ lọc
-        ctx.font = '700 16px "Inter", sans-serif'
-        ctx.letterSpacing = '0.5px'
+        ctx.font = `700 ${Math.round(16 * dpiScale)}px "Inter", sans-serif`
+        ctx.letterSpacing = `${(0.5 * dpiScale).toFixed(1)}px`
         ctx.globalAlpha = 0.85
         ctx.fillText(
             `${opts.eventDate}  •  ${opts.filter.name}`,
             width / 2,
-            height - 48
+            height - Math.round(48 * dpiScale)
         )
         ctx.restore()
     }
@@ -743,9 +510,9 @@ export function sampleImageEdgeColor(img: CanvasImageSource): string {
 }
 
 /**
- * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6:
- * - Nếu là ảnh dải đơn 2x6 (600x1800): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (1200 x 1800 px, 300 DPI) gồm 2 tấm 2x6 cạnh nhau.
- * - Nếu là ảnh khổ 4x6 (1200x1800 hoặc 1800x1200 hoặc 1240x1844): Giữ nguyên kích thước canvas.
+ * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6 600 DPI:
+ * - Nếu là ảnh dải đơn 2x6 (1200x3600): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (2400 x 3600 px, 600 DPI) gồm 2 tấm 2x6 cạnh nhau.
+ * - Nếu là ảnh khổ 4x6 (2400x3600 hoặc 3600x2400): Giữ nguyên kích thước canvas.
  * - Áp dụng Print Scale (90% - 100%, bước 0.25%):
  *   Thu nhỏ nội dung đồng đều theo tỉ lệ (preserving aspect ratio), căn giữa 2 chiều,
  *   lấp viền bằng màu mẫu góc/viền của ảnh để hạn chế viền trắng.
@@ -781,12 +548,15 @@ export async function preparePrintImageForDNP(
     effectiveScale = Math.min(100, Math.max(90, effectiveScale))
     const scaleFactor = effectiveScale / 100.0
 
-    // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, ví dụ 600x1800)
-    // Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 bản in khổ 4x6 (1200 x 1800 px)
+    // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, chuẩn 1200x3600 @ 600 DPI)
+    // Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 bản in khổ 4x6 (2400 x 3600 px @ 600 DPI)
     if (srcW < srcH && srcH / srcW >= 2.5) {
+        const pairedW = 2400
+        const pairedH = 3600
+        const stripW = pairedW / 2
         const canvas = document.createElement('canvas')
-        canvas.width = 1200
-        canvas.height = 1800
+        canvas.width = pairedW
+        canvas.height = pairedH
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
         ctx.imageSmoothingEnabled = true
@@ -795,21 +565,21 @@ export async function preparePrintImageForDNP(
         // Màu nền lấp viền lấy từ 4 góc ảnh
         const bgColor = sampleImageEdgeColor(img)
         ctx.fillStyle = bgColor
-        ctx.fillRect(0, 0, 1200, 1800)
+        ctx.fillRect(0, 0, pairedW, pairedH)
 
-        // Ghép 2 dải 2x6 sát cạnh nhau tại trục cắt giữa x = 600 TRƯỚC thành khối 4x6 (1200x1800),
-        // RỒI mới scale đồng đều cả khối 1200x1800 theo scaleFactor (căn giữa tại tâm 600, 900).
-        // Cách này đảm bảo 2 mép ngoài cùng (trái/phải) có đủ lề bù ~27px (ở 95.5%) giống hệt khổ 4x6 để tránh dao xén ngoài của DNP cắt lẹm,
-        // đồng thời đường cắt 2-inch ở giữa (x = 600) không bị chừa rãnh viền thừa làm lệch tâm 2 dải.
-        const targetStripW = Math.round(600 * scaleFactor)
-        const targetStripH = Math.round(1800 * scaleFactor)
-        const offsetX = Math.round((1200 - targetStripW * 2) / 2)
-        const offsetY = Math.round((1800 - targetStripH) / 2)
+        // Ghép 2 dải 2x6 sát cạnh nhau tại trục cắt giữa x = 1200 TRƯỚC thành khối 4x6 (2400x3600),
+        // RỒI mới scale đồng đều cả khối 2400x3600 theo scaleFactor (căn giữa tại tâm 1200, 1800).
+        // Cách này đảm bảo 2 mép ngoài cùng (trái/phải) có đủ lề bù ~54px (ở 95.5%) giống hệt khổ 4x6 để tránh dao xén ngoài của DNP cắt lẹm,
+        // đồng thời đường cắt 2-inch ở giữa (x = 1200) không bị chừa rãnh viền thừa làm lệch tâm 2 dải.
+        const targetStripW = Math.round(stripW * scaleFactor)
+        const targetStripH = Math.round(pairedH * scaleFactor)
+        const offsetX = Math.round((pairedW - targetStripW * 2) / 2)
+        const offsetY = Math.round((pairedH - targetStripH) / 2)
 
-        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 600)
+        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 1200)
         ctx.drawImage(img, offsetX, offsetY, targetStripW, targetStripH)
 
-        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 600)
+        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 1200)
         ctx.drawImage(
             img,
             offsetX + targetStripW,
@@ -819,16 +589,16 @@ export async function preparePrintImageForDNP(
         )
 
         // Đường chỉ dẫn cắt nhẹ ở vùng lề trên & dưới (không vẽ đè lên thân khung ảnh tránh vết chấm mực dọc cạnh cắt)
-        if (offsetY > 2) {
+        if (offsetY > 4) {
             ctx.save()
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)'
-            ctx.lineWidth = 1
-            ctx.setLineDash([4, 4])
+            ctx.lineWidth = 2
+            ctx.setLineDash([8, 8])
             ctx.beginPath()
-            ctx.moveTo(600, 0)
-            ctx.lineTo(600, offsetY)
-            ctx.moveTo(600, offsetY + targetStripH)
-            ctx.lineTo(600, 1800)
+            ctx.moveTo(stripW, 0)
+            ctx.lineTo(stripW, offsetY)
+            ctx.moveTo(stripW, offsetY + targetStripH)
+            ctx.lineTo(stripW, pairedH)
             ctx.stroke()
             ctx.restore()
         }
@@ -836,7 +606,7 @@ export async function preparePrintImageForDNP(
         return canvas.toDataURL('image/jpeg', 0.98)
     }
 
-    // Trường hợp 2: Khổ 4x6 hoặc tự do (1200x1800, 1800x1200, 1240x1844...)
+    // Trường hợp 2: Khổ 4x6 hoặc tự do (2400x3600, 3600x2400...)
     // 100% giữ nguyên hành vi in hiện tại
     if (scaleFactor >= 0.9999) {
         return sourceDataUrl

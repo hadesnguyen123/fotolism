@@ -38,7 +38,7 @@ const SELFBOOTH_FILTERS: ColorFilterItem[] = [
         id: 'retro_90s',
         name: 'Retro',
         cssFilter:
-            'sepia(0.38) hue-rotate(-14deg) saturate(1.2) contrast(1.08) brightness(0.98)',
+            'contrast(0.92) brightness(0.90) sepia(0.28) saturate(0.92) hue-rotate(-6deg)',
         tag: '',
         previewColor: '#8B4A39',
         hasGrain: true,

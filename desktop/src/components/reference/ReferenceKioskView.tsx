@@ -240,7 +240,7 @@ export const FILTER_OPTIONS: FilterOption[] = [
     ringColor: '#653125',
     checkColor: '#f6f3e8',
     selectedSvg: `${REFERENCE_ASSET_BASE}f_browny_selected.svg`,
-    cssFilter: 'sepia(48%) saturate(135%) contrast(1.04) brightness(0.98)',
+    cssFilter: 'contrast(0.92) brightness(0.90) sepia(0.28) saturate(0.92) hue-rotate(-6deg)',
   },
 ];
 
@@ -2943,7 +2943,6 @@ export default function ReferenceKioskView(props: ReferenceProps) {
 
                       {visibleThemes.map((theme, vIdx) => {
                         const actualIdx = windowStart + vIdx;
-                        const isSelected = actualIdx === selectedFrameIdx;
                         const centerLeft = 142 + vIdx * 148;
                         return (
                           <React.Fragment key={theme.id}>
@@ -2984,28 +2983,6 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                                 </span>
                               )}
                             </div>
-                            <p
-                              onClick={() => setSelectedFrameIdx(actualIdx)}
-                              style={{
-                                position: 'absolute',
-                                left: centerLeft,
-                                top: 305,
-                                width: 136,
-                                transform: 'translateX(-50%)',
-                                fontFamily: 'var(--font-sans)',
-                                fontWeight: isSelected ? 600 : 400,
-                                fontSize: 18,
-                                lineHeight: 1.3,
-                                color: '#653125',
-                                textAlign: 'center',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {theme.name}
-                            </p>
                           </React.Fragment>
                         );
                       })}

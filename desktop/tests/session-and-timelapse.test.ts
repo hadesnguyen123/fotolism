@@ -169,7 +169,7 @@ describe('TL-01: Quy trình Xử lý Video Timelapse Hậu Trường (Background
         ).toBe(true)
     })
 
-    it('Định dạng tên thư mục con session tuân thủ chuẩn Fotolism_YYYY-MM-DD_HHhmm_session', () => {
+    it('Định dạng tên thư mục con session tuân thủ chuẩn session_YYYY-MM-DD_HHhmm_id', () => {
         const now = new Date()
         const pad = (n: number) => (n < 10 ? '0' : '') + n
         const timeStamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}h${pad(now.getMinutes())}`
@@ -177,7 +177,7 @@ describe('TL-01: Quy trình Xử lý Video Timelapse Hậu Trường (Background
         const subfolderName = `${SESSION_FOLDER_PREFIX}_${timeStamp}_${sessionId.slice(-6)}`
 
         expect(subfolderName).toMatch(
-            /^Fotolism_\d{4}-\d{2}-\d{2}_\d{2}h\d{2}_[a-z0-9_]+$/i
+            /^session_\d{4}-\d{2}-\d{2}_\d{2}h\d{2}_[a-z0-9_]+$/i
         )
     })
 

@@ -11,7 +11,7 @@ Tuân thủ `AGENTS.md` và `.agents/rules/hardware-safety.md` (chế độ 2-in
 
 | Máy in | Khổ in | Cơ chế cắt | Định mức cuộn | Tốc độ |
 | :--- | :--- | :--- | :--- | :--- |
-| **DNP DS-RX1HS** | `4x6` (`1200x1800 px`), `2x6` strip | Bật **2-inch Cut** trong Windows Driver | 700 tờ `4x6` (1400 dải `2x6`) | ~12.4s/bản |
+| **DNP DS-RX1HS** | `4x6` (`2400x3600 px`, `600 DPI`), `2x6` strip (`1200x3600 px` ghép đôi `2400x3600 px`) | Bật **2-inch Cut** trong Windows Driver | 700 tờ `4x6` (1400 dải `2x6`) | ~12.4s/bản |
 | **DNP DS620A** | `4x6`, `2x6`, `6x8` | Tự động cắt đa khổ | — | ~8.4s/bản |
 | **HiTi P525L** | `4x6`, `2x6` strip | Dao cắt `2x6` cơ học | 500 tờ `4x6` | ~12.8s/bản |
 | **Canon Selphy CP1300/1500** | `4x6` postcard | Cắt thủ công viền răng cưa | — | ~47s/bản |

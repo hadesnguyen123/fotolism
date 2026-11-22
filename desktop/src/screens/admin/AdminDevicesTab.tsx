@@ -818,11 +818,11 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                     }
                                     className="form-select-touch"
                                 >
-                                    <option value="300 DPI">
-                                        300 DPI (Chuẩn in sắc nét)
-                                    </option>
                                     <option value="600 DPI">
-                                        600 DPI (Siêu chi tiết)
+                                        600 DPI (Chuẩn in siêu chi tiết)
+                                    </option>
+                                    <option value="300 DPI">
+                                        300 DPI (Tương thích tiêu chuẩn)
                                     </option>
                                 </select>
                             </div>

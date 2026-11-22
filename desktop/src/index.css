@@ -390,30 +390,15 @@ optgroup {
     transform: translateY(0) scale(0.97);
 }
 
-/* ── Lớp Phủ Phim Cổ Điển (Retro Warm Vignette + Mahogany Lift + Grain) ───── */
+/* ── Lớp Phủ Hạt Phim Nhẹ cho CSS Preview Tạm Thời ───────────────────────── */
 .retro-film-grain-overlay {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     pointer-events: none;
-    background: radial-gradient(
-        circle at center,
-        rgba(255, 209, 191, 0.1) 25%,
-        rgba(138, 110, 102, 0.25) 100%
-    );
-    mix-blend-mode: multiply;
     border-radius: inherit;
     z-index: 2;
-}
-
-.retro-film-grain-overlay::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(23, 6, 6, 0.7);
-    mix-blend-mode: screen;
-    border-radius: inherit;
 }
 
 .retro-film-grain-overlay::after {

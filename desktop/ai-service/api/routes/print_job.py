@@ -1,6 +1,6 @@
 """
 Router phụ trách truy vấn danh sách máy in OS và gửi lệnh in ảnh fallback qua win32print / CUPS.
-Phụ thuộc: fastapi, pydantic, platform, subprocess, core.database.
+Phụ thuộc: fastapi, pydantic, platform, subprocess.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -9,7 +9,6 @@ import os
 import platform
 import subprocess
 from pathlib import Path
-from core.database import get_connection
 
 router = APIRouter()
 
@@ -80,23 +79,6 @@ async def create_print_job(req: PrintRequest):
         raise HTTPException(status_code=404, detail=f"Image for printing not found: {req.imagePath}")
 
     job_id = f"print_{int(time.time() * 1000)}"
-
-    # Lưu vào database
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO print_jobs (id, session_id, photo_path, printer_name, copies, status)
-            VALUES (?, ?, ?, ?, ?, 'queued')
-            """,
-            (job_id, req.sessionId, str(img_path), req.printerName or "Default", req.copies),
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Warning: Failed to save print_job to DB: {e}")
-
     printed = False
     system = platform.system()
 

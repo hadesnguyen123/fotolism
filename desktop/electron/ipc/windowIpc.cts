@@ -47,6 +47,9 @@ export async function ensureAiService(): Promise<boolean> {
     if (await checkAiService()) return true
 
     const aiScriptPaths = [
+        ...(process.resourcesPath
+            ? [path.join(process.resourcesPath, 'ai-service/main.py')]
+            : []),
         path.join(__dirname, '../../ai-service/main.py'),
         path.join(__dirname, '../ai-service/main.py'),
         path.join(app.getAppPath(), 'ai-service/main.py'),
@@ -60,9 +63,18 @@ export async function ensureAiService(): Promise<boolean> {
     }
 
     const aiDir = path.dirname(aiScript)
+    // Ưu tiên Python trong venv cố định trên máy Kiosk để tách biệt runtime khỏi bộ cài .exe
+    const pythonCandidates = [
+        process.env.FOTOLISM_PYTHON_PATH,
+        'C:\\Fotolism\\ai-env\\Scripts\\python.exe',
+    ].filter((p): p is string => Boolean(p))
+    const pythonExe = pythonCandidates.find((p) => fs.existsSync(p)) || 'python'
+
     try {
-        console.log(`[AI Service] Spawning local FastAPI backend: ${aiScript}`)
-        aiServiceProc = spawn('python', ['main.py'], {
+        console.log(
+            `[AI Service] Spawning local FastAPI backend (${pythonExe}): ${aiScript}`
+        )
+        aiServiceProc = spawn(pythonExe, ['main.py'], {
             cwd: aiDir,
             detached: true,
             stdio: 'ignore',
@@ -211,24 +223,6 @@ export function registerWindowAndConfigIpc(): void {
         }
     })
 
-    // Config Handlers
-    ipcMain.handle('config:get', async (_event, key: string) => {
-        const res = await fetch(`${AI_SERVICE_URL}/config/${key}`)
-        return res.json()
-    })
-
-    ipcMain.handle(
-        'config:set',
-        async (_event, payload: { key: string; value: unknown }) => {
-            const res = await fetch(`${AI_SERVICE_URL}/config`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            })
-            return res.json()
-        }
-    )
-
     // Device Handlers
     ipcMain.handle('device:get-config', async () => {
         try {
@@ -329,23 +323,24 @@ export function registerWindowAndConfigIpc(): void {
                         ? '3:4'
                         : undefined)
 
+                const cleanImagePath = path.resolve(payload.imagePath.replace(/^file:\/+/i, ''))
+
                 // Natural capture preserves the original JPEG bytes and avoids Python startup/inference.
                 if (
                     (payload.beautyLevel ?? 50) === 0 &&
                     (!payload.styleId || payload.styleId === 'natural') &&
                     !effectiveCropAspect
                 ) {
-                    const source = path.resolve(payload.imagePath.replace(/^file:\/\//, ''))
-                    if (!fs.existsSync(source)) throw new Error('Không tìm thấy ảnh gốc')
-                    const target = payload.outputPath ? path.resolve(payload.outputPath) : source
-                    if (target !== source) {
+                    if (!fs.existsSync(cleanImagePath)) throw new Error('Không tìm thấy ảnh gốc')
+                    const target = payload.outputPath ? path.resolve(payload.outputPath) : cleanImagePath
+                    if (target !== cleanImagePath) {
                         fs.mkdirSync(path.dirname(target), { recursive: true })
-                        await fs.promises.copyFile(source, target)
+                        await fs.promises.copyFile(cleanImagePath, target)
                     }
                     return { success: true, data: { enhancedPath: target } }
                 }
                 const key = JSON.stringify([
-                    path.resolve(payload.imagePath.replace(/^file:\/\//, '')),
+                    cleanImagePath,
                     payload.outputPath, payload.beautyLevel ?? 50,
                     payload.presetId || 'white_pink_v2', payload.styleId || 'natural',
                     effectiveCropAspect || '',
@@ -356,7 +351,7 @@ export function registerWindowAndConfigIpc(): void {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        imagePath: payload.imagePath,
+                        imagePath: cleanImagePath,
                         outputPath: payload.outputPath,
                         beautyLevel: payload.beautyLevel ?? 50,
                         presetId: payload.presetId || 'white_pink_v2',
@@ -383,7 +378,7 @@ export function registerWindowAndConfigIpc(): void {
                 if (!fs.existsSync(result.data.enhancedPath) || fs.statSync(result.data.enhancedPath).size === 0) {
                     return { success: false, error: 'AI chưa lưu xong file ảnh' }
                 }
-                assertEnhancedFile(payload.imagePath.replace(/^file:\/+/, ''), result.data.enhancedPath)
+                assertEnhancedFile(cleanImagePath, result.data.enhancedPath)
                 return result
                 })
             } catch (err: any) {

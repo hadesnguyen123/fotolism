@@ -81,5 +81,6 @@
   "clarity": {
     "sigmaRatio": 0.008,
     "amount": 0.06
-  }
+  },
+  "grain": 0.2
 }

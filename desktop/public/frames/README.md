@@ -4,36 +4,36 @@ Thư mục này chứa các file khung viền ảnh mẫu (Frame Overlays) cho h
 
 ---
 
-## 1. Quy Chuẩn Kích Thước File Khung (Chuẩn In Nhiệt 300 DPI)
+## 1. Quy Chuẩn Kích Thước File Khung (Chuẩn In Nhiệt 600 DPI)
 
 | Khổ Ảnh In | Kích Thước Pixel | Tỷ Lệ | Định Dạng File | Ứng Dụng |
 | :--- | :--- | :--- | :--- | :--- |
-| **Dải Đơn 2x6 Strip** | `600 x 1800 px` | 1:3 | PNG-24 (Alpha trong suốt) | Photobooth 3 ô / 4 ô kinh điển |
-| **Dải Kép 2x6 Strip (Dual)** | `1200 x 1800 px` | 2:3 | PNG-24 (Alpha trong suốt) | Dải đôi cắt 2-inch cut trên DNP DS-RX1 |
-| **Khổ 4x6 Dọc (Postcard)** | `1200 x 1800 px` | 2:3 | PNG-24 (Alpha trong suốt) | Lưới 4 ô (2x2), 6 ô (2x3), 1 ô lớn |
-| **Khổ 4x6 Tràn Viền DNP (Full Bleed)** | `1240 x 1844 px` | ~2:3 | PNG-24 (Alpha trong suốt) | Khổ in tràn viền chuẩn máy in nhiệt DNP DS-RX1 / DS620 |
-| **Khổ 4x6 Ngang (Landscape)** | `1800 x 1200 px` | 3:2 | PNG-24 (Alpha trong suốt) | Tiệc cưới, sự kiện công ty |
+| **Dải Đơn 2x6 Strip** | `1200 x 3600 px` | 1:3 | PNG-24 (Alpha trong suốt) | Photobooth 3 ô / 4 ô kinh điển |
+| **Dải Kép 2x6 Strip (Dual)** | `2400 x 3600 px` | 2:3 | PNG-24 (Alpha trong suốt) | Dải đôi cắt 2-inch cut trên DNP DS-RX1 |
+| **Khổ 4x6 Dọc (Postcard)** | `2400 x 3600 px` | 2:3 | PNG-24 (Alpha trong suốt) | Lưới 4 ô (2x2), 6 ô (2x3), 1 ô lớn |
+| **Khổ 4x6 Tràn Viền DNP (Full Bleed)** | `2480 x 3688 px` | ~2:3 | PNG-24 (Alpha trong suốt) | Khổ in tràn viền chuẩn máy in nhiệt DNP DS-RX1 / DS620 |
+| **Khổ 4x6 Ngang (Landscape)** | `3600 x 2400 px` | 3:2 | PNG-24 (Alpha trong suốt) | Tiệc cưới, sự kiện công ty |
 
 > [!IMPORTANT]
 > **Quy tắc thiết kế quan trọng:**
 > - **Các ô chứa ảnh khách PHẢI LÀ VÙNG TRONG SUỐT (Transparent / Alpha = 0)** để ảnh chụp của khách hiển thị xuyên qua bên dưới lớp khung.
 > - **Hệ màu chuẩn**: `sRGB` (tránh dùng CMYK vì trình duyệt & máy in nhiệt sẽ bị lệch màu).
-> - **Độ phân giải**: `300 DPI` (đảm bảo in ra sắc nét, không bị nhòe vỡ).
+> - **Độ phân giải**: `600 DPI` (đảm bảo in ra siêu sắc nét, không bị nhòe vỡ).
 
 ---
 
-## 2. Tọa Độ Các Ô Ảnh (Slot Positions) Trên Khổ 2x6 (600 x 1800 px)
+## 2. Tọa Độ Các Ô Ảnh (Slot Positions) Trên Khổ 2x6 (1200 x 3600 px)
 
 Khi dùng layout 4 ảnh dải dọc kinh điển (`4_strip_classic`):
-- **Chiều rộng mỗi ô ảnh**: `528 px`
-- **Chiều cao mỗi ô ảnh**: `388 px`
-- **Tọa độ vị trí (X, Y)**:
-  - **Ô 1**: `X = 36`, `Y = 40`
-  - **Ô 2**: `X = 36`, `Y = 448`
-  - **Ô 3**: `X = 36`, `Y = 855`
-  - **Ô 4**: `X = 36`, `Y = 1263`
+- **Chiều rộng mỗi ô ảnh**: `1056 px`
+- **Chiều cao mỗi ô ảnh**: `704 px` (tỉ lệ `3:2`)
+- **Tọa độ vị trí mẫu (`BlueStars` / `Creme`)**:
+  - **Ô 1**: `X = 72`, `Y = 166`
+  - **Ô 2**: `X = 72`, `Y = 918`
+  - **Ô 3**: `X = 72`, `Y = 1670`
+  - **Ô 4**: `X = 72`, `Y = 2422`
 - **Khu vực chân trang (Footer Branding)**:
-  - Vùng từ `Y = 1650` đến `Y = 1800` (chiều cao 150 px): Dành riêng cho logo thương hiệu, tên cô dâu chú rể, slogan sự kiện hoặc ngày kỷ niệm.
+  - Vùng từ `Y = 3300` đến `Y = 3600` (chiều cao 300 px): Dành riêng cho logo thương hiệu, tên cô dâu chú rể, slogan sự kiện hoặc ngày kỷ niệm.
 
 ---
 

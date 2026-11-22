@@ -9,7 +9,7 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev:vite": "vite",
-    "dev:electron": "wait-on -t 30000 tcp:127.0.0.1:5173 && cmd /c \"set ELECTRON_RUN_AS_NODE=&& electron .\"",
+    "dev:electron": "wait-on -t 30000 tcp:127.0.0.1:5173 && cmd /c \"set ELECTRON_RUN_AS_NODE=&& set NODE_ENV=development&& electron .\"",
     "dev:ai": "cd ai-service && python main.py",
     "dev": "concurrently -n vite,ai,electron -c cyan,magenta,yellow \"npm run dev:vite\" \"npm run dev:ai\" \"npm run dev:electron\"",
     "dev:vite:photobooth": "cross-env VITE_KIOSK_MODE=photobooth vite",
@@ -59,20 +59,46 @@
     },
     "files": [
       "dist/**",
-      "dist-electron/**",
-      "electron/fotolism_canon_daemon.exe",
-      "electron/fotolism_canon_capture.exe"
+      "dist-electron/**"
+    ],
+    "extraResources": [
+      {
+        "from": "electron",
+        "to": "canon-daemon",
+        "filter": [
+          "fotolism_canon_daemon.exe",
+          "fotolism_canon_capture.exe",
+          "canon_edsdk_capture.ps1",
+          "EDSDK.dll",
+          "EdsImage.dll"
+        ]
+      },
+      {
+        "from": "ai-service",
+        "to": "ai-service",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "public/mediapipe/models/face_landmarker.task",
+        "to": "mediapipe/models/face_landmarker.task"
+      }
     ],
     "win": {
       "target": [
-        "dir"
+        "nsis"
       ],
       "signAndEditExecutable": false,
       "icon": "public/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "mac": {
       "target": [

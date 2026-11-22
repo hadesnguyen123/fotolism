@@ -61,7 +61,7 @@ export const InteractiveStripPreview: React.FC<
                         } ${selectedTheme?.overlayUrl ? 'has-custom-overlay' : ''}`}
                     style={{
                         position: 'relative',
-                        aspectRatio: is2x6 ? '600 / 1800' : '1200 / 1800',
+                        aspectRatio: is2x6 ? '1200 / 3600' : '2400 / 3600',
                         background:
                             selectedTheme?.bgGradient ||
                             selectedTheme?.bgColor ||
@@ -141,10 +141,9 @@ export const InteractiveStripPreview: React.FC<
                                                         : 'transform 0.12s ease-out',
                                             }}
                                         />
-                                        {(selectedFilter?.id === 'retro_90s' ||
-                                            selectedFilter?.hasGrain) && (
-                                                <div className="retro-film-grain-overlay" />
-                                            )}
+                                        {Boolean(selectedFilter?.hasGrain) && (
+                                            <div className="retro-film-grain-overlay" />
+                                        )}
                                     </>
                                 ) : (
                                     <div className="theme-slot-placeholder">

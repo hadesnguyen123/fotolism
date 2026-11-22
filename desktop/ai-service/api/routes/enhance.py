@@ -29,6 +29,7 @@ import numpy as np
 
 from core.config import STORAGE
 from core.lut_manager import lut_manager
+from core.vintage_v2 import VintageV2Config
 from core.white_balance import balance_from_reference
 from core.korean_beauty_engine import korean_beauty_engine, KoreanBeautyConfig
 
@@ -50,7 +51,10 @@ class EnhanceRequest(BaseModel):
     rosyGlow: float = Field(0.00, ge=0.0, le=1.0, description="Sắc hồng tự nhiên trên midtone (0.0 đến 1.0)")
     sharpen: bool = Field(False, description="Bật/tắt sharpening bổ sung (mặc định False theo C1)")
     styleId: str = Field("natural", description="Mã Style LUT")
-    presetId: Optional[str] = Field("white_pink_v2", description="Preset làm đẹp: 'white_pink_v2', 'white_pink' hoặc 'korean_soft_beauty'")
+    styleIntensity: float = Field(1.0, ge=0.0, le=1.0, description="Cường độ bộ lọc hậu kỳ (0.0 - 1.0)")
+    bwConfig: Optional[Dict[str, Any]] = Field(None, description="Cấu hình B&W tùy biến (tùy chọn)")
+    vintageV2Config: Optional[VintageV2Config] = Field(None, description="Cấu hình Retro Vintage V2 tùy biến (tùy chọn)")
+    presetId: Optional[str] = Field("white_pink_v2", description="Preset làm đẹp: 'white_pink_v2' hoặc 'korean_soft_beauty'")
     cropAspect: Optional[str] = Field(None, description="Tỉ lệ cắt khung tâm đầu ra (VD: '3:4' cho Selfbooth)")
     koreanConfig: Optional[KoreanBeautyConfig] = Field(None, description="Cấu hình tùy biến chuyên sâu cho Korean Soft Beauty")
 
@@ -470,10 +474,9 @@ def enhance_image(req: EnhanceRequest):
 
         # BƯỚC 2: Beauty Engine — Làm đẹp chuyên biệt theo từng preset
         if req.beautyLevel > 0:
-            if active_preset in ("korean_soft_beauty", "white_pink", "white_pink_v2"):
+            if active_preset in ("korean_soft_beauty", "white_pink_v2"):
                 k_cfg = req.koreanConfig.copy() if req.koreanConfig else (
                     KoreanBeautyConfig.white_pink_v2() if active_preset == "white_pink_v2"
-                    else KoreanBeautyConfig.white_pink() if active_preset == "white_pink"
                     else KoreanBeautyConfig()
                 )
                 if req.beautyLevel != 50:
@@ -506,8 +509,15 @@ def enhance_image(req: EnhanceRequest):
         else:
             final_img = styled_img
 
-        # BƯỚC 3: Áp dụng bộ lọc màu đầu ra (Basic / B&W / Retro) sau khi đã Enhance
-        final_img = lut_manager.apply_post_filter(final_img, req.styleId)
+        # BƯỚC 3: Áp dụng bộ lọc màu đầu ra (Basic / B&W / Retro Vintage V2) sau khi đã Enhance
+        v2_cfg_dict = req.vintageV2Config.model_dump() if req.vintageV2Config else None
+        final_img = lut_manager.apply_post_filter(
+            final_img,
+            req.styleId,
+            bw_config=req.bwConfig,
+            vintage_v2_config=v2_cfg_dict,
+            intensity=req.styleIntensity,
+        )
 
         # Publish only a complete image. Failed retries must never overwrite AI with RAW.
         suffix = out_path.suffix.lower()

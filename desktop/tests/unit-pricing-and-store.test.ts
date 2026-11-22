@@ -274,72 +274,74 @@ describe('UT-02: Pure Camera Defaults & Zero Filter Guarantee', () => {
     })
 })
 
-describe('UT-03: Kích thước Canvas & Tỷ lệ chuẩn in ấn 300 DPI (Strip & Postcard)', () => {
-    it('Kích thước bản vẽ 2x6 strip là 600 x 1800 px (tỷ lệ 1:3) đúng chuẩn 300 DPI', () => {
+describe('UT-03: Kích thước Canvas & Tỷ lệ chuẩn in ấn 600 DPI (Strip & Postcard)', () => {
+    it('Kích thước bản vẽ 2x6 strip là 1200 x 3600 px (tỷ lệ 1:3) đúng chuẩn 600 DPI', () => {
         const is2x6 = true
-        const width = is2x6 ? 600 : 1200
-        const height = 1800
-        expect(width).toBe(600)
-        expect(height).toBe(1800)
+        const width = is2x6 ? 1200 : 2400
+        const height = 3600
+        expect(width).toBe(1200)
+        expect(height).toBe(3600)
         expect(width / height).toBeCloseTo(1 / 3, 5)
     })
 
-    it('Kích thước bản vẽ 4x6 postcard là 1200 x 1800 px (tỷ lệ 2:3) đúng chuẩn 300 DPI', () => {
+    it('Kích thước bản vẽ 4x6 postcard (và 2x6 ghép đôi) là 2400 x 3600 px (tỷ lệ 2:3) đúng chuẩn 600 DPI', () => {
         const is2x6 = false
-        const width = is2x6 ? 600 : 1200
-        const height = 1800
-        expect(width).toBe(1200)
-        expect(height).toBe(1800)
+        const width = is2x6 ? 1200 : 2400
+        const height = 3600
+        expect(width).toBe(2400)
+        expect(height).toBe(3600)
         expect(width / height).toBeCloseTo(2 / 3, 5)
     })
 
-    it('Bố cục 4 ô strip (4_strip_classic) tính toán slot vừa vặn và không tràn viền', () => {
+    it('Bố cục 4 ô strip (4_strip_classic) tính toán slot vừa vặn và không tràn viền ở 600 DPI', () => {
         const layout = ALL_LAYOUTS[4][0]
         expect(layout.cols).toBe(1)
         expect(layout.rows).toBe(4)
         expect(layout.photosCount).toBe(4)
 
-        const width = 600
-        const height = 1800
-        const footerHeight = 150
-        const padX = 36
-        const padTop = 40
-        const gap = 20
+        const width = 1200
+        const height = 3600
+        const dpiScale = height / 1800
+        const footerHeight = Math.round(150 * dpiScale)
+        const padX = Math.round(36 * dpiScale)
+        const padTop = Math.round(40 * dpiScale)
+        const gap = Math.round(20 * dpiScale)
 
         const availableHeight = height - padTop - footerHeight
         const slotW = (width - padX * 2 - gap * (layout.cols - 1)) / layout.cols
         const slotH = (availableHeight - gap * (layout.rows - 1)) / layout.rows
 
-        expect(slotW).toBe(528)
-        expect(slotH).toBeGreaterThan(350)
-        expect(slotH).toBeLessThan(400)
+        expect(slotW).toBe(1056)
+        expect(slotH).toBeGreaterThan(700)
+        expect(slotH).toBeLessThan(800)
         expect(slotW * layout.cols).toBeLessThanOrEqual(width)
         expect(
             slotH * layout.rows + footerHeight + padTop + gap * 3
         ).toBeLessThanOrEqual(height)
     })
 
-    it('Bố cục 4 ô postcard (4_grid_2x2) tính toán slot 2 cột x 2 hàng cân đối', () => {
+    it('Bố cục 4 ô postcard (4_grid_2x2) tính toán slot 2 cột x 2 hàng cân đối ở 600 DPI', () => {
         const layout = ALL_LAYOUTS[4][1]
         expect(layout.cols).toBe(2)
         expect(layout.rows).toBe(2)
         expect(layout.photosCount).toBe(4)
 
-        const width = 1200
-        const height = 1800
-        const footerHeight = 150
-        const padX = 50
-        const padTop = 40
-        const gap = 20
+        const width = 2400
+        const height = 3600
+        const dpiScale = height / 1800
+        const footerHeight = Math.round(150 * dpiScale)
+        const padX = Math.round(50 * dpiScale)
+        const padTop = Math.round(40 * dpiScale)
+        const gap = Math.round(20 * dpiScale)
 
         const availableHeight = height - padTop - footerHeight
         const slotW = (width - padX * 2 - gap * (layout.cols - 1)) / layout.cols
         const slotH = (availableHeight - gap * (layout.rows - 1)) / layout.rows
 
-        expect(slotW).toBeGreaterThan(500)
-        expect(slotW).toBeLessThan(600)
-        expect(slotH).toBeGreaterThan(700)
-        expect(slotH).toBeLessThan(850)
+        expect(slotW).toBeGreaterThan(1000)
+        expect(slotW).toBeLessThan(1200)
+        expect(slotH).toBeGreaterThan(1400)
+        expect(slotH).toBeLessThan(1700)
     })
 
     it('UT-05: Hệ thống hỗ trợ đúng chuẩn 3 tông màu ảnh cốt lõi (Tự nhiên, Cổ điển B&W, Retro 90s) và các gói Selfbooth 5p, 7p, 10p', () => {

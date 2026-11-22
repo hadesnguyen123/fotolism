@@ -83,9 +83,9 @@ async def composite_photo(req: CompositeRequest):
 @router.post("/multi-cut")
 async def composite_multi_cut(req: MultiCutRequest):
     """
-    Ghép đa ảnh (1, 3, 4, 6, 8 ảnh) thành dải Strip 2x6 hoặc 4x6 chuẩn in 300 DPI.
-    - 2x6 inch: 600 x 1800 px
-    - 4x6 inch: 1200 x 1800 px
+    Ghép đa ảnh (1, 3, 4, 6, 8 ảnh) thành dải Strip 2x6 hoặc 4x6 chuẩn in 600 DPI.
+    - 2x6 inch (strip đơn): 1200 x 3600 px
+    - 4x6 inch (hoặc 2x6 ghép đôi): 2400 x 3600 px
     - Tự động căn crop center theo slot
     - Vẽ màu nền, nhãn sự kiện và ngày tháng
     """
@@ -94,8 +94,9 @@ async def composite_multi_cut(req: MultiCutRequest):
     out_path = STORAGE["composited"] / out_filename
 
     is_2x6 = req.frameSize == "2x6"
-    width = 600 if is_2x6 else 1200
-    height = 1800
+    width = 1200 if is_2x6 else 2400
+    height = 3600
+    dpi_scale = height / 1800.0
 
     try:
         bg_rgb = ImageColor.getrgb(req.themeBgColor)
@@ -110,10 +111,10 @@ async def composite_multi_cut(req: MultiCutRequest):
         cols = max(1, req.cols)
         rows = max(1, req.rows)
 
-        footer_h = 160
-        pad_x = 36 if is_2x6 else 50
-        pad_top = 40
-        gap = 20
+        footer_h = int(round(160 * dpi_scale))
+        pad_x = int(round((36 if is_2x6 else 50) * dpi_scale))
+        pad_top = int(round(40 * dpi_scale))
+        gap = int(round(20 * dpi_scale))
 
         avail_h = height - pad_top - footer_h
         slot_w = int((width - pad_x * 2 - gap * (cols - 1)) / cols)
@@ -142,17 +143,17 @@ async def composite_multi_cut(req: MultiCutRequest):
 
         # Sử dụng default font của PIL hoặc TTF nếu có
         try:
-            font_title = ImageFont.truetype("arialbd.ttf", 28)
-            font_sub = ImageFont.truetype("arial.ttf", 16)
+            font_title = ImageFont.truetype("arialbd.ttf", int(round(28 * dpi_scale)))
+            font_sub = ImageFont.truetype("arial.ttf", int(round(16 * dpi_scale)))
         except Exception:
             font_title = ImageFont.load_default()
             font_sub = ImageFont.load_default()
 
         event_text = req.eventName.upper()
-        draw.text((width // 2, height - 85), event_text, fill=text_rgb, anchor="mm", font=font_title)
+        draw.text((width // 2, height - int(round(85 * dpi_scale))), event_text, fill=text_rgb, anchor="mm", font=font_title)
         
         sub_text = f"{req.eventDate}  •  FOTOLISM" if req.eventDate else "FOTOLISM PHOTOBOOTH"
-        draw.text((width // 2, height - 48), sub_text, fill=text_rgb, anchor="mm", font=font_sub)
+        draw.text((width // 2, height - int(round(48 * dpi_scale))), sub_text, fill=text_rgb, anchor="mm", font=font_sub)
 
         # Lưu ảnh JPEG chất lượng cao
         final_rgb = canvas.convert("RGB")

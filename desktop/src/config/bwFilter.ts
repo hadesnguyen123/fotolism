@@ -20,6 +20,7 @@ export interface BwPresetConfig {
         sigmaRatio: number
         amount: number
     }
+    grain?: number
 }
 
 export const BW_PRESET = JSON.parse(presetJson) as BwPresetConfig

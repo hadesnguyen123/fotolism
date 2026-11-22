@@ -6,14 +6,13 @@
  * Phụ thuộc: react, store/appStore, lib/api, services/cloudSyncService, ./admin/*.
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { DEFAULT_ADMIN_PIN } from '../lib/constants'
 import {
     Camera,
     Cpu,
-    FileText,
     Activity,
     LogOut,
     Delete,
@@ -22,15 +21,13 @@ import {
 import {
     cloudSyncService,
     type CloudSyncStatus,
-    type KioskOutboxSession,
 } from '../services/cloudSyncService'
 import AdminOverviewTab from './admin/AdminOverviewTab'
 import AdminDevicesTab, { type HardwareSubTab } from './admin/AdminDevicesTab'
-import AdminSessionsTab from './admin/AdminSessionsTab'
 import AdminSystemTab from './admin/AdminSystemTab'
 import './AdminScreen.css'
 
-export type AdminTab = 'overview' | 'hardware' | 'sessions' | 'system'
+export type AdminTab = 'overview' | 'hardware' | 'system'
 
 export const AdminScreen: React.FC = () => {
     // Store
@@ -81,7 +78,7 @@ export const AdminScreen: React.FC = () => {
     const [selectedPrinter, setSelectedPrinter] = useState<string>('')
     const [paperRollCount, setPaperRollCount] = useState<number>(640)
     const [printFormat, setPrintFormat] = useState<'2x6' | '4x6'>('2x6')
-    const [printDpi, setPrintDpi] = useState<string>('300 DPI')
+    const [printDpi, setPrintDpi] = useState<string>('600 DPI')
     const [isTestingPrint, setIsTestingPrint] = useState<boolean>(false)
     const [printTestMsg, setPrintTestMsg] = useState<string | null>(null)
 
@@ -96,63 +93,9 @@ export const AdminScreen: React.FC = () => {
         cloudSyncService.getStatus()
     )
 
-    // Sessions Outbox Table
-    const getInitialOutboxSessions = (): KioskOutboxSession[] => {
-        try {
-            if (typeof localStorage !== 'undefined') {
-                const raw = localStorage.getItem('fotolism_sessions_outbox')
-                if (raw) return JSON.parse(raw)
-            }
-        } catch (err) {
-            console.error('[AdminScreen] Lỗi đọc danh sách phiên outbox:', err)
-        }
-        return []
-    }
-
-    const [sessions, setSessions] = useState<KioskOutboxSession[]>(
-        getInitialOutboxSessions
-    )
-    const [sessionDateFrom, setSessionDateFrom] = useState<string>('')
-    const [sessionDateTo, setSessionDateTo] = useState<string>('')
-    const [sessionSyncFilter, setSessionSyncFilter] = useState<
-        'ALL' | 'SYNCED' | 'PENDING_SYNC'
-    >('ALL')
-    const [currentPage, setCurrentPage] = useState<number>(1)
-    const pageSize = 10
-
-    const filteredSessions = useMemo(() => {
-        return sessions.filter((s) => {
-            if (
-                sessionSyncFilter !== 'ALL' &&
-                s.sync_status !== sessionSyncFilter
-            )
-                return false
-            if (sessionDateFrom) {
-                const sDate = s.created_at.split('T')[0]
-                if (sDate < sessionDateFrom) return false
-            }
-            if (sessionDateTo) {
-                const sDate = s.created_at.split('T')[0]
-                if (sDate > sessionDateTo) return false
-            }
-            return true
-        })
-    }, [sessions, sessionSyncFilter, sessionDateFrom, sessionDateTo])
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredSessions.length / pageSize)
-    )
-    const paginatedSessions = useMemo(() => {
-        const start = (currentPage - 1) * pageSize
-        return filteredSessions.slice(start, start + pageSize)
-    }, [filteredSessions, currentPage])
-
     // Diagnostics & Modals
     const [isDiagnosticRunning, setIsDiagnosticRunning] =
         useState<boolean>(false)
-    const [isManualSyncing, setIsManualSyncing] = useState<boolean>(false)
-    const [manualSyncMsg, setManualSyncMsg] = useState<string | null>(null)
     const [cmsPingResult, setCmsPingResult] = useState<string | null>(null)
     const [isPingingCms, setIsPingingCms] = useState<boolean>(false)
     const [isCopiedToken, setIsCopiedToken] = useState<boolean>(false)
@@ -518,34 +461,6 @@ export const AdminScreen: React.FC = () => {
         setIsDiagnosticRunning(false)
     }
 
-    // Session Outbox Sync
-    const handleTriggerManualSync = async () => {
-        setIsManualSyncing(true)
-        setManualSyncMsg(null)
-        try {
-            const result = await cloudSyncService.forceSyncNow()
-            setSessions(getInitialOutboxSessions())
-            setManualSyncMsg(
-                `Đồng bộ hoàn tất: ${result.syncedCount} phiên thành công. ${result.message || ''}`
-            )
-        } catch (err: any) {
-            setManualSyncMsg(
-                `Lỗi đồng bộ: ${err.message || 'Không thể liên lạc CMS'}`
-            )
-        } finally {
-            setIsManualSyncing(false)
-        }
-    }
-
-    // Clean > 7 days
-    const handleCleanOldSessions = () => {
-        const res = cloudSyncService.purgeOldSessions(7)
-        setSessions(getInitialOutboxSessions())
-        alert(
-            `Đã dọn dẹp ${res.removedCount} phiên cũ hơn 7 ngày. Còn lại: ${res.remainingCount} phiên.`
-        )
-    }
-
     // Ping CMS
     const handlePingCms = async () => {
         setIsPingingCms(true)
@@ -758,19 +673,11 @@ export const AdminScreen: React.FC = () => {
                     </button>
 
                     <button
-                        className={`admin-nav-item ${activeTab === 'sessions' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('sessions')}
-                    >
-                        <FileText size={24} strokeWidth={2.2} />
-                        <span>3. Phiên Chụp</span>
-                    </button>
-
-                    <button
                         className={`admin-nav-item ${activeTab === 'system' ? 'active' : ''}`}
                         onClick={() => setActiveTab('system')}
                     >
                         <Cpu size={24} strokeWidth={2.2} />
-                        <span>4. Hệ Thống</span>
+                        <span>3. Hệ Thống</span>
                     </button>
 
                     <div className="sidebar-footer-badge">
@@ -824,30 +731,8 @@ export const AdminScreen: React.FC = () => {
                         />
                     )}
 
-                    {activeTab === 'sessions' && (
-                        <AdminSessionsTab
-                            sessions={sessions}
-                            filteredSessions={filteredSessions}
-                            paginatedSessions={paginatedSessions}
-                            sessionDateFrom={sessionDateFrom}
-                            setSessionDateFrom={setSessionDateFrom}
-                            sessionDateTo={sessionDateTo}
-                            setSessionDateTo={setSessionDateTo}
-                            sessionSyncFilter={sessionSyncFilter}
-                            setSessionSyncFilter={setSessionSyncFilter}
-                            currentPage={currentPage}
-                            setCurrentPage={setCurrentPage}
-                            totalPages={totalPages}
-                            handleCleanOldSessions={handleCleanOldSessions}
-                            handleTriggerManualSync={handleTriggerManualSync}
-                            isManualSyncing={isManualSyncing}
-                            manualSyncMsg={manualSyncMsg}
-                        />
-                    )}
-
                     {activeTab === 'system' && (
                         <AdminSystemTab
-                            daemonStatus={daemonStatus}
                             isNetworkOnline={isNetworkOnline}
                             isPingingCms={isPingingCms}
                             handlePingCms={handlePingCms}
