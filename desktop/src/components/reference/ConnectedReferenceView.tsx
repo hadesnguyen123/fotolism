@@ -15,11 +15,11 @@ export default function ConnectedReferenceView(props: ReferenceProps) {
     const layouts = DEFAULT_LAYOUT_OPTIONS.map((layout, index) => {
         const strip = index === 0
         const price = strip ? eventConfig.price2x6 || DEFAULT_PRICE_2X6 : eventConfig.price4x6 || DEFAULT_PRICE_4X6
-        const copies = strip ? 2 : 1
-        return { ...layout, basePrice: price, sheetsIncluded: copies, extraStep: copies,
+        const extraStep = strip ? 2 : 1
+        return { ...layout, basePrice: price, sheetsIncluded: 2, extraStep,
             extraPrice: strip ? eventConfig.extraCopyPrice2x6 || DEFAULT_EXTRA_COPY_PRICE_2X6 : eventConfig.extraCopyPrice4x6 || DEFAULT_EXTRA_COPY_PRICE_4X6,
             priceLabel: new Intl.NumberFormat('vi-VN').format(price),
-            confirmPriceLabel: `${new Intl.NumberFormat('vi-VN').format(price)}đ/ ${copies} tấm`,
+            confirmPriceLabel: `${new Intl.NumberFormat('vi-VN').format(price)}đ/ 2 tấm`,
         }
     })
     const index = selectedFrameSize === '2x6' ? 0 : selectedLayout.photosCount === 9 ? 2 : 1

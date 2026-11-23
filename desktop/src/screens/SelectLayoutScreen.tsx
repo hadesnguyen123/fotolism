@@ -58,8 +58,8 @@ export default function SelectLayoutScreen() {
             frameSize: '4x6',
             tag: 'Khổ 4×6',
             label: '4 ảnh 4×6',
-            sublabel: 'Gói 1 tấm in lớn',
-            defaultCopies: 1,
+            sublabel: 'Gói 2 tấm in lớn',
+            defaultCopies: 2,
         },
         {
             layout: (ALL_LAYOUTS[9] && ALL_LAYOUTS[9][0]) || {
@@ -75,8 +75,8 @@ export default function SelectLayoutScreen() {
             frameSize: '4x6',
             tag: 'Khổ 4×6',
             label: '9 ảnh 4×6',
-            sublabel: 'Gói 1 tấm in lớn',
-            defaultCopies: 1,
+            sublabel: 'Gói 2 tấm in lớn',
+            defaultCopies: 2,
         },
     ]
 

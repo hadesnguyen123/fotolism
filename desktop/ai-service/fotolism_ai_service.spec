@@ -6,14 +6,16 @@ Cấu hình PyInstaller đóng gói Fotolism AI Service thành thư mục tự c
 from PyInstaller.utils.hooks import collect_all
 
 mp_datas, mp_binaries, mp_hiddenimports = collect_all("mediapipe")
+mpl_datas, mpl_binaries, mpl_hiddenimports = collect_all("matplotlib")
 
 datas = [
     ("data/face_detection_yunet_2023mar.onnx", "data"),
     ("data/bw-preset.json", "data"),
     ("data/vintage-v2-lut.json", "data"),
-] + mp_datas
+    ("../public/mediapipe/models/face_landmarker.task", "mediapipe/models"),
+] + mp_datas + mpl_datas
 
-binaries = [] + mp_binaries
+binaries = [] + mp_binaries + mpl_binaries
 
 hiddenimports = [
     "uvicorn.logging",
@@ -29,7 +31,11 @@ hiddenimports = [
     "win32print",
     "win32api",
     "qrcode",
-] + mp_hiddenimports
+    "matplotlib",
+    "matplotlib.pyplot",
+    "mediapipe",
+    "mediapipe.tasks.python.vision.face_landmarker",
+] + mp_hiddenimports + mpl_hiddenimports
 
 a = Analysis(
     ["main.py"],
@@ -40,7 +46,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["torch", "torchvision", "torchaudio", "tensorflow", "matplotlib", "pytest"],
+    excludes=["torch", "torchvision", "torchaudio", "tensorflow", "pytest"],
     noarchive=False,
 )
 

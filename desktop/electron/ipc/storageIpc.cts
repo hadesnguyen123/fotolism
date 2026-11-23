@@ -551,6 +551,28 @@ export function registerStorageIpc(): void {
         }
     )
 
+    // Xóa thẳng tệp ảnh cục bộ trong thư mục Fotolism khi người dùng xóa ô ảnh trên màn hình chụp
+    ipcMain.handle(
+        'storage:delete-file',
+        async (_event, filePath: string) => {
+            try {
+                const resolved = cleanFilePath(filePath)
+                if (!resolved) return { success: false, error: 'Đường dẫn không hợp lệ' }
+                const rootDir = path.resolve(getFotolismDir())
+                const targetAbs = path.resolve(resolved)
+                if (!targetAbs.toLowerCase().startsWith(rootDir.toLowerCase())) {
+                    return { success: false, error: 'Từ chối xóa tệp ngoài thư mục Kiosk' }
+                }
+                if (fs.existsSync(targetAbs)) {
+                    fs.unlinkSync(targetAbs)
+                }
+                return { success: true }
+            } catch (err: any) {
+                return { success: false, error: err.message }
+            }
+        }
+    )
+
     // Pre-fetch trước tối đa 50 Presigned PUT URLs đầu phiên Selfbooth (1 request duy nhất tới CMS)
     ipcMain.handle(
         'storage:prefetch-selfbooth-urls',
@@ -901,7 +923,12 @@ export function registerStorageIpc(): void {
                                   'fotolism_shot_',
                                   'fotolism_enhanced_'
                               )
-                            : `enhanced_${shotBaseName}`
+                            : shotBaseName.startsWith('fotolism_self_')
+                              ? shotBaseName.replace(
+                                    'fotolism_self_',
+                                    'fotolism_enhanced_self_'
+                                )
+                              : `enhanced_${shotBaseName}`
                         const cleanRaw = cleanFilePath(s.rawPath)
                         const cleanEnh = cleanFilePath(s.enhancedPath)
                         const hasEnhFile = Boolean(cleanEnh && fs.existsSync(cleanEnh))

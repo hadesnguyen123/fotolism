@@ -121,6 +121,21 @@ export const InteractiveStripPreview: React.FC<
                                             src={photoSrc}
                                             alt={`Slot ${idx + 1}`}
                                             draggable={false}
+                                            onError={(e) => {
+                                                const imgEl = e.currentTarget
+                                                if (imgEl.dataset.fallbackTried === '1') return
+                                                imgEl.dataset.fallbackTried = '1'
+                                                const readFn =
+                                                    (window as any)?.fotolism?.storage?.readImageDataUrl ||
+                                                    (window as any)?.electronAPI?.storage?.readImageDataUrl
+                                                if (typeof readFn === 'function') {
+                                                    void readFn(photoSrc).then((res: any) => {
+                                                        if (res?.success && res?.data) {
+                                                            imgEl.src = res.data
+                                                        }
+                                                    })
+                                                }
+                                            }}
                                             style={{
                                                 position: 'absolute',
                                                 inset: 0,

@@ -39,7 +39,7 @@ export default function PaymentScreen() {
     } = useAppStore()
 
     const is2x6 = selectedFrameSize === '2x6' || Boolean(selectedLayout?.strip)
-    const minCopies = is2x6 ? 2 : 1
+    const minCopies = 2
     const copyStep = is2x6 ? 2 : 1
 
     useEffect(() => {
@@ -53,7 +53,7 @@ export default function PaymentScreen() {
             useAppStore.setState({
                 selectedFrameSize: '4x6',
                 selectedLayout: layout4x6,
-                selectedCopies: 1,
+                selectedCopies: 2,
             })
             const p = new URLSearchParams(window.location.search).get(
                 'mockCopies'
@@ -61,7 +61,7 @@ export default function PaymentScreen() {
             if (p) {
                 setCopies(parseInt(p, 10))
             } else {
-                setCopies(1)
+                setCopies(2)
             }
         }
     }, [])
@@ -86,7 +86,7 @@ export default function PaymentScreen() {
             window.location.search.includes('mockCopies')
         )
             return
-        const targetMin = is2x6 ? 2 : 1
+        const targetMin = 2
         if (copies < targetMin || (is2x6 && copies % 2 !== 0)) {
             setCopies(targetMin)
             setSelectedCopies(targetMin)

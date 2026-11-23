@@ -68,7 +68,7 @@ class KoreanBeautyConfig(BaseModel):
         """Preset làm đẹp chính thức của Fotolism (bảo toàn ánh sáng thật, skinBrightening=0)."""
         return cls(
             presetId="white_pink_v2",
-            skinSmoothing=0.7,
+            skinSmoothing=0.5,
             blemishRemoval=1.9,
             skinEvening=0.3,
             skinTextureRetention=0.02,
@@ -228,7 +228,11 @@ class KoreanBeautyEngine:
                         dense.append(pts)
             return dense
         except Exception as exc:
-            logger.warning("Dense Face Landmarker failed; using YuNet 5-point fallback: %s", type(exc).__name__)
+            logger.warning(
+                "Dense Face Landmarker failed; using YuNet 5-point fallback: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
             return None
 
     @staticmethod

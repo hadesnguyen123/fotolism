@@ -16,6 +16,7 @@ import { cloudSyncService } from '../services/cloudSyncService'
 import {
     DEFAULT_PRINT_SCALE,
     FILE_PREFIX_FINAL,
+    FILE_PREFIX_SELF,
     FILE_PREFIX_SHOT,
     UPLOAD_STALL_TIMEOUT_MS,
 } from '../lib/constants'
@@ -150,7 +151,7 @@ export default function ProcessingScreen() {
             const mediaShots = sourcePhotos.map((p, idx) => ({
                 slotIndex: idx,
                 id: p.id || `shot_${idx + 1}`,
-                fileName: `${FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
+                fileName: `${isSelfbooth ? FILE_PREFIX_SELF : FILE_PREFIX_SHOT}_${idx + 1}.jpg`,
                 rawPath: p.rawPath,
                 enhancedPath: p.enhancedPath,
                 rawPhotoUrl: p.rawPath,
@@ -339,6 +340,8 @@ export default function ProcessingScreen() {
             }
 
             // ── BƯỚC 4: Chuyển Sang Màn Hình Review Cuối Cùng ──
+            // Selfbooth: chờ thêm 15s sau khi đã đẩy lên R2 và sẵn sàng QR để đảm bảo đồng bộ Cloud hoàn toàn
+            const transitionDelayMs = isSelfbooth ? 15000 : 600
             if (isMountedRef.current && !hasNavigatedRef.current) {
                 hasNavigatedRef.current = true
                 if (navTimerRef.current) clearTimeout(navTimerRef.current)
@@ -346,7 +349,7 @@ export default function ProcessingScreen() {
                     if (isMountedRef.current) {
                         setScreen('review')
                     }
-                }, 600)
+                }, transitionDelayMs)
             }
         } catch (err: any) {
             console.error('[ProcessingScreen] Process failed:', err)

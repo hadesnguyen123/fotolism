@@ -207,6 +207,7 @@ export default function CaptureScreen() {
     const [aiProgressText, setAiProgressText] = useState<string>('')
     const [aiProcessingError, setAiProcessingError] = useState<string | null>(null)
     const isProceedingRef = useRef<boolean>(false)
+    const deletedPhotoIdsRef = useRef<Set<string>>(new Set())
     const proceedPhotoboothRef = useRef<
         ((options?: { allowPartialOnTimeout?: boolean }) => Promise<void>) | null
     >(null)
@@ -794,6 +795,10 @@ export default function CaptureScreen() {
                     .savePhoto(photoDataUrl, rawSavePath)
                     .then((saved) => {
                         if (!saved.success) throw new Error(saved.error || 'Không thể lưu ảnh gốc')
+                        if (deletedPhotoIdsRef.current.has(newPhoto.id)) {
+                            void api.storage.deleteFile(rawSavePath)
+                            return
+                        }
                         setSlots((prev) => {
                             const next = [...prev]
                             if (next[targetIndex]?.id === newPhoto.id) {
@@ -834,13 +839,17 @@ export default function CaptureScreen() {
                             res.data.savedPath
                         ) {
                             const canonData = res.data
+                            if (deletedPhotoIdsRef.current.has(newPhoto.id)) {
+                                void api.storage.deleteFile(canonData.savedPath)
+                                return
+                            }
                             console.log(
                                 `[Method 2] Canon EOS 24MP captured: ${canonData.savedPath}`
                             )
 
                             const canonUrl =
                                 canonData.dataUrl ||
-                                `file://${canonData.savedPath.replace(/\\/g, '/')}`
+                                `file:///${canonData.savedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
 
                             setSlots((prev) => {
                                 const next = [...prev]
@@ -894,13 +903,21 @@ export default function CaptureScreen() {
     // Xóa ảnh ở ô slot k để chuẩn bị chụp lại (chỉ được xóa tối đa 2 ảnh trong dải ảnh chụp)
     function handleDeleteSlot(indexToDelete: number) {
         if (isCapturingShot) return
-        if (!slotsRef.current[indexToDelete]) return
+        const targetPhoto = slotsRef.current[indexToDelete]
+        if (!targetPhoto) return
 
         const totalUsed = Object.values(slotDeleteCountsRef.current).reduce(
             (sum, count) => sum + count,
             0
         )
         if (totalUsed >= 2) return
+
+        // Đánh dấu đã xóa và xóa thẳng file gốc trên đĩa để tránh xử lý/enhance nhầm ảnh cũ
+        deletedPhotoIdsRef.current.add(targetPhoto.id)
+        if (targetPhoto.rawPath && !targetPhoto.rawPath.startsWith('data:image')) {
+            const api = isBrowser ? mockApi : fotolismApi
+            void api.storage.deleteFile(targetPhoto.rawPath).catch(() => {})
+        }
 
         const currentCount = slotDeleteCountsRef.current[indexToDelete] || 0
         const nextCounts = {
@@ -975,7 +992,7 @@ export default function CaptureScreen() {
                                     enhancedSavePath
                                 )
                                 if (enhRes?.success && enhRes?.data?.enhancedPath) {
-                                    const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                    const enhUrl = `file:///${enhRes.data.enhancedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
                                     currentSlots[i] = {
                                         ...slot,
                                         rawPath,
@@ -983,10 +1000,28 @@ export default function CaptureScreen() {
                                         compositedPath: enhUrl,
                                         enhanceStatus: 'processed',
                                     }
+                                } else {
+                                    const fallbackUrl = slot.enhancedPath?.startsWith('data:image')
+                                        ? slot.enhancedPath
+                                        : `file:///${rawPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                                    currentSlots[i] = {
+                                        ...slot,
+                                        rawPath,
+                                        enhancedPath: fallbackUrl,
+                                        compositedPath: fallbackUrl,
+                                    }
                                 }
                             }
                         } catch (enhErr) {
                             console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
+                            if (slot.rawPath && !slot.rawPath.startsWith('data:image') && !slot.enhancedPath?.startsWith('data:image')) {
+                                const fallbackUrl = `file:///${slot.rawPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                                currentSlots[i] = {
+                                    ...slot,
+                                    enhancedPath: fallbackUrl,
+                                    compositedPath: fallbackUrl,
+                                }
+                            }
                         }
                     }
                 })
@@ -1209,7 +1244,7 @@ export default function CaptureScreen() {
                                     enhRes.data &&
                                     enhRes.data.enhancedPath
                                 ) {
-                                    const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                    const enhUrl = `file:///${enhRes.data.enhancedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
                                     if (activeSessionIdRef.current !== capturedSessionId) {
                                 return
                             }
@@ -1307,7 +1342,7 @@ export default function CaptureScreen() {
                                     enhanceRes.data.enhancedPath
                                 ) {
                                     enhancementSucceeded = true
-                                    finalPhotoUrl = `file://${enhanceRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                    finalPhotoUrl = `file:///${enhanceRes.data.enhancedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
                                     console.log(
                                         `[Selfbooth AI] White Pink applied: ${enhanceRes.data.enhancedPath}`
                                     )
@@ -1451,7 +1486,7 @@ export default function CaptureScreen() {
                                 '3:4'
                             )
                             if (enhRes?.success && enhRes?.data?.enhancedPath) {
-                                const enhUrl = `file://${enhRes.data.enhancedPath.replace(/\\/g, '/')}`
+                                const enhUrl = `file:///${enhRes.data.enhancedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
                                 finalPhotos[idx] = {
                                     ...p,
                                     rawPath: rawP,
@@ -1459,12 +1494,31 @@ export default function CaptureScreen() {
                                     compositedPath: enhUrl,
                                     enhanceStatus: 'processed',
                                 }
+                            } else {
+                                const fallbackUrl = p.enhancedPath?.startsWith('data:image')
+                                    ? p.enhancedPath
+                                    : `file:///${rawP.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                                finalPhotos[idx] = {
+                                    ...p,
+                                    rawPath: rawP,
+                                    enhancedPath: fallbackUrl,
+                                    compositedPath: fallbackUrl,
+                                }
                             }
                         } catch (e) {
                             console.warn(
                                 `Fallback enhance selfbooth photo ${idx + 1}:`,
                                 e
                             )
+                            const fallbackUrl = p.enhancedPath?.startsWith('data:image')
+                                ? p.enhancedPath
+                                : `file:///${rawP.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                            finalPhotos[idx] = {
+                                ...p,
+                                rawPath: rawP,
+                                enhancedPath: fallbackUrl,
+                                compositedPath: fallbackUrl,
+                            }
                         }
                     }
                 }

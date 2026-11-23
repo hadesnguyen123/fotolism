@@ -112,11 +112,11 @@ export const DEFAULT_PRICE_2X6 = 70000
 /** Giá gói postcard 4x6 inch (90.000 đ) */
 export const DEFAULT_PRICE_4X6 = 90000
 
-/** Giá in thêm 2x6 inch (+1 ảnh: 40.000 đ) */
-export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 40000
+/** Giá in thêm 2x6 inch (+2 dải / 1 tờ 4x6 cắt đôi: 30.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_2X6 = 30000
 
-/** Giá in thêm 4x6 inch (+1 ảnh: 40.000 đ) */
-export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 40000
+/** Giá in thêm 4x6 inch (+1 tấm lớn: 30.000 đ) */
+export const DEFAULT_EXTRA_COPY_PRICE_4X6 = 30000
 
 /** Giá gói Selfbooth 5 phút mặc định (VND) - 1 người */
 export const DEFAULT_SELFBOOTH_PRICE_5M = 90000

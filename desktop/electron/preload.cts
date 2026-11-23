@@ -29,6 +29,7 @@ const api = {
     app: {
         getKioskMode: (): 'photobooth' | 'selfbooth' | null =>
             ipcRenderer.sendSync('app:get-kiosk-mode'),
+        quit: (): IpcResponse => ipcRenderer.invoke('app:quit'),
     },
 
     // ── AI ───────────────────────────────────────────────────────────────────
@@ -196,6 +197,9 @@ const api = {
 
         readImageDataUrl: (filePath: string): IpcResponse<string> =>
             ipcRenderer.invoke('storage:read-image-data-url', filePath),
+
+        deleteFile: (filePath: string): IpcResponse =>
+            ipcRenderer.invoke('storage:delete-file', filePath),
 
         prefetchSelfboothUrls: (payload: {
             sessionId: string

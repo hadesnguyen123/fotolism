@@ -58,10 +58,10 @@ export default function ReviewScreen() {
     const defaultCopies =
         session?.paidCopies ||
         selectedCopies ||
-        (selectedFrameSize === '2x6' ? 2 : 1)
+        2
 
     const [qrDataUrl, setQrDataUrl] = useState<string>('')
-    const [printCopies, setPrintCopies] = useState<number>(defaultCopies)
+    const [printCopies] = useState<number>(defaultCopies)
     const [isPrinting, setIsPrinting] = useState<boolean>(false)
     const [printError, setPrintError] = useState<string | null>(null)
     const [compositeStripUrl, setCompositeStripUrl] = useState<string>('')
@@ -923,7 +923,6 @@ export default function ReviewScreen() {
                             isGeneratingComposite={isGeneratingComposite}
                             printCopies={printCopies}
                             printError={printError}
-                            onSetPrintCopies={setPrintCopies}
                             onPrint={handlePrint}
                         />
                     </section>

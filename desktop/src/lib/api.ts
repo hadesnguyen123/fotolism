@@ -47,6 +47,10 @@ export interface EdsdkCaptureResult {
 }
 
 export interface FotolismAPI {
+    app?: {
+        getKioskMode?: () => 'photobooth' | 'selfbooth' | null
+        quit?: () => IpcResponse
+    }
     ai: {
         enhance: (
             imagePath: string,
@@ -164,6 +168,7 @@ export interface FotolismAPI {
         ) => IpcResponse<{ concurrency: number }>
         retryFailedUploads: () => IpcResponse<{ retriedCount: number }>
         readImageDataUrl: (filePath: string) => IpcResponse<string>
+        deleteFile: (filePath: string) => IpcResponse
         prefetchSelfboothUrls: (payload: {
             sessionId: string
             customerName?: string
@@ -261,6 +266,13 @@ const mockCaptures = new Map<string, any[]>()
 
 // Fallback implementation khi chạy trong browser dev mode (không có Electron)
 const defaultMockApi: FotolismAPI = {
+    app: {
+        getKioskMode: () => null,
+        quit: async () => {
+            if (typeof window !== 'undefined') window.close()
+            return { success: true }
+        },
+    },
     ai: {
         enhance: async (
             _imagePath: string,
@@ -627,6 +639,9 @@ const defaultMockApi: FotolismAPI = {
         readImageDataUrl: async (filePath: string) => ({
             success: true,
             data: filePath,
+        }),
+        deleteFile: async () => ({
+            success: true,
         }),
         prefetchSelfboothUrls: async (payload) => ({
             success: true,

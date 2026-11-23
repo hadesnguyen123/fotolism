@@ -38,9 +38,9 @@ export interface LayoutOption {
 export const DEFAULT_LAYOUT_OPTIONS: LayoutOption[] = [
   {
     id: '2x6',
-    title: 'Ảnh 2x6 ',
+    title: '4 ảnh 2x6',
     confirmTitle: 'Khổ 2x6 inch ',
-    subtitle: '(Gói 2 ảnh in)',
+    subtitle: '(Gói 2 dải in)',
     photosPerSheet: 4,
     sheetsIncluded: 2,
     basePrice: 70000,
@@ -55,14 +55,14 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOption[] = [
   },
   {
     id: '4x6_4',
-    title: '4 ảnh 2x6 ',
+    title: '4 ảnh 4x6',
     confirmTitle: 'Khổ 4x6 (4 ảnh)',
-    subtitle: '(Gói 2 ảnh in)',
+    subtitle: '(Gói 2 dải in)',
     photosPerSheet: 4,
     sheetsIncluded: 2,
     basePrice: 90000,
     extraPrice: 30000,
-    extraStep: 2,
+    extraStep: 1,
     priceLabel: '90.000',
     confirmPriceLabel: '90.000đ/ 2 tấm',
     badgeText: '4 ảnh / lưới đôi',
@@ -72,16 +72,16 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOption[] = [
   },
   {
     id: '4x6_9',
-    title: '9 ảnh',
+    title: '9 ảnh 4x6',
     confirmTitle: 'Khổ 4x6 (9 ảnh)',
-    subtitle: '(Gói 1 ảnh in)',
+    subtitle: '(Gói 2 dải in)',
     photosPerSheet: 9,
-    sheetsIncluded: 1,
+    sheetsIncluded: 2,
     basePrice: 90000,
     extraPrice: 30000,
     extraStep: 1,
     priceLabel: '90.000',
-    confirmPriceLabel: '90.000đ/ 1 tấm',
+    confirmPriceLabel: '90.000đ/ 2 tấm',
     badgeText: '9 ảnh / lưới vuông',
     svgAsset: `${REFERENCE_ASSET_BASE}l_group12.svg`,
     confirmSvgAsset: `${REFERENCE_ASSET_BASE}l_group12.svg`,
@@ -955,7 +955,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:231"
               >
-                Ảnh 2x6{' '}
+                4 ảnh 2x6
               </p>
               <p
                 onClick={() => handleSelectLayout(0)}
@@ -973,7 +973,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:232"
               >
-                (Gói 2 ảnh in)
+                (Gói 2 dải in)
               </p>
               <div
                 className="interactive-btn"
@@ -1022,7 +1022,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:233"
               >
-                4 ảnh 2x6{' '}
+                4 ảnh 4x6
               </p>
               <p
                 onClick={() => handleSelectLayout(1)}
@@ -1040,7 +1040,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:235"
               >
-                (Gói 2 ảnh in)
+                (Gói 2 dải in)
               </p>
               <div
                 className="interactive-btn"
@@ -1089,7 +1089,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:234"
               >
-                9 ảnh
+                9 ảnh 4x6
               </p>
               <p
                 onClick={() => handleSelectLayout(2)}
@@ -1106,7 +1106,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:236"
               >
-                (Gói 1 ảnh in)
+                (Gói 2 dải in)
               </p>
               <div
                 className="interactive-btn"

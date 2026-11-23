@@ -10,7 +10,6 @@ interface PrintActionDeckProps {
     isGeneratingComposite: boolean
     printCopies: number
     printError: string | null
-    onSetPrintCopies: React.Dispatch<React.SetStateAction<number>>
     onPrint: () => void
 }
 
@@ -22,7 +21,6 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
     isGeneratingComposite,
     printCopies,
     printError,
-    onSetPrintCopies,
     onPrint,
 }) => {
     return (
@@ -56,22 +54,6 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <button
-                        className="copies-btn-pastel"
-                        aria-label="Giảm số bản in"
-                        onClick={() => {
-                            const step = selectedFrameSize === '2x6' ? 2 : 1
-                            const min = selectedFrameSize === '2x6' ? 2 : 1
-                            onSetPrintCopies((c) => Math.max(min, c - step))
-                        }}
-                        disabled={
-                            Boolean(hasPrinted) ||
-                            isPrinting ||
-                            printCopies <= (selectedFrameSize === '2x6' ? 2 : 1)
-                        }
-                    >
-                        -
-                    </button>
                     <span
                         style={{
                             fontWeight: 900,
@@ -82,21 +64,6 @@ export const PrintActionDeck: React.FC<PrintActionDeckProps> = ({
                         {printCopies}{' '}
                         {selectedFrameSize === '2x6' ? 'dải' : 'tấm'}
                     </span>
-                    <button
-                        className="copies-btn-pastel"
-                        aria-label="Tăng số bản in"
-                        onClick={() => {
-                            const step = selectedFrameSize === '2x6' ? 2 : 1
-                            onSetPrintCopies((c) => Math.min(12, c + step))
-                        }}
-                        disabled={
-                            Boolean(hasPrinted) ||
-                            isPrinting ||
-                            printCopies >= 12
-                        }
-                    >
-                        +
-                    </button>
                 </div>
             </div>
 

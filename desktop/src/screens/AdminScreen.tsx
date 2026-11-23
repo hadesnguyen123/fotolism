@@ -17,6 +17,7 @@ import {
     LogOut,
     Delete,
     Lock,
+    Power,
 } from 'lucide-react'
 import {
     cloudSyncService,
@@ -99,6 +100,7 @@ export const AdminScreen: React.FC = () => {
     const [cmsPingResult, setCmsPingResult] = useState<string | null>(null)
     const [isPingingCms, setIsPingingCms] = useState<boolean>(false)
     const [isCopiedToken, setIsCopiedToken] = useState<boolean>(false)
+    const [confirmQuitApp, setConfirmQuitApp] = useState<boolean>(false)
 
     // Hardware Real-time Status
     const isEos = cameraType === 'eos'
@@ -649,6 +651,50 @@ export const AdminScreen: React.FC = () => {
                         <LogOut size={20} strokeWidth={2.2} />
                         <span>Thoát</span>
                     </button>
+
+                    {!confirmQuitApp ? (
+                        <button
+                            className="header-exit-btn"
+                            onClick={() => setConfirmQuitApp(true)}
+                            title="Đóng hoàn toàn ứng dụng Fotolism Kiosk"
+                            style={{
+                                background: '#fef2f2',
+                                borderColor: '#fecaca',
+                                color: '#b91c1c',
+                            }}
+                        >
+                            <Power size={20} strokeWidth={2.2} />
+                            <span>Thoát ứng dụng</span>
+                        </button>
+                    ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <button
+                                className="header-exit-btn"
+                                onClick={() => {
+                                    const apiInstance = isBrowser ? mockApi : fotolismApi
+                                    if (apiInstance.app?.quit) {
+                                        void apiInstance.app.quit()
+                                    } else {
+                                        window.close()
+                                    }
+                                }}
+                                style={{
+                                    background: '#dc2626',
+                                    borderColor: '#dc2626',
+                                    color: '#ffffff',
+                                }}
+                            >
+                                <Power size={18} strokeWidth={2.2} />
+                                <span>Xác nhận thoát</span>
+                            </button>
+                            <button
+                                className="header-exit-btn"
+                                onClick={() => setConfirmQuitApp(false)}
+                            >
+                                <span>Hủy</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </header>
 

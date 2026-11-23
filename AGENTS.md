@@ -16,6 +16,10 @@
 - **Selfbooth 9:16 & Live View 3:4:** Tất cả các màn hình ở chế độ Selfbooth phải cố định tỉ lệ màn hình dọc `9:16` (không chuyển sang giao diện ngang `16:9`), và Live View / ảnh chụp Selfbooth cố định tỉ lệ `3:4`.
 - **Luôn bật gương (Mirror):** Cả Photobooth và Selfbooth bắt buộc luôn bật gương — Live View phải bật gương, ảnh chụp xong phải bật gương, và kết quả (xem lại, ghép/lưu, tải lên, in ấn) phải bật gương khớp Live View.
 - UI touch-first, tối giản, dùng Lucide Icons; **tuân thủ thiết kế tham chiếu có sẵn**, không tự thay đổi design system.
+- **Photobooth — Quy tắc in ấn & giá mặc định:**
+  - `2x6`: mặc định in **2 dải** (in 1 lần khổ 4x6 cắt đôi); in thêm **30.000đ / 2 tấm** (`extraStep = 2`).
+  - `4x6 (4 ảnh)` và `4x6 (9 ảnh)`: mặc định in **2 tấm**; in thêm **30.000đ / 1 tấm lớn** (`extraStep = 1`).
+  - Số bản in chỉ được thiết lập ở màn **Kiểm tra thông tin** (`ConfirmScreen`), **không được phép thay đổi** tại màn **In ảnh** (`ReviewScreen` / `PrintActionDeck`).
 - Không tự ý thay đổi giá, thanh toán, quy tắc in, schema, API contract hoặc kiến trúc.
 
 ## 3. Thực thi

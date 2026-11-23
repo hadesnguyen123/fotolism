@@ -131,6 +131,10 @@ function createWindow() {
 ipcMain.on('app:get-kiosk-mode', (event) => {
     event.returnValue = resolveInstalledKioskMode() ?? null
 })
+ipcMain.handle('app:quit', () => {
+    app.quit()
+    return { success: true }
+})
 registerCameraIpc()
 registerPrinterIpc(() => mainWindow)
 registerStorageIpc()

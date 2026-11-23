@@ -3,6 +3,7 @@ uvicorn[standard]==0.30.6
 pillow==10.4.0
 opencv-python==4.10.0.84
 mediapipe>=0.10.21
+matplotlib>=3.10.0
 qrcode[pil]==7.4.2
 pydantic==2.8.2
 pywin32>=306; sys_platform == "win32"

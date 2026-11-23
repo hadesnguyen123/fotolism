@@ -200,9 +200,25 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
 
             if (
                 !parsed.extraCopyPrice2x6 ||
-                parsed.extraCopyPrice2x6 === 20000
+                parsed.extraCopyPrice2x6 === 20000 ||
+                parsed.extraCopyPrice2x6 === 25000 ||
+                parsed.extraCopyPrice2x6 === 40000
             ) {
                 parsed.extraCopyPrice2x6 = DEFAULT_EXTRA_COPY_PRICE_2X6
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(
+                        LS_EVENT_CONFIG_KEY,
+                        JSON.stringify(parsed)
+                    )
+                }
+            }
+
+            if (
+                !parsed.extraCopyPrice4x6 ||
+                parsed.extraCopyPrice4x6 === 35000 ||
+                parsed.extraCopyPrice4x6 === 40000
+            ) {
+                parsed.extraCopyPrice4x6 = DEFAULT_EXTRA_COPY_PRICE_4X6
                 if (typeof window !== 'undefined') {
                     localStorage.setItem(
                         LS_EVENT_CONFIG_KEY,

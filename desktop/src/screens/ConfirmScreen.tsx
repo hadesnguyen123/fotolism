@@ -31,7 +31,7 @@ export default function ConfirmScreen() {
     } = useAppStore()
 
     const is2x6 = selectedFrameSize === '2x6' || Boolean(selectedLayout?.strip)
-    const minCopies = is2x6 ? 2 : 1
+    const minCopies = 2
     const copyStep = is2x6 ? 2 : 1
 
     const [copies, setCopies] = useState(() => {
@@ -56,7 +56,7 @@ export default function ConfirmScreen() {
     const [showKeyboard, setShowKeyboard] = useState<boolean>(false)
 
     useEffect(() => {
-        const targetMin = is2x6 ? 2 : 1
+        const targetMin = 2
         if (copies < targetMin || (is2x6 && copies % 2 !== 0)) {
             setCopies(targetMin)
             setSelectedCopies(targetMin)

@@ -3,8 +3,12 @@
 Cung cấp các API xử lý ảnh AI làm đẹp chuẩn Hàn Quốc, ghép khung ảnh in và tạo mã QR.
 Phụ thuộc: fastapi, uvicorn, các router trong api.routes.
 """
+import os
 import sys
 from contextlib import asynccontextmanager
+
+# Ép matplotlib (dependency của mediapipe.tasks.python.vision.drawing_utils) chạy headless, tránh kéo GUI DLL khi đóng gói
+os.environ.setdefault("MPLBACKEND", "Agg")
 
 # Đảm bảo console Windows luôn encode UTF-8 an toàn, tránh lỗi UnicodeEncodeError khi log tiếng Việt
 if sys.platform == "win32":
@@ -34,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Fotolism AI Service",
-    version="0.1.0",
+    version="0.1.2",
     description="Local AI backend for Fotolism photobooth software",
     lifespan=lifespan,
 )
@@ -59,14 +63,41 @@ app.include_router(print_job.router, prefix="/print",    tags=["Print"])
 @app.get("/health")
 async def health():
     """
-    Kiểm tra nhanh tình trạng sống (health check) của tiến trình AI Service.
+    Kiểm tra nhanh tình trạng sống (health check) và các thư viện AI cốt lõi (MediaPipe, Matplotlib, FaceLandmarker model).
     """
-    return {"status": "ok", "service": "Fotolism AI", "version": "0.1.0"}
+    mp_ok = False
+    mpl_ok = False
+    dense_model_ok = False
+    try:
+        import matplotlib.pyplot  # noqa: F401
+        mpl_ok = True
+    except Exception:
+        pass
+    try:
+        import mediapipe  # noqa: F401
+        mp_ok = True
+    except Exception:
+        pass
+    try:
+        from core.korean_beauty_engine import DENSE_MODEL_PATH
+        dense_model_ok = bool(DENSE_MODEL_PATH.is_file())
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "service": "Fotolism AI",
+        "version": "0.1.2",
+        "mediapipe": mp_ok,
+        "matplotlib": mpl_ok,
+        "denseModel": dense_model_ok,
+    }
 
 
 
 if __name__ == "__main__":
     import uvicorn
+    from core.config import PORT
     # Truyền trực tiếp đối tượng app để chạy ổn định khi đóng gói bằng PyInstaller
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
 

@@ -47,7 +47,9 @@ async function resolveLocalSrcForCanvas(src: string): Promise<string> {
         src.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(src)
     if (!isLocalPath) return src
 
-    const readFn = (window as any)?.electronAPI?.storage?.readImageDataUrl
+    const readFn =
+        (window as any)?.fotolism?.storage?.readImageDataUrl ||
+        (window as any)?.electronAPI?.storage?.readImageDataUrl
     if (typeof readFn === 'function') {
         try {
             const res = await readFn(src)
