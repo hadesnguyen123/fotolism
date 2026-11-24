@@ -100,12 +100,17 @@ export const createBeautyCameraSlice: StateCreator<
         localStorage.getItem(LS_BEAUTY_CONFIG_KEY)
     const naturalPreset = BEAUTY_PRESETS.find((p) => p.id === 'natural')
     const active = hasCustom
-        ? saved
+        ? {
+              ...saved,
+              slimFace: 0,
+              vLine: 0,
+              bigEyes: saved.bigEyes === 10 ? 8 : (saved.bigEyes ?? 8),
+          }
         : {
             beautyEnabled: naturalPreset?.beautyEnabled ?? true,
-            slimFace: naturalPreset?.slimFace ?? 8,
-            vLine: naturalPreset?.vLine ?? 8,
-            bigEyes: naturalPreset?.bigEyes ?? 10,
+            slimFace: 0,
+            vLine: 0,
+            bigEyes: naturalPreset?.bigEyes ?? 8,
             skinSmoothing: naturalPreset?.skinSmoothing ?? 60,
             skinToneEvenness: naturalPreset?.skinToneEvenness ?? 50,
             rosyTone: naturalPreset?.rosyTone ?? 10,
@@ -135,9 +140,9 @@ export const createBeautyCameraSlice: StateCreator<
             }
         },
         selectedBeautyPreset: 'natural',
-        slimFace: active.slimFace ?? 8,
-        vLine: active.vLine ?? 8,
-        bigEyes: active.bigEyes ?? 10,
+        slimFace: 0,
+        vLine: 0,
+        bigEyes: active.bigEyes ?? 8,
         skinSmoothing: active.skinSmoothing ?? 60,
         skinToneEvenness: active.skinToneEvenness ?? 50,
         whiteningTone: active.whiteningTone ?? 10,
@@ -252,11 +257,11 @@ export const createBeautyCameraSlice: StateCreator<
                 beautyEnabled: true,
                 skinSmoothing: 45,
                 skinToneEvenness: 30,
-                vLine: 4,
-                bigEyes: 5,
+                vLine: 0,
+                bigEyes: 8,
                 blush: 10,
                 rosyTone: 10,
-                slimFace: 4,
+                slimFace: 0,
             })
         },
 
@@ -307,11 +312,11 @@ export const createBeautyCameraSlice: StateCreator<
                             selectedBeautyPreset: 'natural',
                             skinSmoothing: 60,
                             skinToneEvenness: 50,
-                            vLine: 8,
-                            bigEyes: 10,
+                            vLine: 0,
+                            bigEyes: 8,
                             blush: 10,
                             rosyTone: 10,
-                            slimFace: 8,
+                            slimFace: 0,
                             whiteningTone: 10,
                             glowClarity: 0,
                             brightnessAdjust: 100,

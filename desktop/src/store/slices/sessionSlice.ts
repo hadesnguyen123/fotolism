@@ -276,9 +276,9 @@ export const createSessionSlice: StateCreator<
         const activeBeauty = hasCustom
             ? savedBeauty
             : {
-                  slimFace: naturalPreset?.slimFace ?? 18,
-                  vLine: naturalPreset?.vLine ?? 16,
-                  bigEyes: naturalPreset?.bigEyes ?? 12,
+                  slimFace: 0,
+                  vLine: 0,
+                  bigEyes: naturalPreset?.bigEyes ?? 8,
                   skinSmoothing: naturalPreset?.skinSmoothing ?? 80,
                   whiteningTone: naturalPreset?.whiteningTone ?? 45,
                   rosyTone: naturalPreset?.rosyTone ?? 35,
@@ -306,9 +306,9 @@ export const createSessionSlice: StateCreator<
                 selectedTheme: THEME_OPTIONS[0],
                 selectedFilter: COLOR_FILTERS[0],
                 selectedBeautyPreset: 'natural',
-                slimFace: activeBeauty.slimFace,
-                vLine: activeBeauty.vLine ?? 16,
-                bigEyes: activeBeauty.bigEyes ?? 12,
+                slimFace: 0,
+                vLine: 0,
+                bigEyes: activeBeauty.bigEyes ?? 8,
                 skinSmoothing: activeBeauty.skinSmoothing,
                 whiteningTone: activeBeauty.whiteningTone,
                 rosyTone: activeBeauty.rosyTone,

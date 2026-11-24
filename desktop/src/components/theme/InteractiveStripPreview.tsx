@@ -124,7 +124,7 @@ export const InteractiveStripPreview: React.FC<
         return (
             <div className="interactive-strip-preview-wrapper animate-pop">
                 <div className="strip-reposition-banner">
-                    <span>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</span>
+                    <span>Chạm để kéo căn chỉnh vị trí ảnh</span>
                 </div>
 
                 <div
@@ -160,7 +160,7 @@ export const InteractiveStripPreview: React.FC<
                             photo?.rawPath ||
                             ''
                         const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
-                        const scaleVal = Math.max(1.0, Math.min(3.0, offset.scale || 1.0))
+                        const scaleVal = 1.0
                         const zoom = scaleVal * 1.08
                         const maxTranslatePercent = ((zoom - 1) / 2) * 100
                         const clampedX = Math.max(-1, Math.min(1, offset.x || 0))

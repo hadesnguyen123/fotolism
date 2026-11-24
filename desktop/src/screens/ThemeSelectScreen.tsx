@@ -301,13 +301,8 @@ export default function ThemeSelectScreen() {
             initOffset,
             slotPixelWidth,
             slotPixelHeight,
-            slotCenterX,
-            slotCenterY,
             startX,
             startY,
-            initialPinchDist,
-            initialScale,
-            initialMidpoint,
         } = gestureStateRef.current
 
         const sensitivityX = Math.max(slotPixelWidth * 0.45, 40)
@@ -335,52 +330,12 @@ export default function ThemeSelectScreen() {
                     ...(next[index] || {}),
                     x: nextX,
                     y: nextY,
-                    scale: initOffset.scale || 1.0,
-                }
-                return next
-            })
-        } else if (pointers.length >= 2) {
-            // Cử chỉ 2 ngón tay: Pinch-to-zoom lấy tâm giữa 2 ngón & di chuyển mượt
-            const p1 = pointers[0]
-            const p2 = pointers[1]
-            const currentDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY)
-            const scaleFactor = currentDist / Math.max(initialPinchDist, 10)
-            const nextScale = Math.max(
-                1.0,
-                Math.min(3.0, Number((initialScale * scaleFactor).toFixed(2)))
-            )
-
-            const currentMidX = (p1.clientX + p2.clientX) / 2
-            const currentMidY = (p1.clientY + p2.clientY) / 2
-            const midDx = currentMidX - initialMidpoint.x
-            const midDy = currentMidY - initialMidpoint.y
-            const scaleRatio = nextScale / Math.max(initialScale, 1.0)
-            const focalShiftX =
-                ((initialMidpoint.x - slotCenterX) / Math.max(slotPixelWidth, 1)) *
-                (1 - scaleRatio)
-            const focalShiftY =
-                ((initialMidpoint.y - slotCenterY) / Math.max(slotPixelHeight, 1)) *
-                (1 - scaleRatio)
-
-            const nextX = Math.max(
-                -1,
-                Math.min(1, initOffset.x + midDx / sensitivityX + focalShiftX)
-            )
-            const nextY = Math.max(
-                -1,
-                Math.min(1, initOffset.y + midDy / sensitivityY + focalShiftY)
-            )
-
-            setSlotOffsetsState((prev) => {
-                const next = [...prev]
-                next[index] = {
-                    x: nextX,
-                    y: nextY,
-                    scale: nextScale,
+                    scale: 1.0,
                 }
                 return next
             })
         }
+        // Tạm disable pinch-to-zoom 2 ngón tay; chỉ giữ thao tác kéo 1 ngón căn chỉnh vị trí ảnh
     }
 
     const handleSlotPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -416,27 +371,10 @@ export default function ThemeSelectScreen() {
         }
     }
 
-    // Hỗ trợ cuộn chuột lăn (Wheel) để phóng to / thu nhỏ khi dùng chuột
+    // Tạm disable cuộn chuột phóng to / thu nhỏ ảnh trong ô
     const handleSlotWheel = useCallback(
-        (index: number, e: React.WheelEvent<HTMLDivElement>) => {
-            const currentOffset =
-                slotOffsetsRef.current[index] || { x: 0, y: 0, scale: 1.0 }
-            const currentScale = currentOffset.scale || 1.0
-            const step = e.deltaY < 0 ? 0.08 : -0.08
-            const nextScale = Math.max(
-                1.0,
-                Math.min(3.0, Number((currentScale + step).toFixed(2)))
-            )
-
-            const nextOffsets = [...slotOffsetsRef.current]
-            nextOffsets[index] = {
-                ...currentOffset,
-                scale: nextScale,
-            }
-            setSlotOffsetsState(nextOffsets)
-            setStoreSlotOffsets(nextOffsets)
-        },
-        [setStoreSlotOffsets]
+        (_index: number, _e: React.WheelEvent<HTMLDivElement>) => {},
+        []
     )
 
     // Xử lý bắt đầu chạm màn hình cảm ứng hoặc nhấn chuột

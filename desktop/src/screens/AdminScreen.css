@@ -1009,7 +1009,7 @@
 
 .camera-liveview-controls-grid {
     display: grid;
-    grid-template-columns: 1.25fr 1fr;
+    grid-template-columns: 1fr;
     gap: 22px;
 }
 

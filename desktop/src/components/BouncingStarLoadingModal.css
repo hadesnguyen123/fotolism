@@ -1,0 +1,191 @@
+@keyframes fotolismStarArc {
+    0% {
+        transform: translate3d(-24px, 210px, 0) rotate(0deg) scale(0.92, 1.08);
+    }
+    5% {
+        transform: translate3d(-12px, 168px, 0) rotate(16deg) scale(0.96, 1.04);
+    }
+    10% {
+        transform: translate3d(2px, 145.1px, 0) rotate(36deg) scale(1, 1);
+    }
+    15% {
+        transform: translate3d(15px, 165px, 0) rotate(54deg) scale(0.95, 1.05);
+    }
+    19% {
+        transform: translate3d(24px, 196px, 0) rotate(66deg) scale(0.88, 1.14);
+    }
+    21.5% {
+        transform: translate3d(27.27px, 224px, 0) rotate(72deg) scale(1.26, 0.74);
+    }
+    24.5% {
+        transform: translate3d(45px, 185px, 0) rotate(84deg) scale(0.88, 1.14);
+    }
+    29% {
+        transform: translate3d(69px, 156px, 0) rotate(96deg) scale(0.96, 1.04);
+    }
+    33.5% {
+        transform: translate3d(93.96px, 147.59px, 0) rotate(108deg) scale(1, 1);
+    }
+    38% {
+        transform: translate3d(119px, 156px, 0) rotate(120deg) scale(0.96, 1.04);
+    }
+    42% {
+        transform: translate3d(144px, 185px, 0) rotate(132deg) scale(0.88, 1.14);
+    }
+    45% {
+        transform: translate3d(161.81px, 224px, 0) rotate(144deg) scale(1.26, 0.74);
+    }
+    48% {
+        transform: translate3d(180px, 185px, 0) rotate(156deg) scale(0.88, 1.14);
+    }
+    52% {
+        transform: translate3d(204px, 156px, 0) rotate(168deg) scale(0.96, 1.04);
+    }
+    56.5% {
+        transform: translate3d(228.5px, 147.59px, 0) rotate(180deg) scale(1, 1);
+    }
+    61% {
+        transform: translate3d(253px, 156px, 0) rotate(192deg) scale(0.96, 1.04);
+    }
+    65% {
+        transform: translate3d(278px, 185px, 0) rotate(204deg) scale(0.88, 1.14);
+    }
+    68% {
+        transform: translate3d(296.35px, 224px, 0) rotate(216deg) scale(1.26, 0.74);
+    }
+    72% {
+        transform: translate3d(332px, 183px, 0) rotate(232deg) scale(0.87, 1.15);
+    }
+    77.5% {
+        transform: translate3d(382px, 154px, 0) rotate(250deg) scale(0.96, 1.04);
+    }
+    84% {
+        transform: translate3d(433.97px, 145.1px, 0) rotate(270deg) scale(1, 1);
+    }
+    91% {
+        transform: translate3d(494px, 154px, 0) rotate(294deg) scale(0.97, 1.03);
+    }
+    97% {
+        transform: translate3d(542px, 167.59px, 0) rotate(312deg) scale(0.92, 1.08);
+    }
+    100% {
+        transform: translate3d(568px, 178px, 0) rotate(324deg) scale(0.9, 1.1);
+    }
+}
+
+.fotolism-star-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.fotolism-star-loading-card {
+    position: relative;
+    width: 576px;
+    max-width: 92vw;
+    height: 466px;
+    background: #653125;
+    border-radius: 20px;
+    border: 2px solid #f6f3e8;
+    box-shadow: 0px 4px 20px -4px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.fotolism-star-loading-grit {
+    position: absolute;
+    left: calc(50% - 0.28px);
+    top: -308.91px;
+    transform: translateX(-50%);
+    width: 1919.068px;
+    height: 1080px;
+    mix-blend-mode: color-burn;
+    opacity: 0.22;
+    pointer-events: none;
+}
+
+.fotolism-star-loading-grit img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: bottom;
+    display: block;
+}
+
+.fotolism-star-loading-star {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 40px;
+    height: 40px;
+    transform-origin: center bottom;
+    will-change: transform;
+    animation: fotolismStarArc 3.2s linear infinite;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.fotolism-star-loading-star img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.fotolism-star-loading-text {
+    position: absolute;
+    left: 50%;
+    top: 318px;
+    transform: translateX(-50%);
+    width: calc(100% - 48px);
+    margin: 0;
+    font-family: var(--font-serif, 'Cormorant Garamond', Georgia, serif);
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: -0.04em;
+    line-height: 1.15;
+    color: #f6f3e8;
+    text-align: center;
+    z-index: 6;
+}
+
+.fotolism-star-loading-error-actions {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: calc(100% - 48px);
+}
+
+.fotolism-star-loading-retry-btn {
+    border: none;
+    border-radius: 9999px;
+    padding: 12px 28px;
+    background: #88c9e3;
+    color: #151312;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fotolism-star-loading-retry-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fotolism-star-loading-star {
+        animation: none !important;
+    }
+}

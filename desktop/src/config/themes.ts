@@ -29,8 +29,8 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_2x6_black_film',
         name: 'Film Đen Cổ Điển',
-        bgColor: '#141414',
-        bgGradient: '#141414',
+        bgColor: '#000000',
+        bgGradient: '#000000',
         textColor: '#FFFFFF',
         borderColor: '#1F1F1F',
         overlayUrl: './frames/2x6_4_BlackFilm.png',
@@ -139,8 +139,8 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_black_film',
         name: 'Film Đen Cổ Điển',
-        bgColor: '#141414',
-        bgGradient: '#141414',
+        bgColor: '#000000',
+        bgGradient: '#000000',
         textColor: '#FFFFFF',
         borderColor: '#1F1F1F',
         overlayUrl: './frames/4x6_4_BlackFilm.png',
@@ -249,8 +249,8 @@ export const THEME_OPTIONS: ThemeItem[] = [
     {
         id: 'theme_4x6_9_black',
         name: 'Đen Tối Giản (9 ô)',
-        bgColor: '#18181B',
-        bgGradient: '#18181B',
+        bgColor: '#000000',
+        bgGradient: '#000000',
         textColor: '#FFFFFF',
         borderColor: '#27272A',
         overlayUrl: './frames/4x6_9_Black.png',

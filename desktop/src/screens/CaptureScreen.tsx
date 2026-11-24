@@ -28,6 +28,7 @@ import {
 } from '../components/BeautyCameraView'
 import { CaptureAspectGuide } from '../components/capture/CaptureAspectGuide'
 import { LiveSlotsDock } from '../components/capture/LiveSlotsDock'
+import { BouncingStarLoadingModal } from '../components/BouncingStarLoadingModal'
 import { cropImageToAspect } from '../lib/canvasCompositor'
 import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
@@ -1754,76 +1755,24 @@ export default function CaptureScreen() {
     }
 
     const aiProcessingModal = (isAiProcessingBeforeTheme || aiProcessingError) ? (
-        <div
-            className="ai-enhance-processing-modal-overlay animate-fade-in"
-            style={{
-                position: 'fixed',
-                inset: 0,
-                backgroundColor: 'rgba(21, 19, 18, 0.72)',
-                backdropFilter: 'blur(8px)',
-                zIndex: 99999,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fdf5ed',
-            }}
-        >
-            <div
-                style={{
-                    background:
-                        'linear-gradient(145deg, #fdf5ed 0%, #f6ece0 55%, #efe0d0 100%)',
-                    padding: '44px 56px',
-                    borderRadius: '28px',
-                    border: '2px solid rgba(101, 49, 37, 0.28)',
-                    boxShadow:
-                        '0 25px 60px -10px rgba(64, 33, 20, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.75) inset',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    minWidth: '380px',
-                    maxWidth: '460px',
-                    textAlign: 'center',
-                }}
-            >
-                <div
-                    className="selfbooth-spinner-ring"
-                    style={{
-                        width: '64px',
-                        height: '64px',
-                        borderWidth: '5px',
-                        borderColor: 'rgba(101, 49, 37, 0.18)',
-                        borderTopColor: '#653125',
-                        borderRightColor: '#8b5a42',
-                        marginBottom: '24px',
-                    }}
-                />
-                <h2
-                    style={{
-                        fontSize: '26px',
-                        fontWeight: 700,
-                        margin: 0,
-                        color: '#653125',
-                        letterSpacing: '-0.01em',
-                    }}
-                >
-                    {aiProcessingError || aiProgressText || 'Đang xử lý ảnh'}
-                </h2>
-                {aiProcessingError && (
-                    <button
-                        className="btn-primary"
-                        onClick={() =>
-                            void (isSelfboothMode
-                                ? handleFinishSelfboothToReview()
-                                : handleProceedPhotobooth())
-                        }
-                        style={{ marginTop: 24 }}
-                    >
-                        Thử lại
-                    </button>
-                )}
-            </div>
-        </div>
+        <BouncingStarLoadingModal
+            message={
+                aiProgressText
+                    ? aiProgressText.endsWith('...')
+                        ? aiProgressText
+                        : `${aiProgressText}...`
+                    : 'Đang xử lý ảnh...'
+            }
+            errorMessage={aiProcessingError}
+            onRetry={
+                aiProcessingError
+                    ? () =>
+                          void (isSelfboothMode
+                              ? handleFinishSelfboothToReview()
+                              : handleProceedPhotobooth())
+                    : undefined
+            }
+        />
     ) : null
 
     if (!isSelfboothMode) return (

@@ -23,6 +23,7 @@ import QRCode from 'qrcode'
 import { QrCode, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { PrintActionDeck } from '../components/review/PrintActionDeck'
+import { BouncingStarLoadingModal } from '../components/BouncingStarLoadingModal'
 import '../components/reference/fonts.css'
 import './ReviewScreen.css'
 import './ReviewCompletion.css'
@@ -518,6 +519,7 @@ export default function ReviewScreen() {
 
     return (
         <div className={`review-screen-pastel ${isSelfboothMode ? '' : 'review-completion'}`} id="review-screen">
+            {isPrinting && <BouncingStarLoadingModal message="Đang in ảnh..." />}
             {/* ── Fixed Brand Logo góc trên bên trái ── */}
             <img
                 src={BRAND_LOGO_SRC}

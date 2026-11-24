@@ -2,7 +2,7 @@
   "name": "fotolism-desktop",
   "productName": "fotolism",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "AI-Powered Photobooth Software",
   "type": "module",
   "author": "fotolism team",
@@ -96,7 +96,7 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false,
+      "signExecutable": false,
       "icon": "public/icon.ico"
     },
     "nsis": {

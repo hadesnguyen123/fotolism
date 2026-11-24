@@ -29,9 +29,10 @@ describe('AI Beauty Engine Core — Fotolism 3.0 WYSIWYG & Unified Architecture'
             // Natural is the K-Beauty standard preset
             const natural = BEAUTY_PRESETS.find((p) => p.id === 'natural')!
             expect(natural).toBeDefined()
-            expect(natural.slimFace).toBeGreaterThan(0)
+            expect(natural.slimFace).toBe(0)
+            expect(natural.vLine).toBe(0)
             expect(natural.skinSmoothing).toBeGreaterThan(0)
-            expect(natural.bigEyes).toBeGreaterThan(0)
+            expect(natural.bigEyes).toBe(8)
 
             // None keeps 100% pure camera raw output
             const original = BEAUTY_PRESETS.find((p) => p.id === 'none')!
