@@ -740,46 +740,105 @@ class KoreanBeautyEngine:
                 lip_poly = np.rint(dense[lip_ids] - [x1, y1]).astype(np.int32)
                 dense_lip_core = np.zeros_like(face_roi)
                 cv2.fillPoly(dense_lip_core, [lip_poly], 255)
-                # Mở rộng mượt ra ngoài viền MediaPipe để bao trọn phần viền môi mềm khi chu môi
-                lip_pad_px = max(3, int(round(bw * 0.018)))
-                k_lip_pad = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * lip_pad_px + 1, 2 * lip_pad_px + 1))
-                dense_lip = cv2.dilate(dense_lip_core, k_lip_pad)
-                # Bắt thêm viền sắc tố môi (đỏ/hồng) nối liền với polygon môi trong vành tìm kiếm hẹp
-                halo_px = max(5, int(round(bw * 0.032)))
+                # Phân tách viền môi thích ứng theo trường màu da cục bộ + tách riêng vùng trong/ngoài polygon
+                # để không bị rãnh cười hay bóng nhân trung kéo tràn mặt nạ môi ở cả ảnh chu môi và cười rộng.
+                mw_poly = max(8.0, float(lip_poly[:, 0].max() - lip_poly[:, 0].min()))
+                mh_poly = max(4.0, float(lip_poly[:, 1].max() - lip_poly[:, 1].min()))
+                is_pout_lip = (mh_poly / mw_poly) > 0.44
+                halo_px = max(2, int(round(bw * (0.022 if is_pout_lip else 0.008))))
+                ring_px = max(5, int(round(bw * 0.018)))
+                lx_pts = lip_poly[:, 0]
+                ly_pts = lip_poly[:, 1]
+                roi_h_loc, roi_w_loc = face_roi.shape[:2]
+                pad_tot = max(halo_px, int(round(bw * 0.022))) + ring_px + 6
+                mx0 = max(0, int(lx_pts.min()) - pad_tot)
+                my0 = max(0, int(ly_pts.min()) - pad_tot)
+                mx1 = min(roi_w_loc, int(lx_pts.max()) + pad_tot + 1)
+                my1 = min(roi_h_loc, int(ly_pts.max()) + pad_tot + 1)
+
+                dense_lip = np.zeros_like(face_roi)
+                lip_red_full = (dense_lip_core > 0).astype(np.float32)
+                sub_core = dense_lip_core[my0:my1, mx0:mx1]
+                sub_lab = lab[y1 + my0 : y1 + my1, x1 + mx0 : x1 + mx1].astype(np.float32)
                 k_halo = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * halo_px + 1, 2 * halo_px + 1))
-                lip_halo = cv2.dilate(dense_lip_core, k_halo) > 0
-                outer_ring = (cv2.dilate(lip_halo.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))) > 0) & (~lip_halo)
-                roi_a_tmp = lab[y1:y2, x1:x2, 1].astype(np.float32)
+                k_ring = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * ring_px + 1, 2 * ring_px + 1))
+                lip_halo = cv2.dilate(sub_core, k_halo) > 0
+                outer_ring = (cv2.dilate(lip_halo.astype(np.uint8), k_ring) > 0) & (~lip_halo)
+
                 if np.count_nonzero(outer_ring) >= 16:
-                    ring_a = float(np.median(roi_a_tmp[outer_ring]))
-                    lip_pig = lip_halo & ((roi_a_tmp - ring_a) > 3.0)
-                    _, pig_cc = cv2.connectedComponents((lip_pig | (dense_lip_core > 0)).astype(np.uint8), connectivity=8)
-                    keep_ids = np.unique(pig_cc[dense_lip_core > 0])
+                    r_med = np.median(sub_lab[outer_ring], axis=0)
+                    ring_w = (outer_ring & (np.linalg.norm(sub_lab - r_med, axis=-1) < 22.0)).astype(np.float32)
+                    if float(ring_w.sum()) < 12.0:
+                        ring_w = outer_ring.astype(np.float32)
+                    sig_sf = max(6.0, bw * 0.075)
+                    w_blur = np.maximum(cv2.GaussianBlur(ring_w, (0, 0), sig_sf)[..., None], 1e-4)
+                    skin_field = cv2.GaussianBlur(sub_lab * ring_w[..., None], (0, 0), sig_sf) / w_blur
+                    dL = skin_field[..., 0] - sub_lab[..., 0]
+                    dA = sub_lab[..., 1] - skin_field[..., 1]
+                    dB = sub_lab[..., 2] - skin_field[..., 2]
+                    lip_score = np.maximum(dA, 0.0) * 1.45 + np.clip(dL, 0.0, 32.0) * 0.45 + np.clip(dB, -4.0, 12.0) * 0.20
+
+                    core_in_px = max(2, int(round(bw * 0.010)))
+                    k_core_in = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * core_in_px + 1, 2 * core_in_px + 1))
+                    core_in_mask = cv2.erode(sub_core, k_core_in) > 0
+                    if np.count_nonzero(core_in_mask) < 12:
+                        core_in_mask = sub_core > 0
+
+                    # Trong polygon giữ rìa môi hợp lệ (chặn rãnh nhân trung tối nhưng không đỏ dA <= 0.8);
+                    # ngoài polygon bắt buộc phải có sắc tố son thật (chặn rãnh cười/bóng cằm).
+                    in_ok = (sub_core > 0) & ((dA > 0.8) | (lip_score > 4.2))
+                    out_ok = lip_halo & (sub_core == 0) & (
+                        ((dA > 2.6) & (lip_score > 6.8))
+                        | ((dA > 1.6) & (dL > 10.0) & (lip_score > 8.5))
+                    )
+                    lip_cand = in_ok | out_ok | core_in_mask
+                    _, pig_cc = cv2.connectedComponents(lip_cand.astype(np.uint8), connectivity=8)
+                    keep_ids = np.unique(pig_cc[core_in_mask])
                     keep_ids = keep_ids[keep_ids != 0]
                     if keep_ids.size:
-                        merged_lip = np.where((dense_lip > 0) | np.isin(pig_cc, keep_ids), 255, 0).astype(np.uint8)
-                        # Làm mượt nhẹ hình thái học để không tạo vết khấc trên đường viền môi
-                        dense_lip = cv2.morphologyEx(merged_lip, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+                        sub_lip = np.where(np.isin(pig_cc, keep_ids), 255, 0).astype(np.uint8)
+                        ko = max(3, int(round(bw * 0.004)) | 1)
+                        kc = max(5, int(round(bw * 0.008)) | 1)
+                        sub_lip = cv2.morphologyEx(sub_lip, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ko, ko)))
+                        sub_lip = cv2.morphologyEx(sub_lip, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kc, kc)))
+                    else:
+                        sub_lip = sub_core.copy()
+                    dense_lip[my0:my1, mx0:mx1] = sub_lip
+                    lip_red_full[my0:my1, mx0:mx1] = np.clip((np.maximum(dA, 0.0) + np.clip(dL, 0.0, 20.0) * 0.35 - 2.2) / 5.2, 0.0, 1.0)
+                else:
+                    dense_lip = dense_lip_core.copy()
+
+                # Lưu lõi môi thật trước khi nới để kênh nâng sáng tone_skin không bị hụt sáng sát viền
+                dense_lip_tight = dense_lip.copy()
+                # Mở rộng vùng bảo vệ môi thêm ~5% đường kính ra ngoài để bảo vệ trọn viền môi mềm
+                expand_px = max(1, int(round(mw_poly * 0.025)))
+                k_expand = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1))
+                dense_lip = cv2.dilate(dense_lip, k_expand)
+
                 face_roi[dense_lip > 0] = 0
-                lip_feather_core = cv2.GaussianBlur(dense_lip.astype(np.float32) / 255., (0, 0), max(1.2, bw * .006))
-                lip_alpha = np.maximum(dense_lip.astype(np.float32) / 255., lip_feather_core)
+                # Feather hướng vào trong mép môi để lõi môi được bảo vệ 100% còn biên tiếp giáp da khớp sát ranh giới mới
+                lip_in_dist = cv2.distanceTransform((dense_lip > 0).astype(np.uint8), cv2.DIST_L2, 3)
+                lip_in_ramp = np.clip(lip_in_dist / max(1.5, bw * 0.0045), 0.0, 1.0)
+                lip_in_ramp = lip_in_ramp * lip_in_ramp * (3.0 - 2.0 * lip_in_ramp)
+                lip_alpha = cv2.GaussianBlur(lip_in_ramp.astype(np.float32), (0, 0), max(0.7, bw * 0.0022))
+                lip_alpha = np.where(dense_lip > 0, np.maximum(lip_alpha, lip_in_ramp), lip_alpha * 0.45)
+                lip_alpha = np.clip(lip_alpha, 0.0, 1.0)
                 lip_mask[y1:y2, x1:x2] = np.maximum(lip_mask[y1:y2, x1:x2], lip_alpha)
 
-                # Mặt nạ bảo vệ môi riêng cho kênh sáng L / đều màu quanh miệng (PA 1 + Redness-Gated):
-                # giữ chặt lõi trong môi và chỉ giữ vùng đệm ngoài theo sắc tố son đỏ thật, tránh thâm viền da quanh môi.
-                core_erode_px = max(2, int(round(bw * 0.005)))
+                # Mặt nạ bảo vệ môi cho kênh sáng L / đều màu quanh miệng: co tỷ lệ theo bề dày môi thật để không mất lõi khi môi mỏng/mím
+                tight_in_dist = cv2.distanceTransform((dense_lip_tight > 0).astype(np.uint8), cv2.DIST_L2, 3)
+                tight_ramp = np.clip(tight_in_dist / max(1.5, bw * 0.0045), 0.0, 1.0)
+                tight_ramp = tight_ramp * tight_ramp * (3.0 - 2.0 * tight_ramp)
+                max_lip_rad = max(1.0, float(tight_in_dist.max()))
+                core_erode_px = max(1, min(int(round(bw * 0.006)), int(max_lip_rad * 0.45)))
                 k_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * core_erode_px + 1, 2 * core_erode_px + 1))
-                lip_tone_core = cv2.erode(dense_lip_core, k_erode)
-                if np.count_nonzero(outer_ring) >= 16:
-                    lip_red_gate = np.clip((roi_a_tmp - ring_a - 2.0) / 4.5, 0.0, 1.0)
-                else:
-                    lip_red_gate = (dense_lip_core > 0).astype(np.float32)
+                lip_tone_core = cv2.erode(dense_lip_tight, k_erode)
                 lip_tone_raw = np.where(
                     lip_tone_core > 0,
                     1.0,
-                    np.where(dense_lip > 0, lip_red_gate, 0.0),
+                    np.where(dense_lip_tight > 0, lip_red_full * tight_ramp, 0.0),
                 ).astype(np.float32)
-                lip_tone_blur = cv2.GaussianBlur(lip_tone_raw, (0, 0), max(1.2, bw * 0.004))
+                lip_tone_blur = cv2.GaussianBlur(lip_tone_raw, (0, 0), max(0.9, bw * 0.0028))
                 lip_tone_local = np.clip(np.maximum((lip_tone_core > 0).astype(np.float32), lip_tone_blur), 0.0, 1.0)
                 lip_tone_mask[y1:y2, x1:x2] = np.maximum(lip_tone_mask[y1:y2, x1:x2], lip_tone_local)
             else:
@@ -1009,11 +1068,16 @@ class KoreanBeautyEngine:
                 colour_soft_tone = colour_soft.copy()
                 if dense_lip is not None:
                     lip_dist_out = cv2.distanceTransform((dense_lip == 0).astype(np.uint8), cv2.DIST_L2, 3)
-                    lip_feather = max(3.5, bw * .016)
+                    lip_feather = max(1.5, bw * 0.005)
                     lip_t = np.clip(1.0 - lip_dist_out / lip_feather, 0., 1.)
-                    lip_guard = lip_t * lip_t * (3. - 2. * lip_t)
-                    colour_soft *= 1. - lip_guard
-                    colour_soft_tone *= 1. - lip_tone_local
+                    lip_guard = np.maximum(lip_alpha, lip_t * lip_t * (3. - 2. * lip_t))
+                    # Giảm độ phủ xử lý vùng da sát quanh môi về ~80% để chuyển tiếp tự nhiên, không tạo ranh giới gắt
+                    peri_r = max(4.0, bw * 0.045)
+                    peri_t = np.clip(1.0 - lip_dist_out / peri_r, 0.0, 1.0)
+                    peri_belt = peri_t * peri_t * (3.0 - 2.0 * peri_t)
+                    peri_scale = 1.0 - 0.20 * peri_belt
+                    colour_soft = colour_soft * (1. - lip_guard) * peri_scale
+                    colour_soft_tone = colour_soft_tone * (1. - lip_tone_local) * peri_scale
                 else:
                     colour_soft *= 1. - lip_protection
                     colour_soft_tone *= 1. - lip_protection
@@ -2309,11 +2373,11 @@ class KoreanBeautyEngine:
 
         if harmonized_tone and cfg.skinEvening > 0:
             # Even chroma without filtering luminance/skin texture.
-            # Normalize by skin coverage so a red backdrop/hair cannot colour the face.
-            field = np.dstack((lab[...,1:]*skin_mask[...,None],skin_mask))
-            field = self._fast_gaussian_blur(field,max(2.,avg_bw*.06))
-            chroma_base = field[...,:2]/np.maximum(field[...,2:],1e-5)
-            lab[...,1:] += np.clip(chroma_base-lab[...,1:],-6.,6.) * (cfg.skinEvening*skin_mask[...,None])
+            # Dùng tone_skin_mask (đã mở rộng theo lip_tone) để da sát viền môi đều màu với má/cằm.
+            field = np.dstack((lab[..., 1:] * tone_skin_mask[..., None], tone_skin_mask))
+            field = self._fast_gaussian_blur(field, max(2., avg_bw * .06))
+            chroma_base = field[..., :2] / np.maximum(field[..., 2:], 1e-5)
+            lab[..., 1:] += np.clip(chroma_base - lab[..., 1:], -6., 6.) * (cfg.skinEvening * tone_skin_mask[..., None])
 
         # A. Porcelain Skin Brightening (Chỉ nâng sáng midtone dải 150-190, bảo toàn highlight)
         bright_curve = np.clip(1.0 - np.abs(L - 170.0) / 75.0, 0.0, 1.0)

@@ -20,8 +20,8 @@ import {
 } from './constants'
 import {
     applyBwPostLookToRegion,
-    drawVintageV2Region,
-} from './vintageV2Filter'
+    drawRetroRegion,
+} from './retroFilter'
 
 export interface SlotOffset {
     x: number // -1.0 (trái) đến +1.0 (phải)
@@ -30,7 +30,7 @@ export interface SlotOffset {
 }
 
 export interface RenderOptions {
-    photos: string[] // data URLs or image URLs
+    photos: Array<string | string[]> // URL đơn hoặc danh sách URL ứng viên dự phòng theo thứ tự ưu tiên
     frameSize: FrameSize
     layout: GridLayoutItem
     theme: ThemeItem
@@ -44,7 +44,7 @@ export interface RenderOptions {
 async function resolveLocalSrcForCanvas(src: string): Promise<string> {
     if (!src) return src
     const isLocalPath =
-        src.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(src)
+        src.startsWith('file:/') || /^[a-zA-Z]:[\\/]/.test(src)
     if (!isLocalPath) return src
 
     const readFn =
@@ -73,10 +73,40 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
         ) {
             img.crossOrigin = 'anonymous'
         }
-        img.onload = () => resolve(img)
+        img.onload = () => {
+            if ((img.naturalWidth || img.width) > 0 && (img.naturalHeight || img.height) > 0) {
+                resolve(img)
+            } else {
+                reject(new Error(`Empty image dimensions for ${src}`))
+            }
+        }
         img.onerror = (err) => reject(err)
         img.src = resolvedSrc
     })
+}
+
+async function loadSlotImageWithFallback(
+    slotInput: string | string[] | undefined,
+    fallbackInput?: string | string[]
+): Promise<HTMLImageElement> {
+    const toList = (val: string | string[] | undefined): string[] =>
+        Array.isArray(val) ? val.filter(Boolean) : val ? [val] : []
+
+    const candidates = [...new Set([...toList(slotInput), ...toList(fallbackInput)])]
+    if (candidates.length === 0) {
+        throw new Error('No image candidates available for slot')
+    }
+
+    let lastErr: unknown
+    for (const cand of candidates) {
+        try {
+            return await loadImage(cand)
+        } catch (err) {
+            lastErr = err
+            console.warn(`[canvasCompositor] Candidate failed (${cand}), trying next fallback:`, err)
+        }
+    }
+    throw lastErr || new Error('All photo candidates failed to load')
 }
 
 /**
@@ -238,18 +268,25 @@ export async function generateStripComposite(
         ctx.fill()
         ctx.clip()
 
-        const photoSrc =
-            opts.photos[i] ||
-            (opts.photos.length > 0 ? opts.photos[opts.photos.length - 1] : '')
-        if (photoSrc) {
+        const slotCandidates = opts.photos[i]
+        const fallbackCandidates =
+            opts.photos.length > 0 ? opts.photos[opts.photos.length - 1] : undefined
+        const hasAnyCandidate =
+            (Array.isArray(slotCandidates) ? slotCandidates.length > 0 : Boolean(slotCandidates)) ||
+            (Array.isArray(fallbackCandidates)
+                ? fallbackCandidates.length > 0
+                : Boolean(fallbackCandidates))
+        if (hasAnyCandidate) {
             try {
-                const img = await loadImage(photoSrc)
+                const img = await loadSlotImageWithFallback(
+                    slotCandidates,
+                    fallbackCandidates
+                )
                 const fid = opts.filter?.id || 'normal'
-                const isVintageV2 =
+                const isRetro =
                     fid === 'retro_90s' ||
                     fid === 'retro' ||
-                    fid === 'vintage' ||
-                    fid === 'vintage_v2'
+                    fid === 'vintage'
                 const isBw =
                     fid === 'vintage_noir' ||
                     fid === 'monochrome' ||
@@ -335,9 +372,9 @@ export async function generateStripComposite(
                     )
                 }
 
-                if (isVintageV2) {
+                if (isRetro) {
                     ctx.filter = 'none'
-                    drawVintageV2Region(
+                    drawRetroRegion(
                         ctx,
                         img,
                         finalSrcX,

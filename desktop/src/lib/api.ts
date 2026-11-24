@@ -169,6 +169,19 @@ export interface FotolismAPI {
         retryFailedUploads: () => IpcResponse<{ retriedCount: number }>
         readImageDataUrl: (filePath: string) => IpcResponse<string>
         deleteFile: (filePath: string) => IpcResponse
+        verifyFile: (filePath: string) => IpcResponse<{
+            exists: boolean
+            sizeBytes: number
+            resolvedPath: string
+        }>
+        copyFile: (
+            srcPath: string,
+            destPath: string
+        ) => IpcResponse<{ savedPath: string; sizeBytes: number }>
+        saveBackupSlot: (
+            variant: '2x6_4' | '4x6_4' | '4x6_9',
+            destPath: string
+        ) => IpcResponse<{ savedPath: string; sizeBytes: number }>
         prefetchSelfboothUrls: (payload: {
             sessionId: string
             customerName?: string
@@ -642,6 +655,21 @@ const defaultMockApi: FotolismAPI = {
         }),
         deleteFile: async () => ({
             success: true,
+        }),
+        verifyFile: async (filePath: string) => ({
+            success: true,
+            data: { exists: Boolean(filePath), sizeBytes: 4096, resolvedPath: filePath },
+        }),
+        copyFile: async (_srcPath: string, destPath: string) => ({
+            success: true,
+            data: { savedPath: destPath, sizeBytes: 4096 },
+        }),
+        saveBackupSlot: async (variant: '2x6_4' | '4x6_4' | '4x6_9') => ({
+            success: true,
+            data: {
+                savedPath: `./backup-slots/backup_${variant}.jpg`,
+                sizeBytes: 4096,
+            },
         }),
         prefetchSelfboothUrls: async (payload) => ({
             success: true,

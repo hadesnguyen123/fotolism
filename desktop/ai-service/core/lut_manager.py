@@ -2,7 +2,7 @@
 Fotolism AI Beauty Engine — Style LUT Manager & Cache
 Quản lý, lưu bộ nhớ đệm (cache) và nạp bảng tra cứu màu (LUT) của các Style.
 Hỗ trợ kiểm tra mtime (file modification time) để tự động nạp lại khi file thay đổi trên đĩa.
-Phụ thuộc: cv2, numpy, core.vintage_v2.
+Phụ thuộc: cv2, numpy, core.retro.
 """
 import json
 import logging
@@ -12,7 +12,7 @@ import numpy as np
 import cv2
 
 from core.config import RESOURCE_DIR
-from core.vintage_v2 import apply_fast_film_grain_u8, apply_vintage_v2
+from core.retro import apply_fast_film_grain_u8, apply_retro
 
 logger = logging.getLogger("ai_service.lut_manager")
 
@@ -32,10 +32,8 @@ _PROCEDURAL_STYLES = (
     "retro",
     "retro_90s",
     "vintage",
-    "vintage_v2",
     "vintage_brown",
     "warm_film",
-    "retro_v2",
 )
 
 
@@ -177,20 +175,20 @@ class LUTManager:
         img_bgr: np.ndarray,
         style_id: str,
         bw_config: Optional[Dict[str, Any]] = None,
-        vintage_v2_config: Optional[Dict[str, Any]] = None,
+        retro_config: Optional[Dict[str, Any]] = None,
         skin_mask: Optional[np.ndarray] = None,
         intensity: float = 1.0,
     ) -> np.ndarray:
-        """Áp dụng bộ lọc màu (Basic / B&W / Retro Vintage V2) sau bước AI Enhance."""
+        """Áp dụng bộ lọc màu (Basic / B&W / Retro) sau bước AI Enhance."""
         sid = (style_id or "").strip().lower()
         eff_intensity = float(np.clip(intensity, 0.0, 1.0))
         if not sid or sid in ("none", "raw", "original", "natural", "normal", "basic") or eff_intensity <= 1e-4:
             return img_bgr
 
-        if sid in ("retro", "retro_90s", "vintage", "vintage_v2", "vintage_brown", "warm_film", "retro_v2"):
-            return apply_vintage_v2(
+        if sid in ("retro", "retro_90s", "vintage", "vintage_brown", "warm_film"):
+            return apply_retro(
                 img_bgr,
-                config=vintage_v2_config,
+                config=retro_config,
                 skin_mask=skin_mask,
                 intensity=eff_intensity,
             )

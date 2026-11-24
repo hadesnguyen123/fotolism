@@ -57,7 +57,7 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOption[] = [
     id: '4x6_4',
     title: '4 ảnh 4x6',
     confirmTitle: 'Khổ 4x6 (4 ảnh)',
-    subtitle: '(Gói 2 dải in)',
+    subtitle: '(Gói 2 tấm in)',
     photosPerSheet: 4,
     sheetsIncluded: 2,
     basePrice: 90000,
@@ -74,7 +74,7 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOption[] = [
     id: '4x6_9',
     title: '9 ảnh 4x6',
     confirmTitle: 'Khổ 4x6 (9 ảnh)',
-    subtitle: '(Gói 2 dải in)',
+    subtitle: '(Gói 2 tấm in)',
     photosPerSheet: 9,
     sheetsIncluded: 2,
     basePrice: 90000,
@@ -1040,7 +1040,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:235"
               >
-                (Gói 2 dải in)
+                (Gói 2 tấm in)
               </p>
               <div
                 className="interactive-btn"
@@ -1106,7 +1106,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:236"
               >
-                (Gói 2 dải in)
+                (Gói 2 tấm in)
               </p>
               <div
                 className="interactive-btn"

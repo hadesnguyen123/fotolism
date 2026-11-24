@@ -18,6 +18,7 @@ export interface CapturedPhoto {
     enhancedPath: string
     compositedPath: string
     enhanceStatus?: 'pending' | 'processed' | 'failed'
+    isBackup?: boolean
     timestamp: number
 }
 

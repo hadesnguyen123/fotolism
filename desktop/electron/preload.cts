@@ -201,6 +201,26 @@ const api = {
         deleteFile: (filePath: string): IpcResponse =>
             ipcRenderer.invoke('storage:delete-file', filePath),
 
+        verifyFile: (filePath: string): IpcResponse<{
+            exists: boolean
+            sizeBytes: number
+            resolvedPath: string
+        }> => ipcRenderer.invoke('storage:verify-file', filePath),
+
+        copyFile: (srcPath: string, destPath: string): IpcResponse<{
+            savedPath: string
+            sizeBytes: number
+        }> => ipcRenderer.invoke('storage:copy-file', { srcPath, destPath }),
+
+        saveBackupSlot: (
+            variant: '2x6_4' | '4x6_4' | '4x6_9',
+            destPath: string
+        ): IpcResponse<{ savedPath: string; sizeBytes: number }> =>
+            ipcRenderer.invoke('storage:save-backup-slot', {
+                variant,
+                destPath,
+            }),
+
         prefetchSelfboothUrls: (payload: {
             sessionId: string
             customerName?: string

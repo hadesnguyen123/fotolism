@@ -199,19 +199,24 @@ function findDigiCamSetupPath(): string | null {
 }
 
 /**
- * Lật gương ngang (Horizontal Flip) file ảnh JPEG trực tiếp trên đĩa
- * Đảm bảo 100% ảnh chụp xong từ máy ảnh Canon khớp chính xác với luồng soi gương trên màn hình Kiosk
+ * Lật gương ngang (Horizontal Flip) file ảnh JPEG theo cơ chế atomic (ghi file tạm rồi đổi tên),
+ * tránh làm hỏng hoặc cắt nửa file nếu tiến trình khác đọc đồng thời.
  */
 async function flipImageFile(targetPath: string): Promise<void> {
     return new Promise((resolve) => {
         try {
             if (!targetPath || !fs.existsSync(targetPath)) return resolve()
+            const tmpPath = `${targetPath}.flip.${Date.now()}.tmp.jpg`
             if (process.platform === 'win32') {
-                const escapedPath = targetPath.replace(/'/g, "''")
-                const script = `Add-Type -AssemblyName System.Drawing; $fs = [System.IO.File]::OpenRead('${escapedPath}'); $bmp = [System.Drawing.Bitmap]::FromStream($fs); $fs.Close(); $bmp.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX); $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Jpeg); $bmp.Dispose()`
+                const escapedTarget = targetPath.replace(/'/g, "''")
+                const escapedTmp = tmpPath.replace(/'/g, "''")
+                const script = `Add-Type -AssemblyName System.Drawing; $fs = [System.IO.File]::OpenRead('${escapedTarget}'); $bmp = [System.Drawing.Bitmap]::FromStream($fs); $fs.Close(); $bmp.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX); $bmp.Save('${escapedTmp}', [System.Drawing.Imaging.ImageFormat]::Jpeg); $bmp.Dispose(); if ((Get-Item '${escapedTmp}').Length -gt 1000) { [System.IO.File]::Copy('${escapedTmp}', '${escapedTarget}', $true) }; Remove-Item -Force -ErrorAction SilentlyContinue '${escapedTmp}'`
                 exec(
                     `powershell -NoProfile -NonInteractive -Command "${script}"`,
                     (err) => {
+                        try {
+                            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath)
+                        } catch {}
                         if (err)
                             console.warn(
                                 '[Canon Mirror] PowerShell flip error:',
@@ -221,7 +226,15 @@ async function flipImageFile(targetPath: string): Promise<void> {
                     }
                 )
             } else if (process.platform === 'darwin') {
-                exec(`sips --flipHorizontal "${targetPath}"`, (err) => {
+                fs.copyFileSync(targetPath, tmpPath)
+                exec(`sips --flipHorizontal "${tmpPath}"`, (err) => {
+                    try {
+                        if (!err && fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 1000) {
+                            fs.renameSync(tmpPath, targetPath)
+                        } else if (fs.existsSync(tmpPath)) {
+                            fs.unlinkSync(tmpPath)
+                        }
+                    } catch {}
                     if (err)
                         console.warn('[Canon Mirror] sips flip error:', err)
                     resolve()
@@ -233,6 +246,42 @@ async function flipImageFile(targetPath: string): Promise<void> {
             resolve()
         }
     })
+}
+
+/**
+ * Di chuyển/đặt file ảnh Canon về đúng đường dẫn chuẩn trong thư mục `raw/` theo cơ chế atomic
+ * để mỗi ô ảnh chỉ có đúng 1 tệp RAW duy nhất, khớp với thao tác xóa/chụp lại.
+ */
+function relocateRawCaptureAtomic(sourcePath: string, desiredPath?: string): string {
+    if (!desiredPath) return sourcePath
+    const resolvedSource = path.resolve(sourcePath)
+    const resolvedDesired = path.resolve(desiredPath)
+    if (resolvedSource.toLowerCase() === resolvedDesired.toLowerCase()) {
+        return resolvedSource
+    }
+    try {
+        const destDir = path.dirname(resolvedDesired)
+        if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true })
+        }
+        const tmpDest = `${resolvedDesired}.tmp.${Date.now()}`
+        fs.copyFileSync(resolvedSource, tmpDest)
+        if (fs.existsSync(tmpDest) && fs.statSync(tmpDest).size > 1000) {
+            fs.renameSync(tmpDest, resolvedDesired)
+            if (fs.existsSync(resolvedDesired) && fs.statSync(resolvedDesired).size > 1000) {
+                try {
+                    fs.unlinkSync(resolvedSource)
+                } catch {}
+                return resolvedDesired
+            }
+        }
+        try {
+            if (fs.existsSync(tmpDest)) fs.unlinkSync(tmpDest)
+        } catch {}
+    } catch (moveErr) {
+        console.warn('[Canon Daemon] Relocate raw capture fallback to original path:', moveErr)
+    }
+    return resolvedSource
 }
 
 /**
@@ -434,16 +483,21 @@ export function registerCameraIpc(): void {
 
                         if (daemonRes.ok) {
                             const result = (await daemonRes.json()) as any
-                            const targetPath =
+                            const rawCapturedPath =
                                 result.savedPath || payload.savePath
                             if (
                                 result.success &&
-                                targetPath &&
-                                fs.existsSync(targetPath) &&
-                                fs.statSync(targetPath).size > 1000
+                                rawCapturedPath &&
+                                fs.existsSync(rawCapturedPath) &&
+                                fs.statSync(rawCapturedPath).size > 1000
                             ) {
-                                // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip)
-                                await flipImageFile(targetPath)
+                                // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip) theo cơ chế atomic
+                                await flipImageFile(rawCapturedPath)
+                                // Đặt đúng về đường dẫn `raw/` chuẩn của ô slot để tránh lệch thư mục khi xóa/AI
+                                const targetPath = relocateRawCaptureAtomic(
+                                    rawCapturedPath,
+                                    payload.savePath
+                                )
 
                                 const buffer = fs.readFileSync(targetPath)
                                 const sizeMb = (
@@ -516,7 +570,7 @@ export function registerCameraIpc(): void {
                                         session_id: sessionId,
                                         slot_index: slotIndex,
                                         status: result.status || 'FAILED',
-                                        file_path: targetPath,
+                                        file_path: rawCapturedPath,
                                         is_retake: 0,
                                         retake_count: 0,
                                         latency_ms: result.latencyMs || 0,

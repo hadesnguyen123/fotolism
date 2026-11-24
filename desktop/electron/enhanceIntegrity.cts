@@ -24,6 +24,16 @@ export function enhancedFinalPath(source: string, finalDir: string, fallbackName
 }
 
 /**
+ * Xác định đường dẫn file ảnh gốc RAW trong thư mục raw/ của session.
+ * Nếu file nguồn đã nằm sẵn trong thư mục raw/, giữ nguyên để không sinh bản sao trùng tên khác.
+ */
+export function rawSessionPath(source: string, rawDir: string, fallbackName: string): string {
+    return source && path.resolve(path.dirname(source)) === path.resolve(rawDir)
+        ? source
+        : path.join(rawDir, fallbackName)
+}
+
+/**
  * Xác thực tính hợp lệ của ảnh AI trước khi đưa vào quy trình in ấn/ghép khung.
  * Ném lỗi nếu ảnh AI không tồn tại, rỗng hoặc nội dung nhị phân trùng khớp hoàn toàn với ảnh RAW gốc.
  *

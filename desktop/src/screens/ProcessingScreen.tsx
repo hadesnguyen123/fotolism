@@ -11,6 +11,7 @@ import {
     generateStripComposite,
     preparePrintImageForDNP,
 } from '../lib/canvasCompositor'
+import { buildPhotoUrlCandidates } from '../lib/photoboothSlotIntegrity'
 import { fotolismApi, isBrowser as isBrowserEnv, mockApi } from '../lib/api'
 import { cloudSyncService } from '../services/cloudSyncService'
 import {
@@ -83,12 +84,19 @@ export default function ProcessingScreen() {
                 setCompositeDone(true)
             } else {
                 // Photobooth: Ghép Khung Ảnh Thành Phẩm 1 lần từ ảnh `enhancedPath` (`natural`) và WebGL2/Canvas filter
-                const photoUrls = photos
-                    .map((p) => p.enhancedPath || p.compositedPath || p.rawPath)
-                    .filter(Boolean)
+                // Kèm danh sách ứng viên dự phòng (`enhancedPath -> compositedPath -> rawPath`) tránh mất ảnh tại bước kết xuất cuối
+                const photoCandidates = photos
+                    .map((p) =>
+                        buildPhotoUrlCandidates({
+                            compositedPath: p.enhancedPath,
+                            enhancedPath: p.compositedPath,
+                            rawPath: p.rawPath,
+                        })
+                    )
+                    .filter((cands) => cands.length > 0)
                 console.log(
                     '[ProcessingScreen] Generating final composite strip with',
-                    photoUrls.length,
+                    photoCandidates.length,
                     'photos (filter=' + (selectedFilter?.id || 'normal') + ')...'
                 )
                 const effectiveOffsets =
@@ -96,7 +104,7 @@ export default function ProcessingScreen() {
                     useAppStore.getState().slotOffsets ||
                     []
                 stripUrl = await generateStripComposite({
-                    photos: photoUrls,
+                    photos: photoCandidates,
                     frameSize: selectedFrameSize,
                     layout: selectedLayout,
                     theme: selectedTheme,

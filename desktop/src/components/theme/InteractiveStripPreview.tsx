@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Camera } from 'lucide-react'
 import type {
     ThemeItem,
@@ -7,7 +7,80 @@ import type {
 } from '../../store/appStore'
 import { resolveAssetUrl, DEFAULT_EVENT_NAME } from '../../lib/constants'
 import type { SlotOffset } from '../../lib/canvasCompositor'
+import {
+    buildPhotoUrlCandidates,
+    fromFileUrl,
+} from '../../lib/photoboothSlotIntegrity'
 import './InteractiveStripPreview.css'
+
+/**
+ * Hiển thị ảnh từng ô trong khung với chuỗi dự phòng nhiều tầng:
+ * `compositedPath -> enhancedPath -> rawPath`, kết hợp IPC `readImageDataUrl` khi load trực tiếp lỗi.
+ */
+const SlotPreviewImage: React.FC<{
+    photo: any
+    alt: string
+    style: React.CSSProperties
+}> = ({ photo, alt, style }) => {
+    const candidates = useMemo(
+        () => buildPhotoUrlCandidates(photo),
+        [photo?.compositedPath, photo?.enhancedPath, photo?.rawPath]
+    )
+    const candidatesKey = candidates.join('|')
+    const [candidateIdx, setCandidateIdx] = useState(0)
+    const [triedDataUrl, setTriedDataUrl] = useState(false)
+    const [resolvedSrc, setResolvedSrc] = useState(candidates[0] || '')
+
+    useEffect(() => {
+        setCandidateIdx(0)
+        setTriedDataUrl(false)
+        setResolvedSrc(candidates[0] || '')
+    }, [candidatesKey])
+
+    if (!resolvedSrc) return null
+
+    const handleImgError = () => {
+        const currentUrl = candidates[candidateIdx] || resolvedSrc
+        const localPath = fromFileUrl(currentUrl)
+        const readFn =
+            (window as any)?.fotolism?.storage?.readImageDataUrl ||
+            (window as any)?.electronAPI?.storage?.readImageDataUrl
+
+        if (!triedDataUrl && localPath && typeof readFn === 'function') {
+            setTriedDataUrl(true)
+            void readFn(currentUrl).then((res: any) => {
+                if (res?.success && res?.data) {
+                    setResolvedSrc(res.data)
+                    return
+                }
+                const nextIdx = candidateIdx + 1
+                if (nextIdx < candidates.length) {
+                    setCandidateIdx(nextIdx)
+                    setTriedDataUrl(false)
+                    setResolvedSrc(candidates[nextIdx])
+                }
+            })
+            return
+        }
+
+        const nextIdx = candidateIdx + 1
+        if (nextIdx < candidates.length) {
+            setCandidateIdx(nextIdx)
+            setTriedDataUrl(false)
+            setResolvedSrc(candidates[nextIdx])
+        }
+    }
+
+    return (
+        <img
+            src={resolvedSrc}
+            alt={alt}
+            draggable={false}
+            onError={handleImgError}
+            style={style}
+        />
+    )
+}
 
 export interface InteractiveStripPreviewProps {
     selectedFrameSize: FrameSize
@@ -117,25 +190,9 @@ export const InteractiveStripPreview: React.FC<
                             >
                                 {photoSrc ? (
                                     <>
-                                        <img
-                                            src={photoSrc}
+                                        <SlotPreviewImage
+                                            photo={photo}
                                             alt={`Slot ${idx + 1}`}
-                                            draggable={false}
-                                            onError={(e) => {
-                                                const imgEl = e.currentTarget
-                                                if (imgEl.dataset.fallbackTried === '1') return
-                                                imgEl.dataset.fallbackTried = '1'
-                                                const readFn =
-                                                    (window as any)?.fotolism?.storage?.readImageDataUrl ||
-                                                    (window as any)?.electronAPI?.storage?.readImageDataUrl
-                                                if (typeof readFn === 'function') {
-                                                    void readFn(photoSrc).then((res: any) => {
-                                                        if (res?.success && res?.data) {
-                                                            imgEl.src = res.data
-                                                        }
-                                                    })
-                                                }
-                                            }}
                                             style={{
                                                 position: 'absolute',
                                                 inset: 0,

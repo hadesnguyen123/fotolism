@@ -15,7 +15,7 @@ import { FrameCarousel } from '../components/theme/FrameCarousel'
 import { FilterSelectorDeck } from '../components/theme/FilterSelectorDeck'
 import { InteractiveStripPreview } from '../components/theme/InteractiveStripPreview'
 import type { SlotOffset } from '../lib/canvasCompositor'
-import { renderFilteredPreviewUrl } from '../lib/vintageV2Filter'
+import { renderFilteredPreviewUrl } from '../lib/retroFilter'
 import './ThemeSelectScreen.css'
 
 export default function ThemeSelectScreen() {

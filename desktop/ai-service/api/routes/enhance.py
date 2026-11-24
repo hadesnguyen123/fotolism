@@ -29,7 +29,7 @@ import numpy as np
 
 from core.config import STORAGE, RESOURCE_DIR
 from core.lut_manager import lut_manager
-from core.vintage_v2 import VintageV2Config
+from core.retro import RetroConfig
 from core.white_balance import balance_from_reference
 from core.korean_beauty_engine import korean_beauty_engine, KoreanBeautyConfig
 
@@ -53,7 +53,7 @@ class EnhanceRequest(BaseModel):
     styleId: str = Field("natural", description="Mã Style LUT")
     styleIntensity: float = Field(1.0, ge=0.0, le=1.0, description="Cường độ bộ lọc hậu kỳ (0.0 - 1.0)")
     bwConfig: Optional[Dict[str, Any]] = Field(None, description="Cấu hình B&W tùy biến (tùy chọn)")
-    vintageV2Config: Optional[VintageV2Config] = Field(None, description="Cấu hình Retro Vintage V2 tùy biến (tùy chọn)")
+    retroConfig: Optional[RetroConfig] = Field(None, description="Cấu hình bộ lọc Retro tùy biến (tùy chọn)")
     presetId: Optional[str] = Field("white_pink_v2", description="Preset làm đẹp: 'white_pink_v2' hoặc 'korean_soft_beauty'")
     cropAspect: Optional[str] = Field(None, description="Tỉ lệ cắt khung tâm đầu ra (VD: '3:4' cho Selfbooth)")
     koreanConfig: Optional[KoreanBeautyConfig] = Field(None, description="Cấu hình tùy biến chuyên sâu cho Korean Soft Beauty")
@@ -509,13 +509,13 @@ def enhance_image(req: EnhanceRequest):
         else:
             final_img = styled_img
 
-        # BƯỚC 3: Áp dụng bộ lọc màu đầu ra (Basic / B&W / Retro Vintage V2) sau khi đã Enhance
-        v2_cfg_dict = req.vintageV2Config.model_dump() if req.vintageV2Config else None
+        # BƯỚC 3: Áp dụng bộ lọc màu đầu ra (Basic / B&W / Retro) sau khi đã Enhance
+        retro_cfg_dict = req.retroConfig.model_dump() if req.retroConfig else None
         final_img = lut_manager.apply_post_filter(
             final_img,
             req.styleId,
             bw_config=req.bwConfig,
-            vintage_v2_config=v2_cfg_dict,
+            retro_config=retro_cfg_dict,
             intensity=req.styleIntensity,
         )
 

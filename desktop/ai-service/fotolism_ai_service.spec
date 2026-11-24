@@ -11,7 +11,7 @@ mpl_datas, mpl_binaries, mpl_hiddenimports = collect_all("matplotlib")
 datas = [
     ("data/face_detection_yunet_2023mar.onnx", "data"),
     ("data/bw-preset.json", "data"),
-    ("data/vintage-v2-lut.json", "data"),
+    ("data/retro-chocolates-lut.json", "data"),
     ("../public/mediapipe/models/face_landmarker.task", "mediapipe/models"),
 ] + mp_datas + mpl_datas
 

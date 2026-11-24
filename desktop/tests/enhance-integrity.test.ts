@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { assertEnhancedFile, enhancedFinalPath } from '../dist-electron/enhanceIntegrity.cjs'
+import { assertEnhancedFile, enhancedFinalPath, rawSessionPath } from '../dist-electron/enhanceIntegrity.cjs'
 import { AiEnhanceQueue } from '../dist-electron/aiEnhanceQueue.cjs'
 import { isPhotoEnhanced } from '../src/lib/enhanceState'
 
@@ -33,6 +33,15 @@ describe('enhance final integrity', () => {
         const external = path.resolve('working', 'enhanced.jpg')
         expect(enhancedFinalPath(external, dir, 'fotolism_enhanced_1.jpg'))
             .toBe(path.join(dir, 'fotolism_enhanced_1.jpg'))
+    })
+
+    it('reuses the raw file already in rawDir instead of duplicating fotolism_shot_1.jpg', () => {
+        const rawDir = path.resolve('sessions', 'test', 'raw')
+        const existingRaw = path.join(rawDir, 'fotolism_shot_1_1795452451846.jpg')
+        expect(rawSessionPath(existingRaw, rawDir, 'fotolism_shot_1.jpg')).toBe(existingRaw)
+        const outsideRaw = path.resolve('working', 'canon_raw.jpg')
+        expect(rawSessionPath(outsideRaw, rawDir, 'fotolism_shot_1.jpg'))
+            .toBe(path.join(rawDir, 'fotolism_shot_1.jpg'))
     })
 
     it('does not accept filename-only or processed RAW as AI', () => {

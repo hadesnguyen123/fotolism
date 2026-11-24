@@ -8,10 +8,10 @@
 import { app, ipcMain, shell, BrowserWindow, nativeImage } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
-import { getFotolismDir } from './common.cjs'
+import { getFotolismDir, SAVE_FOLDER_NAME, STORAGE_DRIVE_CANDIDATES } from './common.cjs'
 import { SessionDB, type UploadTaskRecord } from '../sessionDatabase.cjs'
 import { r2UploadWorker, type UploadProgressEvent } from '../r2UploadWorker.cjs'
-import { assertEnhancedFile, enhancedFinalPath } from '../enhanceIntegrity.cjs'
+import { assertEnhancedFile, enhancedFinalPath, rawSessionPath } from '../enhanceIntegrity.cjs'
 
 /**
  * Tạo ảnh thumbnail nhẹ (~480px, ~35KB) để Gallery tải nhanh tức thì mà không ảnh hưởng ảnh gốc.
@@ -137,6 +137,22 @@ export function cleanFilePath(p?: string): string {
     return path.normalize(decodeURIComponent(cleaned))
 }
 
+/**
+ * Kiểm tra đường dẫn có nằm trong thư mục lưu trữ ảnh Kiosk hợp lệ hay không.
+ */
+function isWithinKioskStorage(targetAbs: string): boolean {
+    const normalizedTarget = path.resolve(targetAbs).toLowerCase()
+    const allowedRoots = [
+        path.resolve(getFotolismDir()).toLowerCase(),
+        ...STORAGE_DRIVE_CANDIDATES.map((d) =>
+            path.resolve(path.join(d, SAVE_FOLDER_NAME)).toLowerCase()
+        ),
+    ]
+    return allowedRoots.some(
+        (root) => normalizedTarget === root || normalizedTarget.startsWith(`${root}${path.sep}`)
+    )
+}
+
 interface PrefetchedR2Url {
     putUrl: string
     objectKey: string
@@ -167,18 +183,33 @@ export function registerStorageIpc(): void {
         async (_event, payload: { dataUrl: string; fileName: string }) => {
             try {
                 const dir = getFotolismDir()
-                const targetFile = path.isAbsolute(payload.fileName)
-                    ? payload.fileName
-                    : path.join(dir, payload.fileName)
+                const cleanedName = cleanFilePath(payload.fileName) || payload.fileName
+                const targetFile = path.isAbsolute(cleanedName)
+                    ? cleanedName
+                    : path.join(dir, cleanedName)
                 const targetDir = path.dirname(targetFile)
                 if (!fs.existsSync(targetDir))
                     fs.mkdirSync(targetDir, { recursive: true })
-                const base64Data = payload.dataUrl.replace(
+                const base64Data = (payload.dataUrl || '').replace(
                     /^data:[^;]+;base64,/,
                     ''
                 )
                 const buffer = Buffer.from(base64Data, 'base64')
-                fs.writeFileSync(targetFile, buffer)
+                if (buffer.length < 100) {
+                    return {
+                        success: false,
+                        error: 'Dữ liệu ảnh trống hoặc không hợp lệ',
+                    }
+                }
+                const tmpFile = `${targetFile}.tmp.${Date.now()}`
+                fs.writeFileSync(tmpFile, buffer)
+                fs.renameSync(tmpFile, targetFile)
+                if (!fs.existsSync(targetFile) || fs.statSync(targetFile).size < 100) {
+                    return {
+                        success: false,
+                        error: 'Không xác minh được tệp ảnh vừa lưu',
+                    }
+                }
                 return { success: true, data: { savedPath: targetFile } }
             } catch (err: any) {
                 return { success: false, error: err.message }
@@ -558,9 +589,8 @@ export function registerStorageIpc(): void {
             try {
                 const resolved = cleanFilePath(filePath)
                 if (!resolved) return { success: false, error: 'Đường dẫn không hợp lệ' }
-                const rootDir = path.resolve(getFotolismDir())
                 const targetAbs = path.resolve(resolved)
-                if (!targetAbs.toLowerCase().startsWith(rootDir.toLowerCase())) {
+                if (!isWithinKioskStorage(targetAbs)) {
                     return { success: false, error: 'Từ chối xóa tệp ngoài thư mục Kiosk' }
                 }
                 if (fs.existsSync(targetAbs)) {
@@ -568,6 +598,139 @@ export function registerStorageIpc(): void {
                 }
                 return { success: true }
             } catch (err: any) {
+                return { success: false, error: err.message }
+            }
+        }
+    )
+
+    // Xác minh tệp ảnh cục bộ tồn tại thật và có dung lượng hợp lệ (> 1KB)
+    ipcMain.handle(
+        'storage:verify-file',
+        async (_event, filePath: string) => {
+            try {
+                const resolved = cleanFilePath(filePath)
+                if (!resolved || !fs.existsSync(resolved)) {
+                    return {
+                        success: true,
+                        data: { exists: false, sizeBytes: 0, resolvedPath: resolved },
+                    }
+                }
+                const stat = fs.statSync(resolved)
+                return {
+                    success: true,
+                    data: {
+                        exists: stat.isFile() && stat.size > 1000,
+                        sizeBytes: stat.size,
+                        resolvedPath: resolved,
+                    },
+                }
+            } catch (err: any) {
+                return { success: false, error: err.message }
+            }
+        }
+    )
+
+    // Sao chép tệp ảnh cục bộ theo cơ chế atomic (.tmp -> rename) trong phạm vi thư mục Kiosk
+    ipcMain.handle(
+        'storage:copy-file',
+        async (_event, payload: { srcPath: string; destPath: string }) => {
+            let tmpPath = ''
+            try {
+                const srcResolved = cleanFilePath(payload?.srcPath)
+                const destResolved = cleanFilePath(payload?.destPath)
+                if (!srcResolved || !destResolved) {
+                    return { success: false, error: 'Đường dẫn nguồn hoặc đích không hợp lệ' }
+                }
+                const srcAbs = path.resolve(srcResolved)
+                const destAbs = path.resolve(destResolved)
+                if (!isWithinKioskStorage(srcAbs) || !isWithinKioskStorage(destAbs)) {
+                    return { success: false, error: 'Từ chối sao chép ngoài thư mục Kiosk' }
+                }
+                if (!fs.existsSync(srcAbs) || fs.statSync(srcAbs).size <= 1000) {
+                    return { success: false, error: 'Tệp nguồn không tồn tại hoặc bị hỏng' }
+                }
+                const destDir = path.dirname(destAbs)
+                if (!fs.existsSync(destDir)) {
+                    fs.mkdirSync(destDir, { recursive: true })
+                }
+                tmpPath = `${destAbs}.copy.${Date.now()}.tmp`
+                fs.copyFileSync(srcAbs, tmpPath)
+                fs.renameSync(tmpPath, destAbs)
+                tmpPath = ''
+                const stat = fs.statSync(destAbs)
+                if (!stat.isFile() || stat.size <= 1000) {
+                    return { success: false, error: 'Tệp sao chép không hợp lệ' }
+                }
+                return {
+                    success: true,
+                    data: { savedPath: destAbs, sizeBytes: stat.size },
+                }
+            } catch (err: any) {
+                if (tmpPath && fs.existsSync(tmpPath)) {
+                    try { fs.unlinkSync(tmpPath) } catch {}
+                }
+                return { success: false, error: err.message }
+            }
+        }
+    )
+
+    // Chép ảnh backup có logo Fotolism tương ứng 3 loại khung vào thư mục session theo cơ chế atomic
+    ipcMain.handle(
+        'storage:save-backup-slot',
+        async (
+            _event,
+            payload: {
+                variant: '2x6_4' | '4x6_4' | '4x6_9'
+                destPath: string
+            }
+        ) => {
+            let tmpPath = ''
+            try {
+                const fileName = `backup_${payload?.variant || '4x6_4'}.jpg`
+                const srcCandidates = [
+                    path.join(app.getAppPath(), 'dist', 'backup-slots', fileName),
+                    path.join(app.getAppPath(), 'public', 'backup-slots', fileName),
+                    ...(process.resourcesPath
+                        ? [path.join(process.resourcesPath, 'backup-slots', fileName)]
+                        : []),
+                    path.join(__dirname, '../../dist/backup-slots', fileName),
+                    path.join(__dirname, '../../public/backup-slots', fileName),
+                ]
+                const srcFile = srcCandidates.find((p) => p && fs.existsSync(p))
+                if (!srcFile) {
+                    return {
+                        success: false,
+                        error: `Không tìm thấy ảnh backup ${fileName}`,
+                    }
+                }
+                const destResolved = cleanFilePath(payload?.destPath)
+                if (!destResolved) {
+                    return { success: false, error: 'Đường dẫn đích backup không hợp lệ' }
+                }
+                const destAbs = path.resolve(destResolved)
+                if (!isWithinKioskStorage(destAbs)) {
+                    return { success: false, error: 'Từ chối lưu backup ngoài thư mục Kiosk' }
+                }
+                const bytes = fs.readFileSync(srcFile)
+                if (bytes.length <= 1000) {
+                    return { success: false, error: 'Tệp ảnh backup bị hỏng hoặc rỗng' }
+                }
+                const destDir = path.dirname(destAbs)
+                if (!fs.existsSync(destDir)) {
+                    fs.mkdirSync(destDir, { recursive: true })
+                }
+                tmpPath = `${destAbs}.bak.${Date.now()}.tmp`
+                fs.writeFileSync(tmpPath, bytes)
+                fs.renameSync(tmpPath, destAbs)
+                tmpPath = ''
+                return {
+                    success: true,
+                    data: { savedPath: destAbs, sizeBytes: bytes.length },
+                }
+            } catch (err: any) {
+                if (tmpPath && fs.existsSync(tmpPath)) {
+                    try { fs.unlinkSync(tmpPath) } catch {}
+                }
                 return { success: false, error: err.message }
             }
         }
@@ -915,7 +1078,6 @@ export function registerStorageIpc(): void {
                         const s = shots[i]
                         const shotBaseName =
                             s.fileName || `fotolism_shot_${i + 1}.jpg`
-                        const rawTarget = path.join(rawDir, shotBaseName)
                         const enhancedBaseName = shotBaseName.startsWith(
                             'fotolism_shot_'
                         )
@@ -931,13 +1093,17 @@ export function registerStorageIpc(): void {
                               : `enhanced_${shotBaseName}`
                         const cleanRaw = cleanFilePath(s.rawPath)
                         const cleanEnh = cleanFilePath(s.enhancedPath)
+                        const hasRawFile = Boolean(cleanRaw && fs.existsSync(cleanRaw))
+                        const rawTarget = hasRawFile
+                            ? rawSessionPath(cleanRaw, rawDir, shotBaseName)
+                            : path.join(rawDir, shotBaseName)
                         const hasEnhFile = Boolean(cleanEnh && fs.existsSync(cleanEnh))
                         const finalTarget = hasEnhFile
                             ? enhancedFinalPath(cleanEnh, finalDir, enhancedBaseName)
                             : path.join(finalDir, enhancedBaseName)
 
-                        // Lưu raw file
-                        if (cleanRaw && fs.existsSync(cleanRaw)) {
+                        // Lưu raw file (nếu đã nằm trong thư mục raw/ của session thì giữ nguyên 1 tệp duy nhất)
+                        if (hasRawFile) {
                             if (
                                 path.resolve(cleanRaw) !==
                                 path.resolve(rawTarget)

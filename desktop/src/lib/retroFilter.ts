@@ -1,18 +1,21 @@
 /**
- * @file vintageV2Filter.ts
- * Bộ lọc Vintage V2 (3D LUT 33^3 + Clarity âm + Film Grain 0.2) & Hạt Film B&W chạy trực tiếp trên Frontend
- * qua WebGL2 GPU (tự fallback về Canvas 2D nếu thiếu WebGL2), dùng chung dữ liệu LUT từ Python `ai-service`
- * để Preview và Final Strip khớp 100% mà không gọi lại `ai-service` lần 2.
- * Phụ thuộc: vintage-v2-lut.json, bwFilter.ts.
+ * @file retroFilter.ts
+ * Bộ lọc Retro (3D LUT 33^3 từ Adobe XMP Retro 2 + Chocolates 03 + Soft Glow + Film Grain cho B&W)
+ * chạy trực tiếp trên Frontend qua WebGL2 GPU (tự fallback về Canvas 2D nếu thiếu WebGL2),
+ * dùng chung dữ liệu LUT sinh từ Python `ai-service` để Preview và Final Strip khớp đồng nhất.
+ * Phụ thuộc: retro-lut.json, bwFilter.ts.
  */
 
-import lutJsonRaw from '../../ai-service/data/vintage-v2-lut.json?raw'
+import lutJsonRaw from '../../ai-service/data/retro-lut.json?raw'
 import { BW_CSS_FILTER, BW_PRESET } from '../config/bwFilter'
 
-interface VintageV2LutData {
+interface RetroLutData {
     gridSize: number
-    clarity: number
-    grain: number
+    clarity?: number
+    grain?: number
+    glow?: number
+    glowRange?: number
+    glowSpread?: number
     lutBase64: string
 }
 
@@ -22,15 +25,18 @@ let decodedLut: {
     gridSize: number
     clarity: number
     grain: number
+    glow: number
+    glowRange: number
+    glowSpread: number
     tableRgb: Uint8Array
 } | null = null
 
 let grainTileF32: Float32Array | null = null
 let grainTileU8: Uint8Array | null = null
 
-function getVintageV2Lut() {
+function getRetroLut() {
     if (decodedLut) return decodedLut
-    const parsed = JSON.parse(lutJsonRaw) as VintageV2LutData
+    const parsed = JSON.parse(lutJsonRaw) as RetroLutData
     const bin = atob(parsed.lutBase64)
     const tableRgb = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) {
@@ -38,8 +44,11 @@ function getVintageV2Lut() {
     }
     decodedLut = {
         gridSize: parsed.gridSize || 33,
-        clarity: parsed.clarity ?? -8,
-        grain: parsed.grain ?? 0.2,
+        clarity: parsed.clarity ?? 0,
+        grain: parsed.grain ?? 0,
+        glow: parsed.glow ?? 38,
+        glowRange: parsed.glowRange ?? 50,
+        glowSpread: parsed.glowSpread ?? 50,
         tableRgb,
     }
     return decodedLut
@@ -99,9 +108,8 @@ export function applyMidtoneGrainToCanvasRect(
     const { f32 } = ensureGrainTiles()
     const ix = Math.max(0, Math.floor(x))
     const iy = Math.max(0, Math.floor(y))
-    const iw = Math.min(ctx.canvas.width - ix, Math.ceil(w))
-    const ih = Math.min(ctx.canvas.height - iy, Math.ceil(h))
-    if (iw <= 0 || ih <= 0) return
+    const iw = Math.max(1, Math.min(ctx.canvas.width - ix, Math.round(w)))
+    const ih = Math.max(1, Math.min(ctx.canvas.height - iy, Math.round(h)))
 
     const imgData = ctx.getImageData(ix, iy, iw, ih)
     const d = imgData.data
@@ -122,7 +130,7 @@ export function applyMidtoneGrainToCanvasRect(
 
 // ─── WebGL2 3D LUT Singleton Engine ───────────────────────────────────────────
 
-interface GlVintagePipeline {
+interface GlRetroPipeline {
     canvas: HTMLCanvasElement
     gl: WebGL2RenderingContext
     program: WebGLProgram
@@ -133,12 +141,14 @@ interface GlVintagePipeline {
     vao: WebGLVertexArrayObject
     uSizeLoc: WebGLUniformLocation | null
     uClarityLoc: WebGLUniformLocation | null
+    uGlowLoc: WebGLUniformLocation | null
+    uGlowRangeLoc: WebGLUniformLocation | null
     uGrainSigmaLoc: WebGLUniformLocation | null
     uTexelLoc: WebGLUniformLocation | null
     uDestSizeLoc: WebGLUniformLocation | null
 }
 
-let cachedGlPipeline: GlVintagePipeline | null | undefined
+let cachedGlPipeline: GlRetroPipeline | null | undefined
 
 const VERT_SRC = `#version 300 es
 in vec2 a_pos;
@@ -158,6 +168,8 @@ uniform sampler3D u_lut3d;
 uniform sampler2D u_grain;
 uniform float u_lutSize;
 uniform float u_clarityFactor;
+uniform float u_glowStrength;
+uniform float u_glowRange;
 uniform float u_grainSigma;
 uniform vec2 u_texel;
 uniform vec2 u_destSize;
@@ -193,6 +205,15 @@ void main() {
         lutCol = clamp(lutCol + (lutCol - blurCol) * (u_clarityFactor * edgeKeep * midW), 0.0, 1.0);
     }
 
+    if (u_glowStrength > 0.5) {
+        vec3 bloomCol = texture(u_blur, v_uv).rgb;
+        float rangeThresh = 0.56 - (u_glowRange / 100.0) * 0.24;
+        float lumOut = dot(lutCol, vec3(0.299, 0.587, 0.114));
+        float alphaG = clamp((lumOut - rangeThresh) / max(0.15, 1.0 - rangeThresh), 0.0, 1.0)
+                     * clamp((u_glowStrength / 100.0) * 0.26, 0.0, 0.85);
+        lutCol = clamp(lutCol + (1.0 - lutCol) * (bloomCol * alphaG), 0.0, 1.0);
+    }
+
     if (u_grainSigma > 0.0002) {
         vec2 grainUv = (v_uv * u_destSize) / 512.0;
         float z = (texture(u_grain, grainUv).r * 255.0 - 128.0) / 32.0;
@@ -215,7 +236,7 @@ function compileShader(gl: WebGL2RenderingContext, type: number, src: string): W
     return sh
 }
 
-function getGlPipeline(): GlVintagePipeline | null {
+function getGlPipeline(): GlRetroPipeline | null {
     if (cachedGlPipeline !== undefined) return cachedGlPipeline
     if (typeof document === 'undefined') {
         cachedGlPipeline = null
@@ -268,7 +289,7 @@ function getGlPipeline(): GlVintagePipeline | null {
         gl.enableVertexAttribArray(posLoc)
         gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
 
-        const { gridSize, tableRgb } = getVintageV2Lut()
+        const { gridSize, tableRgb } = getRetroLut()
         const lutTex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_3D, lutTex)
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
@@ -331,13 +352,15 @@ function getGlPipeline(): GlVintagePipeline | null {
             vao,
             uSizeLoc: gl.getUniformLocation(program, 'u_lutSize'),
             uClarityLoc: gl.getUniformLocation(program, 'u_clarityFactor'),
+            uGlowLoc: gl.getUniformLocation(program, 'u_glowStrength'),
+            uGlowRangeLoc: gl.getUniformLocation(program, 'u_glowRange'),
             uGrainSigmaLoc: gl.getUniformLocation(program, 'u_grainSigma'),
             uTexelLoc: gl.getUniformLocation(program, 'u_texel'),
             uDestSizeLoc: gl.getUniformLocation(program, 'u_destSize'),
         }
         return cachedGlPipeline
     } catch (err) {
-        console.warn('[vintageV2Filter] WebGL2 init fallback to CPU:', err)
+        console.warn('[retroFilter] WebGL2 init fallback to CPU:', err)
         cachedGlPipeline = null
         return null
     }
@@ -356,7 +379,7 @@ function buildLutOnlyCanvas(
     ctx.drawImage(srcCanvas, 0, 0, w, h)
     const imgData = ctx.getImageData(0, 0, w, h)
     const d = imgData.data
-    const { gridSize, tableRgb } = getVintageV2Lut()
+    const { gridSize, tableRgb } = getRetroLut()
     const maxIdx = gridSize - 1
     const scale = maxIdx / 255
     const s2 = gridSize * gridSize
@@ -407,11 +430,13 @@ function buildLutOnlyCanvas(
     return out
 }
 
-function applyVintageV2CpuToCanvas(
+function applyRetroCpuToCanvas(
     targetCtx: CanvasRenderingContext2D,
     srcCanvas: HTMLCanvasElement,
     blurSmallCanvas: HTMLCanvasElement,
     clarityVal: number,
+    glowVal: number,
+    glowRangeVal: number,
     grainVal: number
 ): void {
     const w = srcCanvas.width
@@ -422,7 +447,7 @@ function applyVintageV2CpuToCanvas(
     const srcCtx = srcCanvas.getContext('2d')!
     const origData = srcCtx.getImageData(0, 0, w, h)
 
-    if (Math.abs(clarityVal) > 1e-4 && Math.min(w, h) >= 16) {
+    if ((Math.abs(clarityVal) > 1e-4 || glowVal > 0.5) && Math.min(w, h) >= 16) {
         const blurUp = document.createElement('canvas')
         blurUp.width = w
         blurUp.height = h
@@ -432,28 +457,46 @@ function applyVintageV2CpuToCanvas(
             const blurData = buCtx.getImageData(0, 0, w, h).data
             const d = lutData.data
             const o = origData.data
-            const cFactor = (clarityVal / 100) * 0.5
-            for (let i = 0; i < d.length; i += 4) {
-                const lum = (0.2126 * o[i] + 0.7152 * o[i + 1] + 0.0722 * o[i + 2]) / 255
-                const midW = Math.max(0, Math.min(1, 4 * lum * (1 - lum)))
-                const weight = cFactor * midW * 0.85
-                d[i] = Math.max(0, Math.min(255, Math.round(d[i] + (d[i] - blurData[i]) * weight)))
-                d[i + 1] = Math.max(0, Math.min(255, Math.round(d[i + 1] + (d[i + 1] - blurData[i + 1]) * weight)))
-                d[i + 2] = Math.max(0, Math.min(255, Math.round(d[i + 2] + (d[i + 2] - blurData[i + 2]) * weight)))
+
+            if (Math.abs(clarityVal) > 1e-4) {
+                const cFactor = (clarityVal / 100) * 0.5
+                for (let i = 0; i < d.length; i += 4) {
+                    const lum = (0.2126 * o[i] + 0.7152 * o[i + 1] + 0.0722 * o[i + 2]) / 255
+                    const midW = Math.max(0, Math.min(1, 4 * lum * (1 - lum)))
+                    const weight = cFactor * midW * 0.85
+                    d[i] = Math.max(0, Math.min(255, Math.round(d[i] + (d[i] - blurData[i]) * weight)))
+                    d[i + 1] = Math.max(0, Math.min(255, Math.round(d[i + 1] + (d[i + 1] - blurData[i + 1]) * weight)))
+                    d[i + 2] = Math.max(0, Math.min(255, Math.round(d[i + 2] + (d[i + 2] - blurData[i + 2]) * weight)))
+                }
+            }
+
+            if (glowVal > 0.5) {
+                const rangeThresh = 0.56 - (glowRangeVal / 100) * 0.24
+                const strength = Math.max(0, Math.min(0.85, (glowVal / 100) * 0.26))
+                const denom = Math.max(0.15, 1.0 - rangeThresh)
+                for (let i = 0; i < d.length; i += 4) {
+                    const lumOut = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255
+                    const alpha = Math.max(0, Math.min(1, (lumOut - rangeThresh) / denom)) * strength
+                    if (alpha > 1e-4) {
+                        d[i] = Math.min(255, Math.round(d[i] + (255 - d[i]) * (blurData[i] / 255) * alpha))
+                        d[i + 1] = Math.min(255, Math.round(d[i + 1] + (255 - d[i + 1]) * (blurData[i + 1] / 255) * alpha))
+                        d[i + 2] = Math.min(255, Math.round(d[i + 2] + (255 - d[i + 2]) * (blurData[i + 2] / 255) * alpha))
+                    }
+                }
             }
         }
     }
     targetCtx.putImageData(lutData, 0, 0)
     if (grainVal > 1e-4) {
-        applyMidtoneGrainToCanvasRect(targetCtx, 0, 0, w, h, Math.min(0.5, grainVal) * 0.12)
+        applyMidtoneGrainToCanvasRect(targetCtx, 0, 0, w, h, Math.min(0.5, grainVal) * 0.14)
     }
 }
 
 /**
- * Vẽ vùng ảnh `(srcX..srcH)` qua Vintage V2 (WebGL2 3D LUT + Clarity 1/8 + Grain 0.2, fallback CPU nếu thiếu WebGL2)
+ * Vẽ vùng ảnh `(srcX..srcH)` qua bộ lọc Retro (WebGL2 3D LUT + Soft Glow, fallback CPU nếu thiếu WebGL2)
  * trực tiếp lên `(drawX..drawH)` của Canvas đích.
  */
-export function drawVintageV2Region(
+export function drawRetroRegion(
     targetCtx: CanvasRenderingContext2D,
     img: HTMLImageElement,
     srcX: number,
@@ -477,17 +520,18 @@ export function drawVintageV2Region(
     sCtx.imageSmoothingQuality = 'high'
     sCtx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, rw, rh)
 
-    // Tạo ảnh low-pass blur 1/8 độ phân giải phục vụ Clarity âm của Vintage V2
-    const sw = Math.max(16, Math.round(rw / 8))
-    const sh = Math.max(16, Math.round(rh / 8))
+    const { gridSize, clarity, grain, glow, glowRange, glowSpread } = getRetroLut()
+    const sw = Math.max(16, Math.round(rw / 4))
+    const sh = Math.max(16, Math.round(rh / 4))
     const blurSmall = document.createElement('canvas')
     blurSmall.width = sw
     blurSmall.height = sh
     const bCtx = blurSmall.getContext('2d')
-    const { gridSize, clarity, grain } = getVintageV2Lut()
     if (bCtx) {
-        const sigmaFull = Math.max(8, Math.min(rw, rh) * 0.018)
-        const sigmaSmall = Math.max(1, sigmaFull * (sw / rw))
+        const sigmaSmall =
+            glow > 0.5
+                ? Math.max(2, (0.015 + (glowSpread / 100) * 0.028) * Math.max(sw, sh))
+                : Math.max(1, Math.max(8, Math.min(rw, rh) * 0.018) * (sw / rw))
         bCtx.filter = `blur(${sigmaSmall.toFixed(1)}px)`
         bCtx.drawImage(srcCanvas, 0, 0, sw, sh)
         bCtx.filter = 'none'
@@ -500,7 +544,6 @@ export function drawVintageV2Region(
             pipe.canvas.width = rw
             pipe.canvas.height = rh
         }
-        // Làm mờ sau LUT 1/8 từ LUT CPU rất nhỏ (sw x sh ~ 68x90px, <0.2ms) để blurCol cùng không gian màu Vintage
         const lutBlurSmall = buildLutOnlyCanvas(blurSmall, sw, sh)
 
         gl.viewport(0, 0, rw, rh)
@@ -529,7 +572,9 @@ export function drawVintageV2Region(
         gl.uniform1i(gl.getUniformLocation(pipe.program, 'u_grain'), 3)
         gl.uniform1f(pipe.uSizeLoc, gridSize)
         gl.uniform1f(pipe.uClarityLoc, (clarity / 100) * 0.5)
-        gl.uniform1f(pipe.uGrainSigmaLoc, Math.min(0.5, grain) * 0.12)
+        gl.uniform1f(pipe.uGlowLoc, glow)
+        gl.uniform1f(pipe.uGlowRangeLoc, glowRange)
+        gl.uniform1f(pipe.uGrainSigmaLoc, Math.min(0.5, grain) * 0.14)
         gl.uniform2f(pipe.uTexelLoc, 1.0 / rw, 1.0 / rh)
         gl.uniform2f(pipe.uDestSizeLoc, rw, rh)
 
@@ -543,7 +588,7 @@ export function drawVintageV2Region(
     cpuOut.height = rh
     const cCtx = cpuOut.getContext('2d')
     if (!cCtx) return
-    applyVintageV2CpuToCanvas(cCtx, srcCanvas, blurSmall, clarity, grain)
+    applyRetroCpuToCanvas(cCtx, srcCanvas, blurSmall, clarity, glow, glowRange, grain)
     targetCtx.drawImage(cpuOut, 0, 0, rw, rh, drawX, drawY, drawW, drawH)
 }
 
@@ -609,7 +654,7 @@ export function applyBwPostLookToRegion(
             applyMidtoneGrainToCanvasRect(ctx, drawX, drawY, drawW, drawH, grain * 0.14)
         }
     } catch (err) {
-        console.warn('[vintageV2Filter] B&W post-look warning:', err)
+        console.warn('[retroFilter] B&W post-look warning:', err)
     }
 }
 
@@ -617,13 +662,29 @@ export function applyBwPostLookToRegion(
 
 const previewUrlCache = new Map<string, Promise<string | null>>()
 
-function loadImgElement(src: string): Promise<HTMLImageElement> {
+async function loadImgElement(src: string): Promise<HTMLImageElement> {
+    let resolvedSrc = src
+    if (src && (src.startsWith('file:/') || /^[a-zA-Z]:[\\/]/.test(src))) {
+        const readFn =
+            (window as any)?.fotolism?.storage?.readImageDataUrl ||
+            (window as any)?.electronAPI?.storage?.readImageDataUrl
+        if (typeof readFn === 'function') {
+            try {
+                const res = await readFn(src)
+                if (res?.success && res?.data) {
+                    resolvedSrc = res.data
+                }
+            } catch {}
+        }
+    }
     return new Promise((resolve, reject) => {
         const im = new Image()
-        im.crossOrigin = 'anonymous'
+        if (resolvedSrc.startsWith('http://') || resolvedSrc.startsWith('https://')) {
+            im.crossOrigin = 'anonymous'
+        }
         im.onload = () => resolve(im)
         im.onerror = (e) => reject(e)
-        im.src = src
+        im.src = resolvedSrc
     })
 }
 
@@ -656,8 +717,8 @@ export async function renderFilteredPreviewUrl(
             const ctx = out.getContext('2d')
             if (!ctx) return null
 
-            if (filterId === 'retro_90s' || filterId === 'retro' || filterId === 'vintage' || filterId === 'vintage_v2') {
-                drawVintageV2Region(ctx, img, 0, 0, img.width, img.height, 0, 0, pw, ph)
+            if (filterId === 'retro_90s' || filterId === 'retro' || filterId === 'vintage') {
+                drawRetroRegion(ctx, img, 0, 0, img.width, img.height, 0, 0, pw, ph)
             } else if (filterId === 'vintage_noir' || filterId === 'monochrome' || filterId === 'bw') {
                 ctx.filter = BW_CSS_FILTER
                 ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, pw, ph)
@@ -673,7 +734,7 @@ export async function renderFilteredPreviewUrl(
             }
             return out.toDataURL('image/jpeg', 0.92)
         } catch (err) {
-            console.warn('[vintageV2Filter] Preview render fallback to CSS:', err)
+            console.warn('[retroFilter] Preview render fallback to CSS:', err)
             previewUrlCache.delete(cacheKey)
             return null
         }

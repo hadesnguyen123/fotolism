@@ -33,6 +33,11 @@ import { Camera, Palette, Loader2, Clock, Grid3x3, Sun } from 'lucide-react'
 import './CaptureScreen.css'
 import { isPhotoEnhanced } from '../lib/enhanceState'
 import { formatLocalSessionFolder, isTestSessionPin } from '../lib/pinUtils'
+import {
+    fromFileUrl,
+    planMissingSlotsWithBackup,
+    toFileUrl,
+} from '../lib/photoboothSlotIntegrity'
 
 // ── Giả lập âm thanh màn trập cơ học "TÁCH!" dứt khoát 1 lần duy nhất qua Web Audio API ──
 function playCameraShutterSound() {
@@ -207,12 +212,26 @@ export default function CaptureScreen() {
     const [aiProgressText, setAiProgressText] = useState<string>('')
     const [aiProcessingError, setAiProcessingError] = useState<string | null>(null)
     const isProceedingRef = useRef<boolean>(false)
+    const isCapturingShotRef = useRef<boolean>(false)
+    isCapturingShotRef.current = isCapturingShot
     const deletedPhotoIdsRef = useRef<Set<string>>(new Set())
+    const slotGenerationsRef = useRef<Record<number, number>>({})
+    const fotolismRootDirRef = useRef<string>('F:\\Fotolism_image')
     const proceedPhotoboothRef = useRef<
         ((options?: { allowPartialOnTimeout?: boolean }) => Promise<void>) | null
     >(null)
 
     useEffect(() => {
+        if (!isBrowser) {
+            void api.storage
+                .getDownloadsPath()
+                .then((res) => {
+                    if (res?.success && res?.data?.path) {
+                        fotolismRootDirRef.current = res.data.path
+                    }
+                })
+                .catch(() => {})
+        }
         // Đánh thức Canon Daemon và gia hạn shutdown timer
         if (CANON_DAEMON_BASE_URL) {
             fetch(`${CANON_DAEMON_BASE_URL}/wake`).catch(() => {})
@@ -730,8 +749,10 @@ export default function CaptureScreen() {
 
         try {
             const timestamp = Date.now()
+            const shotGeneration = (slotGenerationsRef.current[targetIndex] || 0) + 1
+            slotGenerationsRef.current[targetIndex] = shotGeneration
             const rawFileName = `${FILE_PREFIX_SHOT}_${targetIndex + 1}_${timestamp}.jpg`
-            const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+            const rawSavePath = `${fotolismRootDirRef.current}\\sessions\\${sessionId}\\raw\\${rawFileName}`
             const api = isBrowser ? mockApi : fotolismApi
 
             // Đếm ngược mượt mà (3s, 5s hoặc 10s), giữ nguyên luồng video cho người dùng tạo dáng
@@ -765,8 +786,7 @@ export default function CaptureScreen() {
                 )
                 setCameraFreezeFrame(photoDataUrl)
             }
-            const photoPath =
-                photoDataUrl || `photo_${timestamp}_${targetIndex + 1}.jpg`
+            const photoPath = photoDataUrl || ''
 
             const newPhoto: CapturedPhoto = {
                 id: `photo_${timestamp}_${targetIndex + 1}`,
@@ -788,29 +808,39 @@ export default function CaptureScreen() {
             // Reset lại retake index sau khi chụp xong
             setRetakeSlotIndex(null)
 
+            const isShotStillActive = () =>
+                slotGenerationsRef.current[targetIndex] === shotGeneration &&
+                !deletedPhotoIdsRef.current.has(newPhoto.id)
+
+            const persistLiveViewFallback = async () => {
+                if (!photoDataUrl || !photoDataUrl.startsWith('data:image')) return
+                if (!isShotStillActive()) return
+                const saved = await api.storage.savePhoto(photoDataUrl, rawSavePath)
+                if (!saved?.success || !saved?.data?.savedPath) return
+                if (!isShotStillActive()) {
+                    void api.storage.deleteFile(saved.data.savedPath)
+                    return
+                }
+                const savedFileUrl = toFileUrl(saved.data.savedPath)
+                setSlots((prev) => {
+                    const next = [...prev]
+                    if (next[targetIndex]?.id === newPhoto.id) {
+                        next[targetIndex] = {
+                            ...next[targetIndex]!,
+                            rawPath: saved.data!.savedPath,
+                            enhancedPath: photoDataUrl || savedFileUrl,
+                            compositedPath: photoDataUrl || savedFileUrl,
+                        }
+                    }
+                    slotsRef.current = next
+                    return next
+                })
+            }
+
             // Chỉ lưu ảnh gốc khi chụp; chỉ chạy AI xử lý ảnh khi hoàn tất các ô và chuyển sang màn Frame + Filter.
             if (!isCanonDaemonActive && photoDataUrl && photoDataUrl.startsWith('data:image')) {
                 pendingCapturesRef.current.add(newPhoto.id)
-                api.storage
-                    .savePhoto(photoDataUrl, rawSavePath)
-                    .then((saved) => {
-                        if (!saved.success) throw new Error(saved.error || 'Không thể lưu ảnh gốc')
-                        if (deletedPhotoIdsRef.current.has(newPhoto.id)) {
-                            void api.storage.deleteFile(rawSavePath)
-                            return
-                        }
-                        setSlots((prev) => {
-                            const next = [...prev]
-                            if (next[targetIndex]?.id === newPhoto.id) {
-                                next[targetIndex] = {
-                                    ...next[targetIndex]!,
-                                    rawPath: rawSavePath,
-                                }
-                            }
-                            slotsRef.current = next
-                            return next
-                        })
-                    })
+                persistLiveViewFallback()
                     .catch((err) => console.warn('Save photo error:', err))
                     .finally(() => {
                         pendingCapturesRef.current.delete(newPhoto.id)
@@ -839,7 +869,7 @@ export default function CaptureScreen() {
                             res.data.savedPath
                         ) {
                             const canonData = res.data
-                            if (deletedPhotoIdsRef.current.has(newPhoto.id)) {
+                            if (!isShotStillActive()) {
                                 void api.storage.deleteFile(canonData.savedPath)
                                 return
                             }
@@ -849,7 +879,7 @@ export default function CaptureScreen() {
 
                             const canonUrl =
                                 canonData.dataUrl ||
-                                `file:///${canonData.savedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
+                                toFileUrl(canonData.savedPath)
 
                             setSlots((prev) => {
                                 const next = [...prev]
@@ -874,13 +904,20 @@ export default function CaptureScreen() {
                                       }
                                     : prev
                             )
+                        } else {
+                            console.warn(
+                                '[Method 2] Canon returned unsuccessful, persisting LiveView backup:',
+                                res?.error
+                            )
+                            await persistLiveViewFallback()
                         }
                     })
-                    .catch((err) => {
+                    .catch(async (err) => {
                         console.warn(
-                            '[Method 2] Canon hardware capture fallback:',
+                            '[Method 2] Canon hardware capture fallback to LiveView:',
                             err
                         )
+                        await persistLiveViewFallback()
                     })
                     .finally(() => {
                         pendingCapturesRef.current.delete(newPhoto.id)
@@ -912,11 +949,24 @@ export default function CaptureScreen() {
         )
         if (totalUsed >= 2) return
 
-        // Đánh dấu đã xóa và xóa thẳng file gốc trên đĩa để tránh xử lý/enhance nhầm ảnh cũ
+        // Vô hiệu hóa các tác vụ chụp/AI đang chạy nền của thế hệ cũ ở ô này
+        slotGenerationsRef.current[indexToDelete] =
+            (slotGenerationsRef.current[indexToDelete] || 0) + 1
         deletedPhotoIdsRef.current.add(targetPhoto.id)
-        if (targetPhoto.rawPath && !targetPhoto.rawPath.startsWith('data:image')) {
-            const api = isBrowser ? mockApi : fotolismApi
-            void api.storage.deleteFile(targetPhoto.rawPath).catch(() => {})
+        const api = isBrowser ? mockApi : fotolismApi
+        const otherActivePaths = new Set<string>()
+        slotsRef.current.forEach((other, idx) => {
+            if (idx === indexToDelete || !other) return
+            const r = fromFileUrl(other.rawPath).toLowerCase()
+            const e = fromFileUrl(other.enhancedPath).toLowerCase()
+            if (r) otherActivePaths.add(r)
+            if (e) otherActivePaths.add(e)
+        })
+        for (const candidate of [targetPhoto.rawPath, targetPhoto.enhancedPath]) {
+            const diskPath = fromFileUrl(candidate)
+            if (diskPath && !otherActivePaths.has(diskPath.toLowerCase())) {
+                void api.storage.deleteFile(diskPath).catch(() => {})
+            }
         }
 
         const currentCount = slotDeleteCountsRef.current[indexToDelete] || 0
@@ -951,11 +1001,16 @@ export default function CaptureScreen() {
         setAiProcessingError(null)
 
         try {
-            // Đợi toàn bộ tiến trình chụp và AI hoàn tất trong nền
-            if (pendingCapturesRef.current.size > 0) {
+            // Đợi nếu đang đếm ngược bắt khung hình hoặc tiến trình chụp/lưu nền chưa xong (tối đa 15s)
+            if (isCapturingShotRef.current || pendingCapturesRef.current.size > 0) {
+                const waitDeadline = Date.now() + 15000
                 await new Promise((resolve) => {
                     const interval = setInterval(() => {
-                        if (pendingCapturesRef.current.size === 0) {
+                        const done =
+                            (!isCapturingShotRef.current &&
+                                pendingCapturesRef.current.size === 0) ||
+                            Date.now() >= waitDeadline
+                        if (done) {
                             clearInterval(interval)
                             resolve(true)
                         }
@@ -964,90 +1019,179 @@ export default function CaptureScreen() {
             }
             await new Promise((resolve) => setTimeout(resolve, 150))
 
-            // Đảm bảo 100% các ô đã chụp đều hoàn thành AI Enhance vào thư mục final (chạy song song đồng thời)
-            const currentSlots = [...slotsRef.current]
+            const rootDir = fotolismRootDirRef.current
             const api = isBrowser ? mockApi : fotolismApi
-            await Promise.all(
-                currentSlots.map(async (slot, i) => {
-                    if (!slot) return
-                    const hasAiEnhance = isPhotoEnhanced(slot)
-                    if (!hasAiEnhance) {
-                        try {
-                            const timestamp = slot.timestamp || Date.now()
-                            const enhancedFileName = `fotolism_enhanced_${i + 1}_${timestamp}.jpg`
-                            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
-                            let rawPath = slot.rawPath
-                            if (rawPath && rawPath.startsWith('data:image')) {
-                                const rawFileName = `${FILE_PREFIX_SHOT}_${i + 1}_${timestamp}.jpg`
-                                const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
-                                await api.storage.savePhoto(rawPath, rawSavePath)
-                                rawPath = rawSavePath
+            const workingSlots: Array<CapturedPhoto | null> = Array.from(
+                { length: totalShots },
+                (_, idx) => slotsRef.current[idx] ?? null
+            )
+
+            // Đảm bảo mỗi ô đã chụp đều có tệp RAW tồn tại thật trên đĩa (> 1KB)
+            const ensureVerifiedRawPath = async (
+                slot: CapturedPhoto,
+                slotIdx: number
+            ): Promise<string> => {
+                const rawCandidate = fromFileUrl(slot.rawPath)
+                if (rawCandidate) {
+                    const check = await api.storage.verifyFile(rawCandidate)
+                    if (check?.success && check?.data?.exists) {
+                        return check.data.resolvedPath || rawCandidate
+                    }
+                }
+                const backupDataUrl =
+                    [slot.rawPath, slot.enhancedPath, slot.compositedPath].find((u) =>
+                        Boolean(u && u.startsWith('data:image'))
+                    ) || grabVideoFrame()
+                if (backupDataUrl && backupDataUrl.startsWith('data:image')) {
+                    const fallbackRawPath = `${rootDir}\\sessions\\${sessionId}\\raw\\${FILE_PREFIX_SHOT}_${slotIdx + 1}_${slot.timestamp || Date.now()}.jpg`
+                    const saved = await api.storage.savePhoto(
+                        backupDataUrl,
+                        fallbackRawPath
+                    )
+                    if (saved?.success && saved?.data?.savedPath) {
+                        return saved.data.savedPath
+                    }
+                }
+                return ''
+            }
+
+            for (let i = 0; i < totalShots; i++) {
+                const slot = workingSlots[i]
+                if (!slot) continue
+                const verifiedRaw = await ensureVerifiedRawPath(slot, i)
+                if (verifiedRaw) {
+                    workingSlots[i] = {
+                        ...slot,
+                        rawPath: verifiedRaw,
+                    }
+                } else {
+                    workingSlots[i] = null
+                }
+            }
+
+            // Khi hết giờ 2p30s hoặc còn ô chưa chụp: giữ nguyên vị trí các ô đã chụp,
+            // chèn ảnh backup có logo Fotolism đúng tỉ lệ khung (2x6 4, 4x6 4, 4x6 9) vào mọi ô trống
+            if (allowPartial) {
+                const copyTs = Date.now()
+                const { filledSlots, backupPlans } = planMissingSlotsWithBackup(
+                    workingSlots,
+                    selectedFrameSize,
+                    totalShots,
+                    copyTs
+                )
+                for (const plan of backupPlans) {
+                    const destBackupPath = `${rootDir}\\sessions\\${sessionId}\\final\\fotolism_backup_${plan.slotIndex + 1}_${copyTs}.jpg`
+                    try {
+                        const savedBackup = await api.storage.saveBackupSlot(
+                            plan.variant,
+                            destBackupPath
+                        )
+                        if (savedBackup?.success && savedBackup?.data?.savedPath) {
+                            const backupUrl = toFileUrl(savedBackup.data.savedPath)
+                            filledSlots[plan.slotIndex] = {
+                                ...plan.backupPhoto,
+                                enhancedPath: backupUrl,
+                                compositedPath: backupUrl,
                             }
-                            if (rawPath && !rawPath.startsWith('data:image')) {
-                                const enhRes = await api.ai.enhance(
-                                    rawPath,
-                                    50,
-                                    'white_pink_v2',
-                                    'natural',
-                                    enhancedSavePath
+                        }
+                    } catch (backupErr) {
+                        console.warn(
+                            `Backup slot ${plan.slotIndex + 1} save fallback to static asset:`,
+                            backupErr
+                        )
+                    }
+                }
+                for (let i = 0; i < totalShots; i++) {
+                    workingSlots[i] = filledSlots[i]
+                }
+            }
+
+            if (!allowPartial && workingSlots.some((s) => s === null)) {
+                slotsRef.current = workingSlots
+                setSlots([...workingSlots])
+                return
+            }
+
+            // Đảm bảo 100% các ô đã chụp đều chạy AI Enhance sang `final/` (bỏ qua các ô backup logo)
+            await Promise.all(
+                workingSlots.map(async (slot, i) => {
+                    if (!slot || slot.isBackup) return
+                    const hasAiEnhance = isPhotoEnhanced(slot)
+                    if (hasAiEnhance) {
+                        const enhDisk = fromFileUrl(slot.enhancedPath)
+                        if (enhDisk) {
+                            const checkEnh = await api.storage.verifyFile(enhDisk)
+                            if (checkEnh?.success && checkEnh?.data?.exists) {
+                                return
+                            }
+                        }
+                    }
+
+                    const timestamp = slot.timestamp || Date.now()
+                    const enhancedFileName = `fotolism_enhanced_${i + 1}_${timestamp}.jpg`
+                    const enhancedSavePath = `${rootDir}\\sessions\\${sessionId}\\final\\${enhancedFileName}`
+                    const rawDiskPath = fromFileUrl(slot.rawPath)
+
+                    try {
+                        if (rawDiskPath) {
+                            const enhRes = await api.ai.enhance(
+                                rawDiskPath,
+                                50,
+                                'white_pink_v2',
+                                'natural',
+                                enhancedSavePath
+                            )
+                            if (enhRes?.success && enhRes?.data?.enhancedPath) {
+                                const checkEnh = await api.storage.verifyFile(
+                                    enhRes.data.enhancedPath
                                 )
-                                if (enhRes?.success && enhRes?.data?.enhancedPath) {
-                                    const enhUrl = `file:///${enhRes.data.enhancedPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                                    currentSlots[i] = {
+                                if (checkEnh?.success && checkEnh?.data?.exists) {
+                                    const enhUrl = toFileUrl(
+                                        checkEnh.data.resolvedPath ||
+                                            enhRes.data.enhancedPath
+                                    )
+                                    workingSlots[i] = {
                                         ...slot,
-                                        rawPath,
+                                        rawPath: rawDiskPath,
                                         enhancedPath: enhUrl,
                                         compositedPath: enhUrl,
                                         enhanceStatus: 'processed',
                                     }
-                                } else {
-                                    const fallbackUrl = slot.enhancedPath?.startsWith('data:image')
-                                        ? slot.enhancedPath
-                                        : `file:///${rawPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                                    currentSlots[i] = {
-                                        ...slot,
-                                        rawPath,
-                                        enhancedPath: fallbackUrl,
-                                        compositedPath: fallbackUrl,
-                                    }
+                                    return
                                 }
                             }
-                        } catch (enhErr) {
-                            console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
-                            if (slot.rawPath && !slot.rawPath.startsWith('data:image') && !slot.enhancedPath?.startsWith('data:image')) {
-                                const fallbackUrl = `file:///${slot.rawPath.replace(/\\/g, '/').replace(/^\/+/, '')}`
-                                currentSlots[i] = {
-                                    ...slot,
-                                    enhancedPath: fallbackUrl,
-                                    compositedPath: fallbackUrl,
-                                }
-                            }
+                        }
+                    } catch (enhErr) {
+                        console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
+                    }
+
+                    // Fallback an toàn: lỗi AI không được làm mất ảnh — giữ nguyên ảnh gốc cho màn Frame & Print
+                    if (rawDiskPath) {
+                        const rawFallbackUrl = toFileUrl(rawDiskPath)
+                        workingSlots[i] = {
+                            ...slot,
+                            rawPath: rawDiskPath,
+                            enhancedPath: rawFallbackUrl,
+                            compositedPath: rawFallbackUrl,
+                            enhanceStatus: 'failed',
                         }
                     }
                 })
             )
 
-            slotsRef.current = currentSlots
-            setSlots(currentSlots)
+            slotsRef.current = workingSlots
+            setSlots([...workingSlots])
 
-            const capturedSlots = currentSlots.filter(
+            const chosenPhotos = workingSlots.filter(
                 (s): s is CapturedPhoto => s !== null
             )
 
-            if (capturedSlots.length === 0) {
+            if (chosenPhotos.length === 0) {
                 setIsSessionActive(false)
                 setScreen('select-theme')
                 return
             }
 
-            let chosenPhotos = capturedSlots
-            if (allowPartial && chosenPhotos.length < totalShots) {
-                const filled = [...chosenPhotos]
-                while (filled.length < totalShots) {
-                    filled.push(filled[filled.length - 1])
-                }
-                chosenPhotos = filled.slice(0, totalShots)
-            }
             setSessionPhotos(chosenPhotos)
 
             // Đẩy các ảnh đơn lẻ đã xử lý AI vào thư mục final/ lên Cloud R2 trước khi sang Frame & Filter
@@ -1581,11 +1725,26 @@ export default function CaptureScreen() {
     function handleResetShootSession() {
         if (isSelfboothMode) return
         if (sessionResetCount >= 1) return
+        const resetApi = isBrowser ? mockApi : fotolismApi
+        slotsRef.current.forEach((slot, idx) => {
+            slotGenerationsRef.current[idx] =
+                (slotGenerationsRef.current[idx] || 0) + 1
+            if (!slot) return
+            deletedPhotoIdsRef.current.add(slot.id)
+            for (const p of [slot.rawPath, slot.enhancedPath]) {
+                const diskPath = fromFileUrl(p)
+                if (diskPath) {
+                    void resetApi.storage.deleteFile(diskPath).catch(() => {})
+                }
+            }
+        })
+        const emptySlots = Array(totalShots).fill(null)
+        slotsRef.current = emptySlots
         setSessionResetCount((c) => c + 1)
         setIsSessionActive(false)
         setIsCapturingShot(false)
         setIsSelfboothRunning(false)
-        setSlots(Array(totalShots).fill(null))
+        setSlots(emptySlots)
         setRetakeSlotIndex(null)
         slotDeleteCountsRef.current = {}
         setSlotDeleteCounts({})
