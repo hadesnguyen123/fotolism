@@ -15,6 +15,7 @@ import {
     DEFAULT_EXTRA_COPY_PRICE_4X6,
 } from '../lib/constants'
 import { Printer, Tag, Camera } from 'lucide-react'
+import { cloudSyncService } from '../services/cloudSyncService'
 import PhotoboothHeader from '../components/PhotoboothHeader'
 import './ConfirmScreen.css'
 
@@ -53,6 +54,7 @@ export default function ConfirmScreen() {
         storeAppliedCoupon
     )
     const [couponError, setCouponError] = useState<string | null>(null)
+    const [isCheckingCoupon, setIsCheckingCoupon] = useState(false)
     const [showKeyboard, setShowKeyboard] = useState<boolean>(false)
 
     useEffect(() => {
@@ -106,7 +108,8 @@ export default function ConfirmScreen() {
         setCouponInput('')
     }
 
-    function handleApplyCoupon(customCode?: string) {
+    async function handleApplyCoupon(customCode?: string) {
+        if (isCheckingCoupon) return
         setCouponError(null)
         const codeToTest = (customCode !== undefined ? customCode : couponInput)
             .trim()
@@ -116,17 +119,57 @@ export default function ConfirmScreen() {
             return
         }
 
-        const availableCoupons = eventConfig.discountCoupons || []
-        const found = availableCoupons.find(
-            (c) => c.code.toUpperCase() === codeToTest
-        )
-        if (found) {
-            setAppliedCoupon(found)
-            setStoreAppliedCoupon(found)
-            setCouponError(null)
-            setShowKeyboard(false)
-        } else {
-            setCouponError('Mã không hợp lệ hoặc đã hết hạn')
+        const cmsUrl = cloudSyncService.getCmsUrl()
+        if (!cmsUrl) {
+            setCouponError('Chưa cấu hình địa chỉ Cloud CMS')
+            return
+        }
+
+        setIsCheckingCoupon(true)
+        try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 6000)
+            const res = await fetch(`${cmsUrl}/api/kiosk/coupons/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: codeToTest,
+                    subtotal: subTotal,
+                }),
+                signal: controller.signal,
+            })
+            clearTimeout(timeout)
+
+            const json = await res.json().catch(() => null)
+            if (res.ok && json?.valid && json?.coupon) {
+                const remote = json.coupon
+                const couponType: 'percent' | 'fixed' =
+                    remote.discount_type === 'fixed' ? 'fixed' : 'percent'
+                const couponValue = Number(remote.discount_value || 0)
+                const resolved: DiscountCoupon = {
+                    code: String(remote.code || codeToTest).toUpperCase(),
+                    type: couponType,
+                    value: couponValue,
+                    description:
+                        couponType === 'percent'
+                            ? `Giảm ${couponValue}% tổng hóa đơn`
+                            : `Giảm trực tiếp ${formatVND(couponValue)}`,
+                }
+                setAppliedCoupon(resolved)
+                setStoreAppliedCoupon(resolved)
+                setCouponError(null)
+                setShowKeyboard(false)
+            } else {
+                setAppliedCoupon(null)
+                setStoreAppliedCoupon(null)
+                setCouponError(
+                    json?.error || 'Mã ưu đãi không hợp lệ hoặc đã hết hạn'
+                )
+            }
+        } catch {
+            setCouponError('Không thể kết nối CMS để kiểm tra mã ưu đãi')
+        } finally {
+            setIsCheckingCoupon(false)
         }
     }
 
@@ -190,7 +233,7 @@ export default function ConfirmScreen() {
     if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
         screen="confirm-info"
         onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
-        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: couponError || (appliedCoupon ? 'Đã áp dụng mã ưu đãi' : ''), finalTotal: finalAmount }}
+        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: isCheckingCoupon ? 'Đang kiểm tra mã...' : couponError || (appliedCoupon ? 'Đã áp dụng mã ưu đãi' : ''), finalTotal: finalAmount }}
         changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
         onPromo={() => handleApplyCoupon()}
     />

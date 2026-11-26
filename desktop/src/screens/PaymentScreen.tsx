@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { useAppStore, ALL_LAYOUTS } from '../store/appStore'
 import {
     DEFAULT_ACCOUNT_HOLDER,
+    DEFAULT_ADMIN_PIN,
     DEFAULT_BANK_BIN,
     DEFAULT_BANK_NAME,
     DEFAULT_ACCOUNT_NUMBER,
@@ -18,6 +19,7 @@ import {
     DEFAULT_EXTRA_COPY_PRICE_2X6,
     DEFAULT_EXTRA_COPY_PRICE_4X6,
 } from '../lib/constants'
+import { isTestSessionPin } from '../lib/pinUtils'
 import { Clock, CheckCircle2 } from 'lucide-react'
 import { cloudSyncService } from '../services/cloudSyncService'
 import { generateVietQrSvgDataUrl } from '../lib/vietqr'
@@ -28,6 +30,7 @@ import './PaymentScreen.css'
 export default function PaymentScreen() {
     const {
         setScreen,
+        session,
         selectedFrameSize,
         selectedLayout,
         eventConfig,
@@ -169,7 +172,67 @@ export default function PaymentScreen() {
             : activeBankBin === '970415'
               ? 'VietinBank'
               : 'VietinBank'
-    const sepayTransferDesc = `SEVQR TKPNVF ${orderCode}`
+    // Gắn bắt buộc mã PIN/phiên vào nội dung chuyển khoản VietQR để đối soát khớp 1-1 với vé CMS
+    const rawSessionPin = (session?.pinCode || '').trim()
+    const cleanSessionTag = rawSessionPin
+        ? `PIN${rawSessionPin.replace(/[^a-zA-Z0-9]/g, '')}`
+        : session?.sessionId
+          ? `SES${session.sessionId.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}`
+          : ''
+    const transferCode = cleanSessionTag
+        ? `${orderCode} ${cleanSessionTag}`
+        : orderCode
+    const sepayTransferDesc = `SEVQR TKPNVF ${transferCode}`
+
+    /**
+     * Đẩy trực tiếp số tiền & trạng thái thanh toán của vé lên Cloud CMS ngay sau khi Kiosk xác nhận,
+     * đảm bảo CMS nhận đúng giá tiền mà không phụ thuộc hoàn toàn vào SePay webhook.
+     */
+    const syncTicketPaymentToCms = (
+        paidAmount: number,
+        method: 'vietqr' | 'cash'
+    ) => {
+        const pin = rawSessionPin
+        const adminPin = (
+            eventConfig.adminPin ||
+            DEFAULT_ADMIN_PIN ||
+            '8888'
+        ).trim()
+        if (!pin || pin === '8888' || pin === adminPin || isTestSessionPin(pin))
+            return
+
+        const cmsUrl = cloudSyncService.getCmsUrl()
+        if (!cmsUrl) return
+
+        const rawKioskId = (cloudSyncService.getKioskId() || '').trim()
+        const isSelfbooth = eventConfig.captureMode === 'selfbooth'
+        const fallbackKioskId = isSelfbooth ? 'selfbooth_01' : 'photobooth_01'
+        const resolvedKioskId =
+            rawKioskId &&
+            rawKioskId !== 'kiosk_01' &&
+            rawKioskId !== 'kiosk_02'
+                ? rawKioskId
+                : fallbackKioskId
+
+        fetch(`${cmsUrl}/api/kiosk/tickets`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pin_code: pin,
+                kiosk_id: resolvedKioskId,
+                service_type: isSelfbooth ? 'selfbooth' : 'photobooth',
+                amount: Math.max(0, Math.round(paidAmount)),
+                payment_status: 'paid',
+                payment_method: method,
+                coupon_code: appliedCoupon?.code || null,
+            }),
+        }).catch((err) => {
+            console.warn(
+                `[PaymentScreen] Không thể đồng bộ thanh toán vé ${pin} lên CMS:`,
+                err
+            )
+        })
+    }
 
     // SePay VietQR chuẩn EMVCo Napas247 (sinh đồng bộ local 0ms + fallback trực tuyến)
     const localVietQrUrl = generateVietQrSvgDataUrl(
@@ -225,13 +288,16 @@ export default function PaymentScreen() {
                     clearInterval(checkInterval)
                     setPaymentSuccess(true)
 
+                    const confirmedAmount =
+                        res.transaction?.amount || finalAmount
                     setSessionPayment({
-                        paidAmount: res.transaction?.amount || finalAmount,
+                        paidAmount: confirmedAmount,
                         paidCopies: copies,
                         paymentMethod: 'vietqr',
                         discountCodeUsed: appliedCoupon?.code || null,
                         discountAmount,
                     })
+                    syncTicketPaymentToCms(confirmedAmount, 'vietqr')
 
                     setTimeout(() => {
                         if (eventConfig.captureMode !== 'selfbooth') {
@@ -283,6 +349,7 @@ export default function PaymentScreen() {
                 discountCodeUsed: appliedCoupon?.code || null,
                 discountAmount,
             })
+            syncTicketPaymentToCms(finalAmount, 'cash')
 
             setTimeout(() => {
                 if (eventConfig.captureMode !== 'selfbooth') {
@@ -304,6 +371,7 @@ export default function PaymentScreen() {
             discountCodeUsed: appliedCoupon?.code || null,
             discountAmount,
         })
+        syncTicketPaymentToCms(finalAmount, 'vietqr')
         setTimeout(() => {
             if (eventConfig.captureMode !== 'selfbooth') {
                 startPhotoboothSessionTimer()
@@ -324,7 +392,7 @@ export default function PaymentScreen() {
 
     if (eventConfig.captureMode !== 'selfbooth') return <>
         <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}
-            bank={{ name: activeBankName, holder: activeAccountHolder, account: activeAccountNumber, code: orderCode }}
+            bank={{ name: activeBankName, holder: activeAccountHolder, account: activeAccountNumber, code: transferCode }}
             onNavigate={(target) => { if (target === 'welcome') setScreen('welcome'); }}
             values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess, remainingSeconds: secondsLeft }}
             changes={{ paymentConfirmed: () => setShowStaffPinModal(true) }}

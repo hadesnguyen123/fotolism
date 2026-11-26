@@ -184,17 +184,28 @@ export default function IdleScreen() {
                 setWelcomeGuest('Thành công')
 
                 const effectiveMode: CaptureMode = targetMode
-                const kioskId = cloudSyncService.getKioskId()
+                const rawKioskId = (cloudSyncService.getKioskId() || '').trim()
+                const fallbackKioskId =
+                    effectiveMode === 'selfbooth'
+                        ? 'selfbooth_01'
+                        : 'photobooth_01'
+                const resolvedKioskId =
+                    rawKioskId &&
+                    rawKioskId !== 'kiosk_01' &&
+                    rawKioskId !== 'kiosk_02'
+                        ? rawKioskId
+                        : fallbackKioskId
 
                 // Cập nhật trạng thái vé thành IN_BOOTH trên CMS để đánh dấu đang chụp
-                if (kioskId) {
+                if (cmsUrl) {
                     fetch(`${cmsUrl}/api/kiosk/tickets`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             pin_code: rawCode,
                             status: 'IN_BOOTH',
-                            kiosk_id: kioskId,
+                            kiosk_id: resolvedKioskId,
+                            service_type: effectiveMode,
                         }),
                     })
                         .then(async (r) => {

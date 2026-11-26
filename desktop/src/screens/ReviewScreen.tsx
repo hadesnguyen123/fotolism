@@ -277,22 +277,47 @@ export default function ReviewScreen() {
 
         const cmsUrl = cloudSyncService.getCmsUrl()
         const kioskId = cloudSyncService.getKioskId()
-        if (!cmsUrl || !kioskId) {
+        if (!cmsUrl) {
             console.error(
-                '[ReviewScreen] Thiếu cấu hình Cloud CMS hoặc Kiosk ID khi cập nhật trạng thái vé',
-                { pin, cmsUrl: cmsUrl || null, kioskId: kioskId || null }
+                '[ReviewScreen] Thiếu cấu hình Cloud CMS khi cập nhật trạng thái vé',
+                { pin, cmsUrl: cmsUrl || null }
             )
             return
         }
 
         try {
+            const paidAmount =
+                typeof session?.paidAmount === 'number' &&
+                session.paidAmount > 0
+                    ? Math.round(session.paidAmount)
+                    : undefined
+            const rawKioskId = (kioskId || '').trim()
+            const fallbackKioskId = isSelfboothMode
+                ? 'selfbooth_01'
+                : 'photobooth_01'
+            const resolvedKioskId =
+                rawKioskId &&
+                rawKioskId !== 'kiosk_01' &&
+                rawKioskId !== 'kiosk_02'
+                    ? rawKioskId
+                    : fallbackKioskId
             const res = await fetch(`${cmsUrl}/api/kiosk/tickets`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     pin_code: pin,
                     status: 'COMPLETED',
-                    kiosk_id: kioskId,
+                    kiosk_id: resolvedKioskId,
+                    service_type: isSelfboothMode ? 'selfbooth' : 'photobooth',
+                    ...(paidAmount !== undefined
+                        ? {
+                              amount: paidAmount,
+                              payment_status: 'paid',
+                              payment_method:
+                                  session?.paymentMethod || 'vietqr',
+                              coupon_code: session?.discountCodeUsed || null,
+                          }
+                        : {}),
                 }),
             })
             if (!res.ok) {
@@ -307,7 +332,7 @@ export default function ReviewScreen() {
                 err
             )
         }
-    }, [session?.pinCode, eventConfig.adminPin])
+    }, [session?.pinCode, session?.paidAmount, session?.paymentMethod, session?.discountCodeUsed, eventConfig.adminPin])
 
     // Cập nhật trạng thái COMPLETED ngay khi khách vào màn hình Review nhận ảnh
     useEffect(() => {
