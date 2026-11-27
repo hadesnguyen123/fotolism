@@ -9,6 +9,10 @@ import ConnectedReferenceView from '../components/reference/ConnectedReferenceVi
 import { useState, useEffect } from 'react'
 import { useAppStore, type DiscountCoupon } from '../store/appStore'
 import {
+    MAX_COUPONS_PER_SESSION,
+    calculateCouponsDiscount,
+} from '../config/coupons'
+import {
     DEFAULT_PRICE_2X6,
     DEFAULT_PRICE_4X6,
     DEFAULT_EXTRA_COPY_PRICE_2X6,
@@ -27,8 +31,8 @@ export default function ConfirmScreen() {
         eventConfig,
         selectedCopies,
         setSelectedCopies,
-        appliedCoupon: storeAppliedCoupon,
-        setAppliedCoupon: setStoreAppliedCoupon,
+        appliedCoupons: storeAppliedCoupons,
+        setAppliedCoupons: setStoreAppliedCoupons,
     } = useAppStore()
 
     const is2x6 = selectedFrameSize === '2x6' || Boolean(selectedLayout?.strip)
@@ -50,9 +54,10 @@ export default function ConfirmScreen() {
     })
 
     const [couponInput, setCouponInput] = useState('')
-    const [appliedCoupon, setAppliedCoupon] = useState<DiscountCoupon | null>(
-        storeAppliedCoupon
+    const [appliedCoupons, setAppliedCoupons] = useState<DiscountCoupon[]>(
+        storeAppliedCoupons || []
     )
+    const appliedCoupon = appliedCoupons[0] ?? null
     const [couponError, setCouponError] = useState<string | null>(null)
     const [isCheckingCoupon, setIsCheckingCoupon] = useState(false)
     const [showKeyboard, setShowKeyboard] = useState<boolean>(false)
@@ -79,14 +84,7 @@ export default function ConfirmScreen() {
 
     const subTotal = basePrice + extraTotal
 
-    let discountAmount = 0
-    if (appliedCoupon) {
-        if (appliedCoupon.type === 'percent') {
-            discountAmount = Math.round((subTotal * appliedCoupon.value) / 100)
-        } else {
-            discountAmount = appliedCoupon.value
-        }
-    }
+    const discountAmount = calculateCouponsDiscount(subTotal, appliedCoupons)
     const finalAmount = Math.max(0, subTotal - discountAmount)
 
     const formatVND = (num: number) =>
@@ -116,6 +114,24 @@ export default function ConfirmScreen() {
             .toUpperCase()
         if (!codeToTest) {
             setCouponError('Vui lòng nhập mã ưu đãi')
+            return
+        }
+
+        // Rule: Không được nhập trùng 1 mã 2 lần trong cùng phiên
+        if (
+            appliedCoupons.some(
+                (c) => c.code.trim().toUpperCase() === codeToTest
+            )
+        ) {
+            setCouponError('Mã ưu đãi này đã được áp dụng trong phiên')
+            return
+        }
+
+        // Rule: Tối đa 2 mã giảm giá khác nhau trong 1 phiên
+        if (appliedCoupons.length >= MAX_COUPONS_PER_SESSION) {
+            setCouponError(
+                `Mỗi phiên chỉ được áp dụng tối đa ${MAX_COUPONS_PER_SESSION} mã ưu đãi`
+            )
             return
         }
 
@@ -155,13 +171,13 @@ export default function ConfirmScreen() {
                             ? `Giảm ${couponValue}% tổng hóa đơn`
                             : `Giảm trực tiếp ${formatVND(couponValue)}`,
                 }
-                setAppliedCoupon(resolved)
-                setStoreAppliedCoupon(resolved)
+                const nextCoupons = [...appliedCoupons, resolved]
+                setAppliedCoupons(nextCoupons)
+                setStoreAppliedCoupons(nextCoupons)
+                setCouponInput('')
                 setCouponError(null)
                 setShowKeyboard(false)
             } else {
-                setAppliedCoupon(null)
-                setStoreAppliedCoupon(null)
                 setCouponError(
                     json?.error || 'Mã ưu đãi không hợp lệ hoặc đã hết hạn'
                 )
@@ -197,9 +213,12 @@ export default function ConfirmScreen() {
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [showKeyboard, couponInput, eventConfig.discountCoupons])
 
-    function handleRemoveCoupon() {
-        setAppliedCoupon(null)
-        setStoreAppliedCoupon(null)
+    function handleRemoveCoupon(codeToRemove?: string) {
+        const next = codeToRemove
+            ? appliedCoupons.filter((c) => c.code !== codeToRemove)
+            : []
+        setAppliedCoupons(next)
+        setStoreAppliedCoupons(next)
         setCouponInput('')
         setCouponError(null)
     }
@@ -222,7 +241,7 @@ export default function ConfirmScreen() {
 
     function handleProceed() {
         setSelectedCopies(copies)
-        setStoreAppliedCoupon(appliedCoupon)
+        setStoreAppliedCoupons(appliedCoupons)
         if (eventConfig.paymentRequiredForPhotobooth) {
             setScreen('payment')
         } else {
@@ -230,12 +249,27 @@ export default function ConfirmScreen() {
         }
     }
 
+    const promoFeedbackText = isCheckingCoupon
+        ? 'Đang kiểm tra mã...'
+        : couponError ||
+          (appliedCoupons.length > 0
+              ? `Đã áp dụng: ${appliedCoupons.map((c) => c.code).join(', ')} (${appliedCoupons.length}/${MAX_COUPONS_PER_SESSION})`
+              : '')
+
+    const appliedPromoChips = appliedCoupons.map((c) => ({
+        code: c.code,
+        label: c.type === 'percent' ? `-${c.value}%` : `-${formatVND(c.value)}`,
+    }))
+
     if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
         screen="confirm-info"
         onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
-        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: isCheckingCoupon ? 'Đang kiểm tra mã...' : couponError || (appliedCoupon ? 'Đã áp dụng mã ưu đãi' : ''), finalTotal: finalAmount }}
+        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: promoFeedbackText, finalTotal: finalAmount }}
         changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
         onPromo={() => handleApplyCoupon()}
+        appliedPromos={appliedPromoChips}
+        onRemovePromo={(code) => handleRemoveCoupon(code)}
+        promoIsError={Boolean(couponError)}
     />
 
     return (
@@ -417,7 +451,7 @@ export default function ConfirmScreen() {
                                     <button
                                         type="button"
                                         className="applied-remove-btn"
-                                        onClick={handleRemoveCoupon}
+                                        onClick={() => handleRemoveCoupon()}
                                     >
                                         ✕
                                     </button>

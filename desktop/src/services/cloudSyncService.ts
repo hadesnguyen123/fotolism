@@ -174,13 +174,29 @@ class CloudSyncService {
     }
 
     public getKioskId(): string {
-        return (
+        const raw = (
             this.getDeviceConfig()?.kiosk_id ||
             (typeof localStorage !== 'undefined'
                 ? localStorage.getItem('fotolism_kiosk_id')
                 : null) ||
             ''
-        )
+        ).trim()
+        if (raw && raw !== 'kiosk_01' && raw !== 'kiosk_02') {
+            return raw
+        }
+        let captureMode = ''
+        if (typeof localStorage !== 'undefined') {
+            try {
+                const cfg = JSON.parse(
+                    localStorage.getItem('fotolism_event_config') || '{}'
+                )
+                captureMode = String(cfg?.captureMode || '')
+            } catch {}
+        }
+        if (raw === 'kiosk_02' || captureMode === 'selfbooth') {
+            return 'selfbooth_01'
+        }
+        return 'photobooth_01'
     }
 
     private lastReportedErrorKey: string | null = null

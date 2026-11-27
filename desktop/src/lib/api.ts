@@ -72,7 +72,8 @@ export interface FotolismAPI {
     print: {
         send: (
             imagePath: string,
-            copies: number
+            copies: number,
+            frameSize?: '2x6' | '4x6'
         ) => IpcResponse<{ jobId: string }>
         listPrinters: () => IpcResponse<{
             printers: Array<{ name: string; isDefault: boolean }>

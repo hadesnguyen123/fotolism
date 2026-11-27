@@ -8,6 +8,7 @@
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, ALL_LAYOUTS } from '../store/appStore'
+import { calculateCouponsDiscount } from '../config/coupons'
 import {
     DEFAULT_ACCOUNT_HOLDER,
     DEFAULT_ADMIN_PIN,
@@ -37,7 +38,7 @@ export default function PaymentScreen() {
         selectedCopies,
         setSelectedCopies,
         setSessionPayment,
-        appliedCoupon: storeAppliedCoupon,
+        appliedCoupons: storeAppliedCoupons,
         startPhotoboothSessionTimer,
     } = useAppStore()
 
@@ -96,7 +97,9 @@ export default function PaymentScreen() {
         }
     }, [is2x6, setSelectedCopies, copies])
 
-    const appliedCoupon = storeAppliedCoupon
+    const appliedCoupons = storeAppliedCoupons || []
+    const appliedCouponCodes = appliedCoupons.map((c) => c.code)
+    const appliedCouponCodeStr = appliedCouponCodes.join(',') || null
 
     const [orderCode] = useState(
         () => `FTL${Math.floor(100000 + Math.random() * 900000)}`
@@ -122,15 +125,8 @@ export default function PaymentScreen() {
 
     const subTotal = basePrice + extraTotal
 
-    // 2. Tính tiền giảm giá
-    let discountAmount = 0
-    if (appliedCoupon) {
-        if (appliedCoupon.type === 'percent') {
-            discountAmount = Math.round((subTotal * appliedCoupon.value) / 100)
-        } else {
-            discountAmount = appliedCoupon.value
-        }
-    }
+    // 2. Tính tiền giảm giá (tối đa 2 mã khác nhau)
+    const discountAmount = calculateCouponsDiscount(subTotal, appliedCoupons)
     const finalAmount = Math.max(0, subTotal - discountAmount)
 
     const formatVND = (num: number) =>
@@ -224,7 +220,8 @@ export default function PaymentScreen() {
                 amount: Math.max(0, Math.round(paidAmount)),
                 payment_status: 'paid',
                 payment_method: method,
-                coupon_code: appliedCoupon?.code || null,
+                coupon_code: appliedCouponCodeStr,
+                coupon_codes: appliedCouponCodes,
             }),
         }).catch((err) => {
             console.warn(
@@ -294,7 +291,7 @@ export default function PaymentScreen() {
                         paidAmount: confirmedAmount,
                         paidCopies: copies,
                         paymentMethod: 'vietqr',
-                        discountCodeUsed: appliedCoupon?.code || null,
+                        discountCodeUsed: appliedCouponCodeStr,
                         discountAmount,
                     })
                     syncTicketPaymentToCms(confirmedAmount, 'vietqr')
@@ -320,7 +317,7 @@ export default function PaymentScreen() {
         finalAmount,
         paymentSuccess,
         copies,
-        appliedCoupon,
+        appliedCouponCodeStr,
         discountAmount,
         setSessionPayment,
         setScreen,
@@ -346,7 +343,7 @@ export default function PaymentScreen() {
                 paidAmount: finalAmount,
                 paidCopies: copies,
                 paymentMethod: 'cash',
-                discountCodeUsed: appliedCoupon?.code || null,
+                discountCodeUsed: appliedCouponCodeStr,
                 discountAmount,
             })
             syncTicketPaymentToCms(finalAmount, 'cash')
@@ -368,7 +365,7 @@ export default function PaymentScreen() {
             paidAmount: finalAmount,
             paidCopies: copies,
             paymentMethod: 'vietqr',
-            discountCodeUsed: appliedCoupon?.code || null,
+            discountCodeUsed: appliedCouponCodeStr,
             discountAmount,
         })
         syncTicketPaymentToCms(finalAmount, 'vietqr')
@@ -388,7 +385,7 @@ export default function PaymentScreen() {
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [finalAmount, copies, appliedCoupon, discountAmount])
+    }, [finalAmount, copies, appliedCouponCodeStr, discountAmount])
 
     if (eventConfig.captureMode !== 'selfbooth') return <>
         <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}

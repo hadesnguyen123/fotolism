@@ -6,6 +6,8 @@ export interface PaymentSlice {
     setSelectedCopies: (copies: number) => void
     appliedCoupon: DiscountCoupon | null
     setAppliedCoupon: (coupon: DiscountCoupon | null) => void
+    appliedCoupons: DiscountCoupon[]
+    setAppliedCoupons: (coupons: DiscountCoupon[]) => void
     setSessionPayment: (data: {
         paidAmount: number
         paidCopies: number
@@ -22,7 +24,17 @@ export const createPaymentSlice: StateCreator<any, [], [], PaymentSlice> = (
     selectedCopies: 2,
     setSelectedCopies: (selectedCopies) => set({ selectedCopies }),
     appliedCoupon: null,
-    setAppliedCoupon: (appliedCoupon) => set({ appliedCoupon }),
+    setAppliedCoupon: (appliedCoupon) =>
+        set({
+            appliedCoupon,
+            appliedCoupons: appliedCoupon ? [appliedCoupon] : [],
+        }),
+    appliedCoupons: [],
+    setAppliedCoupons: (appliedCoupons) =>
+        set({
+            appliedCoupons,
+            appliedCoupon: appliedCoupons[0] ?? null,
+        }),
 
     setSessionPayment: (data) =>
         set((state: any) => ({

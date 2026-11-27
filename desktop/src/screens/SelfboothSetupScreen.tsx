@@ -1,7 +1,7 @@
 /**
  * @file SelfboothSetupScreen.tsx
  * Màn hình cấu hình trước khi chụp phòng tự chụp (Selfbooth):
- * chọn tỷ lệ khung ảnh, chọn bộ lọc màu (Basic, B&W, Retro) và hiển thị thông tin thời gian phiên chụp.
+ * chọn tỷ lệ khung ảnh, chọn bộ lọc màu (Nature, B&W, Retro) và hiển thị thông tin thời gian phiên chụp.
  * Phụ thuộc: react, store/appStore, lib/api.
  */
 
@@ -18,11 +18,11 @@ import { CANON_DAEMON_BASE_URL } from '../lib/constants'
 import { BW_CSS_FILTER } from '../config/bwFilter'
 import './SelfboothSetupScreen.css'
 
-// Bộ 3 filter riêng cho chế độ Selfbooth: Basic, B&W, Retro
+// Bộ 3 filter riêng cho chế độ Selfbooth: Nature, B&W, Retro
 const SELFBOOTH_FILTERS: ColorFilterItem[] = [
     {
         id: 'normal',
-        name: 'Basic',
+        name: 'Nature',
         cssFilter: 'none',
         tag: '',
         previewColor: '#E4D2C3',
@@ -61,7 +61,7 @@ export default function SelfboothSetupScreen() {
         SELFBOOTH_FILTERS.find((f) => f.id === selectedFilter?.id) ||
         SELFBOOTH_FILTERS[0]
 
-    // Đảm bảo mặc định chọn một trong 3 filter Basic / B&W / Retro
+    // Đảm bảo mặc định chọn một trong 3 filter Nature / B&W / Retro
     useEffect(() => {
         const isValid = SELFBOOTH_FILTERS.some(
             (f) => f.id === selectedFilter?.id
@@ -166,13 +166,13 @@ export default function SelfboothSetupScreen() {
                             <circle cx="12" cy="13" r="3" />
                         </svg>
                     </div>
-                    <h1 className="setup-header-title">Chọn Bộ Lọc Màu</h1>
+                    <h1 className="setup-header-title">Chọn filter</h1>
                 </div>
             </header>
 
             {/* ── Main Stage: Bố cục dọc 9:16 — Bộ lọc trên, Preview 3:4 bên dưới ── */}
             <main className="selfbooth-setup-grid">
-                {/* PHẦN TRÊN: BỘ 3 FILTER SELFBOOTH (Basic, B&W, Retro) */}
+                {/* PHẦN TRÊN: BỘ 3 FILTER SELFBOOTH (Nature, B&W, Retro) */}
                 <section className="setup-controls-card">
                     <div className="control-section">
                         <div className="control-section-header">

@@ -171,6 +171,19 @@ export default function IdleScreen() {
                         ? 'selfbooth'
                         : 'photobooth'
 
+                // Rule: Mã PIN chỉ được nhập duy nhất 1 lần ở màn Welcome (trạng thái WAITING)
+                if (
+                    ticket.status !== 'WAITING' ||
+                    (ticketServiceType === 'photobooth' &&
+                        ticket.payment_status === 'paid')
+                ) {
+                    setPinError(
+                        'Mã PIN này đã được sử dụng, không thể dùng lại.'
+                    )
+                    setIsVerifying(false)
+                    return
+                }
+
                 if (ticketServiceType !== targetMode) {
                     setPinError(
                         ticketServiceType === 'selfbooth'
@@ -191,8 +204,8 @@ export default function IdleScreen() {
                         : 'photobooth_01'
                 const resolvedKioskId =
                     rawKioskId &&
-                    rawKioskId !== 'kiosk_01' &&
-                    rawKioskId !== 'kiosk_02'
+                        rawKioskId !== 'kiosk_01' &&
+                        rawKioskId !== 'kiosk_02'
                         ? rawKioskId
                         : fallbackKioskId
 
@@ -256,7 +269,7 @@ export default function IdleScreen() {
             } else {
                 setPinError(
                     json.error ||
-                        'Mã không đúng hoặc chưa được cấp từ hệ thống thu ngân.'
+                    'Mã không đúng hoặc chưa được cấp từ hệ thống thu ngân.'
                 )
                 setIsVerifying(false)
             }
@@ -327,43 +340,43 @@ export default function IdleScreen() {
 
     return <>
         <ConnectedReferenceView screen="welcome" onNavigate={() => handleOpenUnlockModal('photobooth')} />
-            <NumericKeypadModal
-                isOpen={showPinModal}
-                title="Mã lượt chụp"
-                placeholder="NHẬP MÃ SỐ..."
-                submitText="Mở khóa buồng chụp"
-                isLoading={isVerifying}
-                loadingText="Đang kiểm tra..."
-                errorMessage={pinError}
-                successMessage={welcomeGuest}
-                onClose={() => {
-                    if (!isVerifying) setShowPinModal(false)
-                }}
-                onSubmit={(code) => handleVerifyUnlock(code)}
-            />
-            <button
-                className="idle-admin-btn"
-                id="idle-admin-btn"
-                style={{
-                    position: 'fixed',
-                    top: 16,
-                    right: 16,
-                    zIndex: 50,
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 8,
-                    cursor: 'pointer',
-                    color: 'rgba(130, 120, 108, 0.5)',
-                }}
-                onClick={(e) => {
-                    e.stopPropagation()
-                    setScreen('admin')
-                }}
-                title="Cài đặt hệ thống"
-                aria-label="Cài đặt hệ thống"
-            >
-                <Settings size={22} strokeWidth={1.8} />
-            </button>
+        <NumericKeypadModal
+            isOpen={showPinModal}
+            title="Mã lượt chụp"
+            placeholder="NHẬP MÃ SỐ..."
+            submitText="Mở khóa buồng chụp"
+            isLoading={isVerifying}
+            loadingText="Đang kiểm tra..."
+            errorMessage={pinError}
+            successMessage={welcomeGuest}
+            onClose={() => {
+                if (!isVerifying) setShowPinModal(false)
+            }}
+            onSubmit={(code) => handleVerifyUnlock(code)}
+        />
+        <button
+            className="idle-admin-btn"
+            id="idle-admin-btn"
+            style={{
+                position: 'fixed',
+                top: 16,
+                right: 16,
+                zIndex: 50,
+                background: 'transparent',
+                border: 'none',
+                padding: 8,
+                cursor: 'pointer',
+                color: 'rgba(130, 120, 108, 0.5)',
+            }}
+            onClick={(e) => {
+                e.stopPropagation()
+                setScreen('admin')
+            }}
+            title="Cài đặt hệ thống"
+            aria-label="Cài đặt hệ thống"
+        >
+            <Settings size={22} strokeWidth={1.8} />
+        </button>
     </>
 
     return (

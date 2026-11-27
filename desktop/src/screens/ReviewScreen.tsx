@@ -301,6 +301,23 @@ export default function ReviewScreen() {
                 rawKioskId !== 'kiosk_02'
                     ? rawKioskId
                     : fallbackKioskId
+            const layoutType = isSelfboothMode
+                ? 'selfbooth'
+                : selectedFrameSize === '4x6'
+                  ? '4x6'
+                  : '2x6'
+            const photoCount = isSelfboothMode
+                ? session?.selfboothLibrary?.length || session?.photos?.length || 0
+                : session?.photos?.length || 0
+            const finalCopies = isSelfboothMode
+                ? 0
+                : session?.paidCopies || selectedCopies || 2
+            const photoboothBasePrice =
+                selectedFrameSize === '4x6'
+                    ? eventConfig.price4x6 || 90000
+                    : eventConfig.price2x6 || 70000
+            const photoboothPackageName = `Photobooth ${layoutType} (${Math.round(photoboothBasePrice / 1000)}k)`
+
             const res = await fetch(`${cmsUrl}/api/kiosk/tickets`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -309,6 +326,13 @@ export default function ReviewScreen() {
                     status: 'COMPLETED',
                     kiosk_id: resolvedKioskId,
                     service_type: isSelfboothMode ? 'selfbooth' : 'photobooth',
+                    layout_type: layoutType,
+                    copies: finalCopies,
+                    photo_count: photoCount,
+                    completed_at: new Date().toISOString(),
+                    ...(!isSelfboothMode
+                        ? { package_name: photoboothPackageName }
+                        : {}),
                     ...(paidAmount !== undefined
                         ? {
                               amount: paidAmount,
@@ -511,7 +535,11 @@ export default function ReviewScreen() {
                     ? Math.max(1, Math.ceil(printCopies / 2))
                     : printCopies
 
-            const res = await api.print.send(pathToPrint, physicalSheets)
+            const res = await api.print.send(
+                pathToPrint,
+                physicalSheets,
+                selectedFrameSize
+            )
             if (res && res.success) {
                 setSessionPrinted()
                 setIsPrinting(false)

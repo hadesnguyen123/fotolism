@@ -60,8 +60,12 @@ const api = {
 
     // ── Print ────────────────────────────────────────────────────────────────
     print: {
-        send: (imagePath: string, copies: number): IpcResponse =>
-            ipcRenderer.invoke('print:send', { imagePath, copies }),
+        send: (
+            imagePath: string,
+            copies: number,
+            frameSize?: '2x6' | '4x6'
+        ): IpcResponse =>
+            ipcRenderer.invoke('print:send', { imagePath, copies, frameSize }),
 
         listPrinters: (): IpcResponse =>
             ipcRenderer.invoke('print:list-printers'),

@@ -136,7 +136,7 @@ export default function ProcessingScreen() {
 
             const sourcePhotos =
                 session?.selfboothLibrary &&
-                session.selfboothLibrary.length > 0
+                    session.selfboothLibrary.length > 0
                     ? session.selfboothLibrary
                     : photos
 
@@ -179,8 +179,8 @@ export default function ProcessingScreen() {
                 const layoutType = isSelfbooth
                     ? 'selfbooth'
                     : selectedFrameSize === '4x6'
-                      ? '4x6'
-                      : '2x6'
+                        ? '4x6'
+                        : '2x6'
                 const deviceConfig = cloudSyncService.getDeviceConfig()
                 const kioskId = cloudSyncService.getKioskId()
                 const branchId = deviceConfig?.branch_id || undefined
@@ -196,8 +196,8 @@ export default function ProcessingScreen() {
                     session?.paidCopies && session.paidCopies > 0
                         ? session.paidCopies
                         : isSelfbooth
-                          ? 0
-                          : 1
+                            ? 0
+                            : 1
 
                 cloudSyncService.queueSession({
                     id: sessionId,
@@ -211,7 +211,7 @@ export default function ProcessingScreen() {
                     copies: isSelfbooth ? 0 : paidCopies,
                     total_amount: session?.paidAmount ?? 0,
                     payment_method: (session?.paymentMethod?.toLowerCase() ===
-                    'cash'
+                        'cash'
                         ? 'cash'
                         : 'vietqr') as 'vietqr' | 'cash',
                     coupon_code: null,
@@ -266,9 +266,9 @@ export default function ProcessingScreen() {
                         const effectiveTotal =
                             totalTasks ??
                             pendingTasks +
-                                uploadingTasks +
-                                uploadedTasks +
-                                failedTasks
+                            uploadingTasks +
+                            uploadedTasks +
+                            failedTasks
 
                         if (uploadedTasks > lastUploadedCount) {
                             lastUploadedCount = uploadedTasks
@@ -369,7 +369,7 @@ export default function ProcessingScreen() {
         if (!isBrowser) {
             try {
                 await fotolismApi.storage.retryFailedUploads()
-            } catch {}
+            } catch { }
         }
         await processMediaAndUpload()
     }
@@ -384,7 +384,7 @@ export default function ProcessingScreen() {
 
             <BouncingStarLoadingModal
                 inline
-                message="Đang hoàn thiện ảnh cho bạn nè"
+                message="Đang hoàn thiện ảnh ..."
                 errorMessage={errorMessage}
                 onRetry={handleRetry}
                 retryDisabled={isRetrying}

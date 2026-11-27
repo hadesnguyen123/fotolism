@@ -180,6 +180,7 @@ export const createSessionSlice: StateCreator<
                 selectedLayout: defaultLayout,
                 selectedCopies: 2,
                 appliedCoupon: null,
+            appliedCoupons: [],
                 selectedTheme: THEME_OPTIONS[0],
                 selectedFilter: COLOR_FILTERS[0],
                 placedStickers: [],
@@ -299,6 +300,7 @@ export const createSessionSlice: StateCreator<
             slotOffsets: [],
             ...(set as any)({
                 appliedCoupon: null,
+            appliedCoupons: [],
                 selectedFrameSize: '2x6',
                 selectedCategory: 4,
                 selectedLayout: ALL_LAYOUTS[4][0],

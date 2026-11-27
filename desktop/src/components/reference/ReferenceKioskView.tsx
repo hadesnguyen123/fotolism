@@ -269,6 +269,9 @@ export interface ReferenceProps {
   qrUrl?: string;
   onCapture?: (index?: number) => void;
   onPromo?: () => void;
+  appliedPromos?: Array<{ code: string; label: string }>;
+  onRemovePromo?: (code: string) => void;
+  promoIsError?: boolean;
   onFinish?: () => void;
   status?: string;
   bank?: { name: string; holder: string; account: string; code: string };
@@ -1630,20 +1633,78 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                   </span>
                 </button>
 
-                {promoFeedback && (
-                  <p
+                {(props.appliedPromos && props.appliedPromos.length > 0) || promoFeedback ? (
+                  <div
                     style={{
                       position: 'absolute',
                       left: 36.94,
-                      top: 273,
-                      fontSize: 15,
-                      fontWeight: 500,
-                      color: '#146e40',
+                      top: 266,
+                      width: 496,
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 8,
                     }}
                   >
-                    ✓ {promoFeedback}
-                  </p>
-                )}
+                    {props.appliedPromos?.map((promo) => (
+                      <span
+                        key={promo.code}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          background: '#ebf7f0',
+                          border: '1px solid #b9e4c9',
+                          color: '#146e40',
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                      >
+                        <span>
+                          ✓ {promo.code} ({promo.label})
+                        </span>
+                        {props.onRemovePromo && (
+                          <button
+                            type="button"
+                            onClick={() => props.onRemovePromo?.(promo.code)}
+                            aria-label={`Xóa mã ${promo.code}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 18,
+                              height: 18,
+                              borderRadius: 999,
+                              border: 'none',
+                              background: '#d1f0dc',
+                              color: '#146e40',
+                              cursor: 'pointer',
+                              padding: 0,
+                              fontSize: 12,
+                              fontWeight: 800,
+                              lineHeight: 1,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {promoFeedback && (!props.appliedPromos?.length || props.promoIsError) && (
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: props.promoIsError ? '#b91c1c' : '#146e40',
+                        }}
+                      >
+                        {props.promoIsError ? promoFeedback : `✓ ${promoFeedback}`}
+                      </span>
+                    )}
+                  </div>
+                ) : null}
 
                 <div
                   style={{

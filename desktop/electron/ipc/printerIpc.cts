@@ -12,7 +12,54 @@ import { exec } from 'child_process'
 import { SessionDB } from '../sessionDatabase.cjs'
 import { AI_SERVICE_URL } from './common.cjs'
 
+const DEFAULT_PRINTER_4X6 = 'DS-RX1'
+const DEFAULT_PRINTER_2X6 = 'DS-RX1-2x6'
+
 let isPrintSpoolerActive = false
+
+/**
+ * Chọn tên máy in mục tiêu theo khổ ảnh: ưu tiên hàng đợi `DS-RX1-2x6` (đã bật 2-inch Cut)
+ * khi in khổ `2x6` nếu đã cài trên Windows, ngược lại fallback về `DS-RX1`.
+ */
+async function resolveTargetPrinter(
+    mainWindow: BrowserWindow | null,
+    printerName?: string,
+    frameSize?: '2x6' | '4x6'
+): Promise<string> {
+    if (
+        printerName &&
+        printerName !== 'Default Windows Printer' &&
+        !printerName.includes('SELPHY')
+    ) {
+        return printerName
+    }
+
+    if (frameSize === '2x6') {
+        try {
+            if (mainWindow && mainWindow.webContents) {
+                const printers = await mainWindow.webContents.getPrintersAsync()
+                const stripPrinter = printers.find(
+                    (p) =>
+                        p.name.trim().toLowerCase() ===
+                        DEFAULT_PRINTER_2X6.toLowerCase()
+                )
+                if (stripPrinter) {
+                    return stripPrinter.name
+                }
+            }
+        } catch (err) {
+            console.warn(
+                '[Print] Không kiểm tra được danh sách máy in cho 2x6, fallback DS-RX1:',
+                err
+            )
+        }
+        console.warn(
+            `[Print] Không tìm thấy hàng đợi "${DEFAULT_PRINTER_2X6}" trên Windows, fallback về "${DEFAULT_PRINTER_4X6}".`
+        )
+    }
+
+    return DEFAULT_PRINTER_4X6
+}
 
 /**
  * Đăng ký các kênh IPC phục vụ in ảnh (gửi lệnh in, kiểm tra danh sách máy in có sẵn).
@@ -26,7 +73,12 @@ export function registerPrinterIpc(
         'print:send',
         async (
             _event,
-            payload: { imagePath: string; copies: number; printerName?: string }
+            payload: {
+                imagePath: string
+                copies: number
+                printerName?: string
+                frameSize?: '2x6' | '4x6'
+            }
         ) => {
             if (isPrintSpoolerActive) {
                 console.warn(
@@ -43,15 +95,14 @@ export function registerPrinterIpc(
 
             try {
                 const copiesCount = Math.max(1, payload.copies || 1)
-                const targetPrinter =
-                    payload.printerName &&
-                    payload.printerName !== 'Default Windows Printer' &&
-                    !payload.printerName.includes('SELPHY')
-                        ? payload.printerName
-                        : 'DS-RX1'
+                const targetPrinter = await resolveTargetPrinter(
+                    getMainWindow(),
+                    payload.printerName,
+                    payload.frameSize
+                )
 
                 console.log(
-                    `[Print] Bắt đầu gửi lệnh in ${copiesCount} bản tới máy in: "${targetPrinter}"`
+                    `[Print] Bắt đầu gửi lệnh in ${copiesCount} bản (khổ ${payload.frameSize || '4x6'}) tới máy in: "${targetPrinter}"`
                 )
                 const jobUniqueId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
