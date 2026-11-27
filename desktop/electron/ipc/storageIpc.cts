@@ -1173,12 +1173,58 @@ export function registerStorageIpc(): void {
                                 )
                               : `enhanced_${shotBaseName}`
                         const cleanRaw = cleanFilePath(s.rawPath)
-                        const cleanEnh = cleanFilePath(s.enhancedPath)
+                        let cleanEnh = cleanFilePath(s.enhancedPath)
                         const hasRawFile = Boolean(cleanRaw && fs.existsSync(cleanRaw))
                         const rawTarget = hasRawFile
                             ? rawSessionPath(cleanRaw, rawDir, shotBaseName)
                             : path.join(rawDir, shotBaseName)
-                        const hasEnhFile = Boolean(cleanEnh && fs.existsSync(cleanEnh))
+                        let hasEnhFile = Boolean(cleanEnh && fs.existsSync(cleanEnh))
+
+                        // Nếu đường dẫn enhanced đang bị fallback về raw/ (ngoài finalDir), ưu tiên tìm lại
+                        // file `fotolism_enhanced_{i}_*.jpg` hợp lệ đã nằm sẵn trong finalDir để không tạo bản sao ảnh gốc
+                        const isEnhAlreadyInFinal =
+                            hasEnhFile &&
+                            path.resolve(path.dirname(cleanEnh)) ===
+                                path.resolve(finalDir)
+                        if (!isEnhAlreadyInFinal && fs.existsSync(finalDir)) {
+                            const stemPrefix = `${path.parse(enhancedBaseName).name}_`
+                            try {
+                                const candidates = fs
+                                    .readdirSync(finalDir)
+                                    .filter(
+                                        (name) =>
+                                            name.startsWith(stemPrefix) &&
+                                            /\.(jpe?g|png)$/i.test(name)
+                                    )
+                                    .map((name) => {
+                                        const full = path.join(finalDir, name)
+                                        return {
+                                            full,
+                                            mtimeMs: fs.statSync(full).mtimeMs,
+                                        }
+                                    })
+                                    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+
+                                for (const cand of candidates) {
+                                    try {
+                                        if (hasRawFile) {
+                                            assertEnhancedFile(cleanRaw, cand.full)
+                                        } else if (fs.statSync(cand.full).size <= 1000) {
+                                            continue
+                                        }
+                                        cleanEnh = cand.full
+                                        hasEnhFile = true
+                                        console.log(
+                                            `[Storage IPC] Phục hồi file AI enhance hợp lệ trong final/: ${path.basename(cand.full)}`
+                                        )
+                                        break
+                                    } catch {
+                                        // Bỏ qua file chưa đạt chuẩn AI integrity
+                                    }
+                                }
+                            } catch {}
+                        }
+
                         const finalTarget = hasEnhFile
                             ? enhancedFinalPath(cleanEnh, finalDir, enhancedBaseName)
                             : path.join(finalDir, enhancedBaseName)

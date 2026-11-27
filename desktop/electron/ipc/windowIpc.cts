@@ -417,10 +417,35 @@ export function registerWindowAndConfigIpc(): void {
                 if (!result.success || result.data?.status !== 'processed' || !result.data?.enhancedPath) {
                     return { success: false, error: result.error || result.data?.message || 'AI chưa xử lý ảnh thành công' }
                 }
-                if (!fs.existsSync(result.data.enhancedPath) || fs.statSync(result.data.enhancedPath).size === 0) {
-                    return { success: false, error: 'AI chưa lưu xong file ảnh' }
+
+                // Retry ngắn khi Windows Defender/AV tạm khóa file vừa os.replace gây EBUSY/EPERM/stat lỗi tức thời
+                let lastVerifyErr: any = null
+                for (let attempt = 1; attempt <= 5; attempt++) {
+                    try {
+                        if (
+                            !fs.existsSync(result.data.enhancedPath) ||
+                            fs.statSync(result.data.enhancedPath).size === 0
+                        ) {
+                            throw new Error('AI chưa lưu xong file ảnh')
+                        }
+                        assertEnhancedFile(cleanImagePath, result.data.enhancedPath)
+                        lastVerifyErr = null
+                        break
+                    } catch (verifyErr: any) {
+                        lastVerifyErr = verifyErr
+                        const code = verifyErr?.code
+                        const isTransientLock =
+                            code === 'EBUSY' ||
+                            code === 'EPERM' ||
+                            code === 'EACCES' ||
+                            verifyErr?.message === 'AI chưa lưu xong file ảnh'
+                        if (!isTransientLock || attempt === 5) break
+                        await new Promise((r) => setTimeout(r, 100 * attempt))
+                    }
                 }
-                assertEnhancedFile(cleanImagePath, result.data.enhancedPath)
+                if (lastVerifyErr) {
+                    throw lastVerifyErr
+                }
                 return result
                 })
             } catch (err: any) {

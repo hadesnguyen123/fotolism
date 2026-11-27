@@ -269,6 +269,7 @@ export interface ReferenceProps {
   qrUrl?: string;
   onCapture?: (index?: number) => void;
   onPromo?: () => void;
+  onOpenPromoKeyboard?: () => void;
   appliedPromos?: Array<{ code: string; label: string }>;
   onRemovePromo?: (code: string) => void;
   promoIsError?: boolean;
@@ -1543,6 +1544,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
 
                 <div
                   className="brush-border-tan"
+                  onClick={() => props.onOpenPromoKeyboard?.()}
                   style={{
                     position: 'absolute',
                     left: 36.94,
@@ -1552,15 +1554,19 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                     background: '#ffffff',
                     borderRadius: 10,
                     overflow: 'hidden',
+                    cursor: props.onOpenPromoKeyboard ? 'pointer' : undefined,
                   }}
                   data-node-id="13:1598"
                 >
                   <input
                     type="text"
                     value={promoCode}
+                    readOnly={Boolean(props.onOpenPromoKeyboard)}
+                    onClick={() => props.onOpenPromoKeyboard?.()}
+                    onFocus={() => props.onOpenPromoKeyboard?.()}
                     onChange={(e) => setPromoCode(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleApplyPromo()}
-                    placeholder="Nhập mã giảm giá"
+                    placeholder="Chạm để nhập mã"
                     style={{
                       width: '100%',
                       height: '100%',
@@ -1571,6 +1577,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                       fontSize: 22,
                       color: '#653125',
                       background: 'transparent',
+                      cursor: props.onOpenPromoKeyboard ? 'pointer' : undefined,
                     }}
                     data-node-id="13:1599"
                   />

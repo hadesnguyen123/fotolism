@@ -68,7 +68,7 @@ class KoreanBeautyConfig(BaseModel):
         """Preset làm đẹp chính thức của Fotolism (bảo toàn ánh sáng thật, skinBrightening=0)."""
         return cls(
             presetId="white_pink_v2",
-            skinSmoothing=0.35,
+            skinSmoothing=0.4,
             blemishRemoval=1.9,
             skinEvening=0.3,
             skinTextureRetention=0.02,

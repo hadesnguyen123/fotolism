@@ -1161,11 +1161,35 @@ export default function CaptureScreen() {
                                     }
                                     return
                                 }
+                            } else {
+                                console.warn(
+                                    `[CaptureScreen] AI enhance returned unsuccessful for slot ${i + 1}:`,
+                                    enhRes?.error || enhRes
+                                )
                             }
                         }
                     } catch (enhErr) {
                         console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
                     }
+
+                    // Trước khi fallback về ảnh gốc, kiểm tra xem file enhance đích đã được Python ghi hợp lệ ra final/ chưa
+                    try {
+                        const diskCheck =
+                            await api.storage.verifyFile(enhancedSavePath)
+                        if (diskCheck?.success && diskCheck?.data?.exists) {
+                            const recoveredUrl = toFileUrl(
+                                diskCheck.data.resolvedPath || enhancedSavePath
+                            )
+                            workingSlots[i] = {
+                                ...slot,
+                                rawPath: rawDiskPath || slot.rawPath,
+                                enhancedPath: recoveredUrl,
+                                compositedPath: recoveredUrl,
+                                enhanceStatus: 'processed',
+                            }
+                            return
+                        }
+                    } catch {}
 
                     // Fallback an toàn: lỗi AI không được làm mất ảnh — giữ nguyên ảnh gốc cho màn Frame & Print
                     if (rawDiskPath) {

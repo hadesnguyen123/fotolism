@@ -261,16 +261,181 @@ export default function ConfirmScreen() {
         label: c.type === 'percent' ? `-${c.value}%` : `-${formatVND(c.value)}`,
     }))
 
-    if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
-        screen="confirm-info"
-        onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
-        values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: promoFeedbackText, finalTotal: finalAmount }}
-        changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
-        onPromo={() => handleApplyCoupon()}
-        appliedPromos={appliedPromoChips}
-        onRemovePromo={(code) => handleRemoveCoupon(code)}
-        promoIsError={Boolean(couponError)}
-    />
+    // Bàn phím cảm ứng ảo dùng chung cho màn hình Kiểm tra thông tin (cả Photobooth Reference UI & Selfbooth)
+    const virtualKeyboardModal = showKeyboard ? (
+        <div
+            className="confirm-keyboard-overlay animate-fade-in"
+            onClick={() => setShowKeyboard(false)}
+        >
+            <div
+                className="confirm-keyboard-modal animate-pop"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="confirm-keyboard-header">
+                    <div className="confirm-keyboard-title-box">
+                        <Tag size={24} color="#502A1D" strokeWidth={2.4} />
+                        <h3 className="confirm-keyboard-title">
+                            Nhập mã ưu đãi
+                        </h3>
+                    </div>
+                    <button
+                        type="button"
+                        className="confirm-keyboard-close-btn"
+                        onClick={() => setShowKeyboard(false)}
+                        title="Đóng bàn phím"
+                        aria-label="Đóng"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <div className="confirm-keyboard-display-box">
+                    <span
+                        className={`confirm-keyboard-display-text ${couponInput ? 'has-text' : 'placeholder'}`}
+                    >
+                        {couponInput || 'Chạm các phím bên dưới để nhập mã'}
+                    </span>
+                    {couponInput && (
+                        <button
+                            type="button"
+                            className="confirm-keyboard-clear-btn"
+                            onClick={handleVirtualClear}
+                            title="Xóa trắng mã"
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
+
+                {couponError && (
+                    <div className="confirm-keyboard-err-msg animate-fade-in">
+                        {couponError}
+                    </div>
+                )}
+
+                <div className="confirm-virtual-keyboard">
+                    <div className="vk-row vk-numbers-row">
+                        {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(
+                            (num) => (
+                                <button
+                                    key={num}
+                                    type="button"
+                                    className="vk-key vk-number-key"
+                                    onClick={() => handleVirtualKeyPress(num)}
+                                >
+                                    {num}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    <div className="vk-row">
+                        {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map(
+                            (char) => (
+                                <button
+                                    key={char}
+                                    type="button"
+                                    className="vk-key vk-letter-key"
+                                    onClick={() => handleVirtualKeyPress(char)}
+                                >
+                                    {char}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    <div className="vk-row">
+                        {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map(
+                            (char) => (
+                                <button
+                                    key={char}
+                                    type="button"
+                                    className="vk-key vk-letter-key"
+                                    onClick={() => handleVirtualKeyPress(char)}
+                                >
+                                    {char}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    <div className="vk-row">
+                        {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((char) => (
+                            <button
+                                key={char}
+                                type="button"
+                                className="vk-key vk-letter-key"
+                                onClick={() => handleVirtualKeyPress(char)}
+                            >
+                                {char}
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            className="vk-key vk-backspace-key"
+                            onClick={handleVirtualBackspace}
+                            title="Xóa 1 ký tự"
+                        >
+                            ⌫
+                        </button>
+                    </div>
+
+                    <div className="vk-row vk-bottom-actions">
+                        <button
+                            type="button"
+                            className="vk-action-btn btn-vk-cancel"
+                            onClick={() => setShowKeyboard(false)}
+                        >
+                            Đóng
+                        </button>
+                        <button
+                            type="button"
+                            className="vk-action-btn btn-vk-clear"
+                            onClick={handleVirtualClear}
+                            disabled={!couponInput || isCheckingCoupon}
+                        >
+                            Xóa hết
+                        </button>
+                        <button
+                            type="button"
+                            className="vk-action-btn btn-vk-apply"
+                            disabled={!couponInput.trim() || isCheckingCoupon}
+                            onClick={() => handleApplyCoupon(couponInput)}
+                        >
+                            {isCheckingCoupon ? 'Đang kiểm tra...' : 'Áp dụng mã'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    ) : null
+
+    if (eventConfig.captureMode !== 'selfbooth') return (
+        <>
+            <ConnectedReferenceView
+                screen="confirm-info"
+                onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
+                values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: promoFeedbackText, finalTotal: finalAmount }}
+                changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
+                onPromo={() => {
+                    if (!couponInput.trim()) {
+                        setCouponError(null)
+                        setShowKeyboard(true)
+                    } else {
+                        handleApplyCoupon()
+                    }
+                }}
+                onOpenPromoKeyboard={() => {
+                    setCouponError(null)
+                    setShowKeyboard(true)
+                }}
+                appliedPromos={appliedPromoChips}
+                onRemovePromo={(code) => handleRemoveCoupon(code)}
+                promoIsError={Boolean(couponError)}
+            />
+            {virtualKeyboardModal}
+        </>
+    )
 
     return (
         <div className="confirm-screen-container" id="confirm-screen">
@@ -501,205 +666,7 @@ export default function ConfirmScreen() {
             </footer>
 
             {/* ── BÀN PHÍM CẢM ỨNG ẢO NHẬP MÃ (CHỮ SỐ VÀ CHỮ CÁI CHO KHÁCH) ── */}
-            {showKeyboard && (
-                <div
-                    className="confirm-keyboard-overlay animate-fade-in"
-                    onClick={() => setShowKeyboard(false)}
-                >
-                    <div
-                        className="confirm-keyboard-modal animate-pop"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header Modal */}
-                        <div className="confirm-keyboard-header">
-                            <div className="confirm-keyboard-title-box">
-                                <Tag
-                                    size={24}
-                                    color="#502A1D"
-                                    strokeWidth={2.4}
-                                />
-                                <h3 className="confirm-keyboard-title">
-                                    Nhập mã ưu đãi
-                                </h3>
-                            </div>
-                            <button
-                                type="button"
-                                className="confirm-keyboard-close-btn"
-                                onClick={() => setShowKeyboard(false)}
-                                title="Đóng bàn phím"
-                                aria-label="Đóng"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {/* Ô hiển thị mã đang nhập */}
-                        <div className="confirm-keyboard-display-box">
-                            <span
-                                className={`confirm-keyboard-display-text ${couponInput ? 'has-text' : 'placeholder'}`}
-                            >
-                                {couponInput ||
-                                    'Chạm các phím bên dưới để nhập mã'}
-                            </span>
-                            {couponInput && (
-                                <button
-                                    type="button"
-                                    className="confirm-keyboard-clear-btn"
-                                    onClick={handleVirtualClear}
-                                    title="Xóa trắng mã"
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Thông báo lỗi nếu mã sai */}
-                        {couponError && (
-                            <div className="confirm-keyboard-err-msg animate-fade-in">
-                                {couponError}
-                            </div>
-                        )}
-
-                        {/* Bàn phím ảo gồm số và chữ cái */}
-                        <div className="confirm-virtual-keyboard">
-                            {/* Hàng 1: Số 1 2 3 4 5 6 7 8 9 0 */}
-                            <div className="vk-row vk-numbers-row">
-                                {[
-                                    '1',
-                                    '2',
-                                    '3',
-                                    '4',
-                                    '5',
-                                    '6',
-                                    '7',
-                                    '8',
-                                    '9',
-                                    '0',
-                                ].map((num) => (
-                                    <button
-                                        key={num}
-                                        type="button"
-                                        className="vk-key vk-number-key"
-                                        onClick={() =>
-                                            handleVirtualKeyPress(num)
-                                        }
-                                    >
-                                        {num}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Hàng 2: Chữ Q W E R T Y U I O P */}
-                            <div className="vk-row">
-                                {[
-                                    'Q',
-                                    'W',
-                                    'E',
-                                    'R',
-                                    'T',
-                                    'Y',
-                                    'U',
-                                    'I',
-                                    'O',
-                                    'P',
-                                ].map((char) => (
-                                    <button
-                                        key={char}
-                                        type="button"
-                                        className="vk-key vk-letter-key"
-                                        onClick={() =>
-                                            handleVirtualKeyPress(char)
-                                        }
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Hàng 3: Chữ A S D F G H J K L */}
-                            <div className="vk-row">
-                                {[
-                                    'A',
-                                    'S',
-                                    'D',
-                                    'F',
-                                    'G',
-                                    'H',
-                                    'J',
-                                    'K',
-                                    'L',
-                                ].map((char) => (
-                                    <button
-                                        key={char}
-                                        type="button"
-                                        className="vk-key vk-letter-key"
-                                        onClick={() =>
-                                            handleVirtualKeyPress(char)
-                                        }
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Hàng 4: Chữ Z X C V B N M + Phím xóa lùi Backspace */}
-                            <div className="vk-row">
-                                {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map(
-                                    (char) => (
-                                        <button
-                                            key={char}
-                                            type="button"
-                                            className="vk-key vk-letter-key"
-                                            onClick={() =>
-                                                handleVirtualKeyPress(char)
-                                            }
-                                        >
-                                            {char}
-                                        </button>
-                                    )
-                                )}
-                                <button
-                                    type="button"
-                                    className="vk-key vk-backspace-key"
-                                    onClick={handleVirtualBackspace}
-                                    title="Xóa 1 ký tự"
-                                >
-                                    ⌫
-                                </button>
-                            </div>
-
-                            {/* Hàng 5: Hành động */}
-                            <div className="vk-row vk-bottom-actions">
-                                <button
-                                    type="button"
-                                    className="vk-action-btn btn-vk-cancel"
-                                    onClick={() => setShowKeyboard(false)}
-                                >
-                                    Đóng
-                                </button>
-                                <button
-                                    type="button"
-                                    className="vk-action-btn btn-vk-clear"
-                                    onClick={handleVirtualClear}
-                                    disabled={!couponInput}
-                                >
-                                    Xóa hết
-                                </button>
-                                <button
-                                    type="button"
-                                    className="vk-action-btn btn-vk-apply"
-                                    disabled={!couponInput.trim()}
-                                    onClick={() =>
-                                        handleApplyCoupon(couponInput)
-                                    }
-                                >
-                                    Áp dụng mã
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {virtualKeyboardModal}
         </div>
     )
 }
