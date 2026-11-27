@@ -122,6 +122,7 @@
     top: 0;
     width: 40px;
     height: 40px;
+    transform: translate3d(268px, 168px, 0);
     transform-origin: center bottom;
     will-change: transform;
     animation: fotolismStarArc 3.2s linear infinite;
@@ -182,10 +183,4 @@
 .fotolism-star-loading-retry-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .fotolism-star-loading-star {
-        animation: none !important;
-    }
 }

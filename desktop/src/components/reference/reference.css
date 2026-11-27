@@ -143,18 +143,7 @@
   transform: translateY(0px) scale(0.99);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .reference-kiosk .interactive-btn,
-  .reference-kiosk .interactive-card {
-    transition: none !important;
-  }
-  .reference-kiosk .interactive-btn:hover,
-  .reference-kiosk .interactive-btn:active,
-  .reference-kiosk .interactive-card:hover,
-  .reference-kiosk .interactive-card:active {
-    transform: none !important;
-  }
-}
+/* Không dùng transform: none !important ở prefers-reduced-motion để tránh phá inline transform căn giữa trên máy Kiosk tắt hiệu ứng Windows */
 
 /* Adaptive Top Header Bar */
 .reference-kiosk .header-bar-adaptive {
@@ -464,6 +453,7 @@
   top: 0;
   width: 40px;
   height: 40px;
+  transform: translate3d(268px, 168px, 0);
   transform-origin: center bottom;
   will-change: transform;
   animation: bouncingStarArc 3.2s linear infinite;
@@ -479,13 +469,6 @@
   animation: trailStarPulse 3.2s ease-out infinite;
   pointer-events: none;
   z-index: 3;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reference-kiosk .bouncing-loading-star,
-  .reference-kiosk .loading-trail-star {
-    animation: none !important;
-  }
 }
 
 /* ==========================================================================

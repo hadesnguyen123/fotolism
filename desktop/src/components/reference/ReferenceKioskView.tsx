@@ -3005,6 +3005,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                       {visibleThemes.map((theme, vIdx) => {
                         const actualIdx = windowStart + vIdx;
                         const centerLeft = 142 + vIdx * 148;
+                        const cardWidth = theme.is2x6 ? 70 : 104;
                         return (
                           <React.Fragment key={theme.id}>
                             <div
@@ -3012,10 +3013,9 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                               onClick={() => setSelectedFrameIdx(actualIdx)}
                               style={{
                                 position: 'absolute',
-                                left: centerLeft,
+                                left: centerLeft - cardWidth / 2,
                                 top: theme.is2x6 ? 78 : 107,
-                                transform: 'translateX(-50%)',
-                                width: theme.is2x6 ? 70 : 104,
+                                width: cardWidth,
                                 aspectRatio: theme.is2x6 ? '2 / 6' : '2 / 3',
                                 height: 'auto',
                                 background: theme.bgColor || '#ffffff',
