@@ -390,7 +390,7 @@ export default function PaymentScreen() {
     if (eventConfig.captureMode !== 'selfbooth') return <>
         <ConnectedReferenceView screen="payment" qrUrl={currentQrUrl}
             bank={{ name: activeBankName, holder: activeAccountHolder, account: activeAccountNumber, code: transferCode }}
-            onNavigate={(target) => { if (target === 'welcome') setScreen('welcome'); }}
+            onNavigate={() => {}}
             values={{ finalTotal: finalAmount, paymentConfirmed: paymentSuccess, remainingSeconds: secondsLeft }}
             changes={{ paymentConfirmed: () => setShowStaffPinModal(true) }}
             status={paymentSuccess ? 'Thanh toán thành công' : undefined}

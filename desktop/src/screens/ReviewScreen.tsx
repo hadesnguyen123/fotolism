@@ -517,7 +517,7 @@ export default function ReviewScreen() {
                         selectedFrameSize === '2x6'
                             ? `${FILE_PREFIX_FINAL}_2x6_paired_4x6.jpg`
                             : `${FILE_PREFIX_FINAL}_4x6_scaled.jpg`
-                    const printTargetPath = `F:\\Fotolism_image\\sessions\\${sId}\\final\\${printTargetFileName}`
+                    const printTargetPath = `sessions\\${sId}\\final\\${printTargetFileName}`
                     api.storage
                         .savePhoto(pathToPrint, printTargetPath)
                         .catch((err) =>

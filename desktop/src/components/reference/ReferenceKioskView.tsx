@@ -1144,25 +1144,9 @@ export default function ReferenceKioskView(props: ReferenceProps) {
               </div>
             </div>
 
-            {/* Adaptive Bottom Navigation */}
+            {/* Adaptive Bottom Navigation (đã nhập PIN nên ẩn nút quay lại, giữ spacer căn phải nút tiếp tục) */}
             <div className="bottom-bar-adaptive">
-              <button
-                type="button"
-                className="nav-pill-btn interactive-btn"
-                onClick={() => setScreen('welcome')}
-                data-node-id="0:225"
-              >
-                <div className="nav-pill-oval" data-node-id="0:226">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}l_ellipse2.svg`} />
-                </div>
-                <span
-                  className="nav-pill-label"
-                  style={{ color: '#f6f3e8' }}
-                  data-node-id="0:227"
-                >
-                  quay lại
-                </span>
-              </button>
+              <div style={{ width: 220, height: 120, flexShrink: 0 }} aria-hidden="true" />
 
               <button
                 type="button"
@@ -1761,23 +1745,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
             </div>
 
             <div className="bottom-bar-adaptive" data-node-id="0:92">
-              <button
-                type="button"
-                className="nav-pill-btn interactive-btn"
-                onClick={() => setScreen('select-layout')}
-                data-node-id="0:93"
-              >
-                <div className="nav-pill-oval" data-node-id="0:94">
-                  <img alt="" src={`${REFERENCE_ASSET_BASE}c_ellipse2.svg`} />
-                </div>
-                <span
-                  className="nav-pill-label"
-                  style={{ color: '#653125' }}
-                  data-node-id="0:95"
-                >
-                  quay lại
-                </span>
-              </button>
+              <div style={{ width: 220, height: 120, flexShrink: 0 }} aria-hidden="true" />
 
               <div
                 className="brush-border-soft-brown"
@@ -2840,7 +2808,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 }}
                 data-node-id="0:377"
               >
-                <p>Chạm để kéo, dùng hai ngón tay để phóng to ảnh</p>
+                <p>Ảnh xem trước</p>
               </div>
 
               {/* Live Interactive Photo Strip / 4x6 Preview */}

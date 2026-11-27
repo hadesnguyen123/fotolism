@@ -414,7 +414,9 @@ export default function ConfirmScreen() {
         <>
             <ConnectedReferenceView
                 screen="confirm-info"
-                onNavigate={(target) => target === 'payment' ? handleProceed() : setScreen(target === 'welcome' ? 'welcome' : 'select-layout')}
+                onNavigate={(target) => {
+                    if (target === 'payment') handleProceed()
+                }}
                 values={{ printCount: copies, promoCode: couponInput, appliedDiscount: discountAmount, promoFeedback: promoFeedbackText, finalTotal: finalAmount }}
                 changes={{ printCount: (value) => Number(value) > copies ? handleIncreaseCopies() : handleDecreaseCopies(), promoCode: (value) => setCouponInput(String(value)) }}
                 onPromo={() => {
@@ -642,17 +644,8 @@ export default function ConfirmScreen() {
                 </div>
             </main>
 
-            {/* ── Fixed Footer Navigation: Khóa cứng vị trí đồng bộ với Step 1 & Step 3 ── */}
+            {/* ── Fixed Footer Navigation: Đã nhập PIN nên ẩn nút Quay lại ── */}
             <footer className="kiosk-fixed-bottom-bar">
-                <button
-                    className="kiosk-nav-btn btn-nav-back"
-                    onClick={() => setScreen('select-layout')}
-                    title="Quay lại"
-                    aria-label="Quay lại"
-                >
-                    <span>Quay lại</span>
-                </button>
-
                 <div className="kiosk-footer-center" />
 
                 <button

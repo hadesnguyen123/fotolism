@@ -86,7 +86,7 @@ export function cleanupDiskStorage(retentionDays = 15): void {
             }
         }
 
-        const sessionsBase = 'F:\\Fotolism_image\\sessions'
+        const sessionsBase = path.join(getFotolismDir(), 'sessions')
         if (fs.existsSync(sessionsBase)) {
             const sessionDirs = fs.readdirSync(sessionsBase)
             const cutoffMs = now - retentionDays * 24 * 3600 * 1000

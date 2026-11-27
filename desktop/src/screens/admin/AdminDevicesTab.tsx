@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
     Camera,
     Printer,
@@ -7,10 +7,47 @@ import {
     Check,
     RotateCcw,
     Settings,
+    Grid3x3,
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { BeautyCameraView } from '../../components/BeautyCameraView'
 import { DEFAULT_PRINT_SCALE, CANON_DAEMON_BASE_URL } from '../../lib/constants'
+
+type PhotoboothFrameTestKey = '2x6_4' | '4x6_4' | '4x6_9'
+
+/**
+ * Thông số 3 khung Photobooth chuẩn 600 DPI (khớp 100% Single Source of Truth tại CaptureScreen.tsx)
+ * đặt trong vùng Live View cảm biến gốc 3:2.
+ */
+const PHOTOBOOTH_FRAME_PRESETS: Array<{
+    key: PhotoboothFrameTestKey
+    label: string
+    w: number
+    h: number
+    ratioText: string
+}> = [
+    {
+        key: '2x6_4',
+        label: '2×6 (4 ảnh)',
+        w: 1056,
+        h: 704,
+        ratioText: '3:2 • 1056×704',
+    },
+    {
+        key: '4x6_4',
+        label: '4×6 (4 ảnh)',
+        w: 1088,
+        h: 1452,
+        ratioText: '3:4 • 1088×1452',
+    },
+    {
+        key: '4x6_9',
+        label: '4×6 (9 ảnh)',
+        w: 762,
+        h: 1162,
+        ratioText: '2:3 • 762×1162',
+    },
+]
 
 export type HardwareSubTab = 'camera' | 'printer' | 'remote'
 
@@ -72,10 +109,39 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
         skinSmoothing,
         skinToneEvenness,
         blush,
+        slimFace,
+        whiteningTone,
+        rosyTone,
+        glowClarity,
+        brightnessAdjust,
+        contrastAdjust,
+        saturationAdjust,
         getBeautyFilterCss,
         printScale,
         setPrintScale,
     } = useAppStore()
+
+    const [activeFrameKey, setActiveFrameKey] =
+        useState<PhotoboothFrameTestKey>('2x6_4')
+    const [showAlignmentGrid, setShowAlignmentGrid] = useState<boolean>(true)
+
+    const activePreset =
+        PHOTOBOOTH_FRAME_PRESETS.find((p) => p.key === activeFrameKey) ||
+        PHOTOBOOTH_FRAME_PRESETS[0]
+    const slotAspect = activePreset.w / activePreset.h
+    const liveAspect = 3 / 2
+    const guideBoxStyle: React.CSSProperties =
+        slotAspect <= liveAspect
+            ? {
+                  height: '100%',
+                  width: `${((slotAspect / liveAspect) * 100).toFixed(4)}%`,
+                  aspectRatio: `${activePreset.w} / ${activePreset.h}`,
+              }
+            : {
+                  width: '100%',
+                  height: `${((liveAspect / slotAspect) * 100).toFixed(4)}%`,
+                  aspectRatio: `${activePreset.w} / ${activePreset.h}`,
+              }
 
     const isCameraOnline = Boolean(daemonStatus?.running)
 
@@ -182,14 +248,13 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                         </div>
                     </div>
 
-                    {/* 2. Hàng Live View (16:9) và Các Bộ Điều Khiển Cảm Ứng */}
+                    {/* 2. Hàng Live View chuẩn 3:2 và Kiểm Tra 3 Khung Photobooth */}
                     <div className="camera-liveview-controls-grid">
-                        {/* Cột Trái: Màn hình Live View 16:9 */}
                         <div className="liveview-preview-column">
                             <div className="liveview-header-bar">
                                 <div className="liveview-title-group">
                                     <span className="liveview-title-text">
-                                        Live View (16:9)
+                                        Live View (3:2)
                                     </span>
                                     <span
                                         className={`pill-badge ${isCameraOnline || cameraType === 'laptop' ? 'pill-green' : 'pill-amber'}`}
@@ -208,7 +273,45 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                     </span>
                                 </div>
 
-                                <div className="liveview-actions-right">
+                                {/* 3 nút chuyển khung tỉ lệ Photobooth + Bật/tắt lưới căn tâm */}
+                                <div className="admin-frame-test-bar">
+                                    <div
+                                        className="admin-frame-presets-group"
+                                        role="group"
+                                        aria-label="Chọn khung Photobooth để căn chỉnh góc máy"
+                                    >
+                                        {PHOTOBOOTH_FRAME_PRESETS.map(
+                                            (preset) => (
+                                                <button
+                                                    key={preset.key}
+                                                    type="button"
+                                                    className={`admin-frame-preset-btn ${activeFrameKey === preset.key ? 'active' : ''}`}
+                                                    onClick={() =>
+                                                        setActiveFrameKey(
+                                                            preset.key
+                                                        )
+                                                    }
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            )
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className={`admin-grid-toggle-btn ${showAlignmentGrid ? 'active' : ''}`}
+                                        onClick={() =>
+                                            setShowAlignmentGrid(
+                                                (prev) => !prev
+                                            )
+                                        }
+                                        title="Bật/tắt trục tâm & lưới kiểm tra nghiêng lệch"
+                                    >
+                                        <Grid3x3 size={16} strokeWidth={2.2} />
+                                        <span>Lưới căn tâm</span>
+                                    </button>
+
                                     <button
                                         className="btn-shutter-test-touch"
                                         onClick={handleTestShutter}
@@ -224,12 +327,53 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                 </div>
                             </div>
 
-                            {/* Viewfinder 16:9 với WebGL Beauty Real-time đồng bộ */}
-                            <div className="liveview-viewfinder-box">
-                                {cameraType === 'eos' ? (
-                                    isCameraOnline && CANON_DAEMON_BASE_URL ? (
+                            {/* Viewfinder 3:2 khớp 100% CaptureScreen + Khung cắt thực tế của 3 loại Frame */}
+                            <div className="liveview-stage-backdrop">
+                                <div className="liveview-viewfinder-box">
+                                    {cameraType === 'eos' ? (
+                                        isCameraOnline &&
+                                        CANON_DAEMON_BASE_URL ? (
+                                            <BeautyCameraView
+                                                mjpegUrl={`${CANON_DAEMON_BASE_URL}/liveview`}
+                                                mirrorCamera={true}
+                                                beautyEnabled={beautyEnabled}
+                                                skinSmoothing={skinSmoothing}
+                                                skinToneEvenness={
+                                                    skinToneEvenness
+                                                }
+                                                vLine={vLine}
+                                                bigEyes={bigEyes}
+                                                blush={blush}
+                                                slimFace={slimFace}
+                                                whiteningTone={whiteningTone}
+                                                rosyTone={rosyTone}
+                                                glowClarity={glowClarity}
+                                                brightnessAdjust={
+                                                    brightnessAdjust
+                                                }
+                                                contrastAdjust={contrastAdjust}
+                                                saturationAdjust={
+                                                    saturationAdjust
+                                                }
+                                                className="liveview-feed-media"
+                                            />
+                                        ) : (
+                                            <div className="liveview-offline-placeholder">
+                                                <Camera
+                                                    size={56}
+                                                    strokeWidth={1.5}
+                                                    color="#8C756B"
+                                                />
+                                                <p>Máy ảnh Canon chưa kết nối</p>
+                                                <span>
+                                                    Vui lòng cắm cáp USB và bật
+                                                    nguồn máy ảnh Canon EOS R100
+                                                </span>
+                                            </div>
+                                        )
+                                    ) : webcamStream ? (
                                         <BeautyCameraView
-                                            mjpegUrl={`${CANON_DAEMON_BASE_URL}/liveview`}
+                                            stream={webcamStream}
                                             mirrorCamera={true}
                                             beautyEnabled={beautyEnabled}
                                             skinSmoothing={skinSmoothing}
@@ -237,59 +381,67 @@ export const AdminDevicesTab: React.FC<AdminDevicesTabProps> = ({
                                             vLine={vLine}
                                             bigEyes={bigEyes}
                                             blush={blush}
+                                            slimFace={slimFace}
+                                            whiteningTone={whiteningTone}
+                                            rosyTone={rosyTone}
+                                            glowClarity={glowClarity}
+                                            brightnessAdjust={brightnessAdjust}
+                                            contrastAdjust={contrastAdjust}
+                                            saturationAdjust={saturationAdjust}
                                             className="liveview-feed-media"
                                         />
                                     ) : (
-                                        <div className="liveview-offline-placeholder">
-                                            <Camera
-                                                size={56}
-                                                strokeWidth={1.5}
-                                                color="#8C756B"
-                                            />
-                                            <p>Máy ảnh Canon chưa kết nối</p>
-                                            <span>
-                                                Vui lòng cắm cáp USB và bật
-                                                nguồn máy ảnh Canon EOS R100
-                                            </span>
+                                        <video
+                                            ref={webcamVideoRef}
+                                            autoPlay
+                                            playsInline
+                                            muted
+                                            className="liveview-feed-media"
+                                            style={{
+                                                transform: 'scaleX(-1)',
+                                                filter: getBeautyFilterCss(),
+                                            }}
+                                        />
+                                    )}
+
+                                    {/* Khung giới hạn tỉ lệ thực tế (khớp 100% CaptureAspectGuide ở màn chụp) */}
+                                    <div className="admin-frame-guide-overlay">
+                                        <div
+                                            className="admin-frame-guide-box"
+                                            style={guideBoxStyle}
+                                        >
+                                            {showAlignmentGrid && (
+                                                <div
+                                                    className="admin-alignment-grid"
+                                                    aria-hidden="true"
+                                                >
+                                                    <span className="align-third-v v1" />
+                                                    <span className="align-third-v v2" />
+                                                    <span className="align-third-h h1" />
+                                                    <span className="align-third-h h2" />
+                                                    <span className="align-center-v" />
+                                                    <span className="align-center-h" />
+                                                    <span className="align-center-dot" />
+                                                </div>
+                                            )}
+
+                                            <div className="admin-guide-corner top-left" />
+                                            <div className="admin-guide-corner top-right" />
+                                            <div className="admin-guide-corner bottom-left" />
+                                            <div className="admin-guide-corner bottom-right" />
+
+                                            <div className="admin-guide-spec-pill">
+                                                Khung {activePreset.label} •{' '}
+                                                {activePreset.ratioText}
+                                            </div>
                                         </div>
-                                    )
-                                ) : webcamStream ? (
-                                    <BeautyCameraView
-                                        stream={webcamStream}
-                                        mirrorCamera={true}
-                                        beautyEnabled={beautyEnabled}
-                                        skinSmoothing={skinSmoothing}
-                                        skinToneEvenness={skinToneEvenness}
-                                        vLine={vLine}
-                                        bigEyes={bigEyes}
-                                        blush={blush}
-                                        className="liveview-feed-media"
-                                    />
-                                ) : (
-                                    <video
-                                        ref={webcamVideoRef}
-                                        autoPlay
-                                        playsInline
-                                        muted
-                                        className="liveview-feed-media"
-                                        style={{
-                                            transform: 'scaleX(-1)',
-                                            filter: getBeautyFilterCss(),
-                                        }}
-                                    />
-                                )}
+                                    </div>
 
-                                {/* Thước ngắm viền góc */}
-                                <div className="viewfinder-grid-lines" />
-                                <div className="corner-bracket top-left" />
-                                <div className="corner-bracket top-right" />
-                                <div className="corner-bracket bottom-left" />
-                                <div className="corner-bracket bottom-right" />
-
-                                {/* FPS Badge */}
-                                <div className="fps-indicator-pill">
-                                    <span className="live-dot-pulse" />
-                                    <span>LIVE • 35 FPS</span>
+                                    {/* FPS Badge */}
+                                    <div className="fps-indicator-pill">
+                                        <span className="live-dot-pulse" />
+                                        <span>LIVE • GƯƠNG BẬT</span>
+                                    </div>
                                 </div>
                             </div>
 

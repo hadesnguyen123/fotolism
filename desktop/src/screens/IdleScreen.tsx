@@ -9,7 +9,8 @@
 import ConnectedReferenceView from '../components/reference/ConnectedReferenceView'
 import { useState, useEffect } from 'react'
 import { useAppStore, type CaptureMode } from '../store/appStore'
-import { DEFAULT_ADMIN_PIN } from '../lib/constants'
+import { CANON_DAEMON_BASE_URL, DEFAULT_ADMIN_PIN } from '../lib/constants'
+import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Settings, Check } from 'lucide-react'
 import NumericKeypadModal from '../components/NumericKeypadModal'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
@@ -92,8 +93,18 @@ export default function IdleScreen() {
         setIsVerifying(true)
         setPinError(null)
 
+        // Đánh thức sớm máy ảnh Canon & gia hạn timer ngủ ngay khi mở khóa mã PIN (non-blocking)
+        const wakeCanonCameraEarly = () => {
+            const apiClient = isBrowser ? mockApi : fotolismApi
+            void apiClient.camera.canonDaemonStatus?.().catch(() => {})
+            if (CANON_DAEMON_BASE_URL) {
+                fetch(`${CANON_DAEMON_BASE_URL}/wake`).catch(() => {})
+            }
+        }
+
         // ── ƯU TIÊN 0: MÃ TEST 1234 TỰ ĐỘNG VÀO NGAY LẬP TỨC ──
         if (rawCode === '1234') {
+            wakeCanonCameraEarly()
             setWelcomeGuest('Thành công')
             setTimeout(() => {
                 setShowPinModal(false)
@@ -120,6 +131,7 @@ export default function IdleScreen() {
             '8888'
         ).trim()
         if (rawCode === machineAdminPin || rawCode === '8888') {
+            wakeCanonCameraEarly()
             setWelcomeGuest('Thành công')
             setTimeout(() => {
                 setShowPinModal(false)
@@ -247,6 +259,7 @@ export default function IdleScreen() {
                 }
 
                 const durationSeconds = resolveTicketDurationSeconds(ticket)
+                wakeCanonCameraEarly()
 
                 setTimeout(() => {
                     setShowPinModal(false)

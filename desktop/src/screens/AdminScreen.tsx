@@ -284,7 +284,13 @@ export const AdminScreen: React.FC = () => {
             cameraType === 'laptop'
         ) {
             navigator.mediaDevices
-                ?.getUserMedia({ video: { width: 1280, height: 720 } })
+                ?.getUserMedia({
+                    video: {
+                        width: { ideal: 1920 },
+                        height: { ideal: 1280 },
+                        aspectRatio: { ideal: 1.5 },
+                    },
+                })
                 .then((stream) => {
                     if (active) {
                         setWebcamStream(stream)

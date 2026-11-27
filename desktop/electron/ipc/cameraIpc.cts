@@ -461,133 +461,159 @@ export function registerCameraIpc(): void {
                 }
 
                 if (daemonReady) {
-                    try {
-                        console.log(
-                            `[Canon Daemon] Posting capture: ID=${captureId}, Session=${sessionId}, Slot=${slotIndex}`
-                        )
-                        const daemonRes = await fetch(
-                            `${CANON_DAEMON_URL}/api/captures`,
-                            {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    captureId,
-                                    sessionId,
-                                    slotIndex,
-                                }),
-                                signal: AbortSignal.timeout(
-                                    HARDWARE_TIMEOUT_MS
-                                ),
-                            }
-                        )
-
-                        if (daemonRes.ok) {
-                            const result = (await daemonRes.json()) as any
-                            const rawCapturedPath =
-                                result.savedPath || payload.savePath
-                            if (
-                                result.success &&
-                                rawCapturedPath &&
-                                fs.existsSync(rawCapturedPath) &&
-                                fs.statSync(rawCapturedPath).size > 1000
-                            ) {
-                                // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip) theo cơ chế atomic
-                                await flipImageFile(rawCapturedPath)
-                                // Đặt đúng về đường dẫn `raw/` chuẩn của ô slot để tránh lệch thư mục khi xóa/AI
-                                const targetPath = relocateRawCaptureAtomic(
-                                    rawCapturedPath,
-                                    payload.savePath
-                                )
-
-                                const buffer = fs.readFileSync(targetPath)
-                                const sizeMb = (
-                                    buffer.length /
-                                    (1024 * 1024)
-                                ).toFixed(1)
-
-                                try {
-                                    SessionDB.saveCapture({
-                                        id: captureId,
-                                        session_id: sessionId,
-                                        slot_index: slotIndex,
-                                        status: 'COMPLETED',
-                                        file_path: targetPath,
-                                        raw_file_path: targetPath,
-                                        is_retake: 0,
-                                        retake_count: 0,
-                                        latency_ms: result.latencyMs,
-                                        shutter_ms: result.shutterMs,
-                                        transfer_ms: result.transferMs,
-                                    })
-
-                                    SessionDB.recordMediaFile({
-                                        id: `media_${captureId}`,
-                                        session_id: sessionId,
-                                        capture_id: captureId,
-                                        type: 'raw',
-                                        file_path: targetPath,
-                                        file_size: buffer.length,
-                                    })
-                                } catch (dbErr) {
-                                    console.warn(
-                                        '[SessionDB] SQLite record warning:',
-                                        dbErr
-                                    )
-                                }
-
-                                console.log(
-                                    `[Canon Daemon] Shutter success! Saved: ${targetPath} (${sizeMb} MB) in ${result.latencyMs}ms (Idempotent: ${Boolean(result.idempotent)})`
-                                )
-                                return {
-                                    success: true,
-                                    data: {
-                                        savedPath: targetPath,
-                                        dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-                                        source:
-                                            result.source ||
-                                            'Canon EOS R100 (EDSDK Persistent Daemon 2.2)',
-                                        resolution:
-                                            result.resolution ||
-                                            '24MP (Full Resolution)',
-                                        fileSizeMb: sizeMb,
-                                        latencyMs: result.latencyMs,
-                                        shutterMs: result.shutterMs,
-                                        transferMs: result.transferMs,
-                                        captureId,
+                    const DAEMON_CAPTURE_TIMEOUT_MS = 15000
+                    let lastDaemonError = 'Máy ảnh Canon không phản hồi lệnh chụp.'
+                    // Canon Daemon độc quyền EDSDK session: retry tối đa 2 lần trực tiếp trên Daemon
+                    // (không spawn fotolism_canon_capture.exe tranh chấp USB khi Daemon đang chạy).
+                    for (let attempt = 1; attempt <= 2; attempt++) {
+                        const attemptCaptureId =
+                            attempt === 1
+                                ? captureId
+                                : `${captureId}_r${attempt}`
+                        try {
+                            console.log(
+                                `[Canon Daemon] Posting capture (attempt ${attempt}/2): ID=${attemptCaptureId}, Session=${sessionId}, Slot=${slotIndex}`
+                            )
+                            const daemonRes = await fetch(
+                                `${CANON_DAEMON_URL}/api/captures`,
+                                {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        captureId: attemptCaptureId,
                                         sessionId,
                                         slotIndex,
-                                        idempotent: Boolean(result.idempotent),
-                                    },
+                                    }),
+                                    signal: AbortSignal.timeout(
+                                        DAEMON_CAPTURE_TIMEOUT_MS
+                                    ),
                                 }
-                            } else if (result.error) {
-                                console.warn(
-                                    '[Canon Daemon] Daemon capture returned error:',
-                                    result.error
-                                )
-                                try {
-                                    SessionDB.saveCapture({
-                                        id: captureId,
-                                        session_id: sessionId,
-                                        slot_index: slotIndex,
-                                        status: result.status || 'FAILED',
-                                        file_path: rawCapturedPath,
-                                        is_retake: 0,
-                                        retake_count: 0,
-                                        latency_ms: result.latencyMs || 0,
-                                    })
-                                } catch {}
-                                return {
-                                    success: false,
-                                    error: result.error,
-                                    idempotent: Boolean(result.idempotent),
+                            )
+
+                            if (daemonRes.ok) {
+                                const result = (await daemonRes.json()) as any
+                                const rawCapturedPath =
+                                    result.savedPath || payload.savePath
+                                if (
+                                    result.success &&
+                                    rawCapturedPath &&
+                                    fs.existsSync(rawCapturedPath) &&
+                                    fs.statSync(rawCapturedPath).size > 1000
+                                ) {
+                                    // Luôn luôn lật gương ảnh chụp xong (Horizontal Flip) theo cơ chế atomic
+                                    await flipImageFile(rawCapturedPath)
+                                    // Đặt đúng về đường dẫn `raw/` chuẩn của ô slot để tránh lệch thư mục khi xóa/AI
+                                    const targetPath = relocateRawCaptureAtomic(
+                                        rawCapturedPath,
+                                        payload.savePath
+                                    )
+
+                                    const buffer = fs.readFileSync(targetPath)
+                                    const sizeMb = (
+                                        buffer.length /
+                                        (1024 * 1024)
+                                    ).toFixed(1)
+
+                                    try {
+                                        SessionDB.saveCapture({
+                                            id: attemptCaptureId,
+                                            session_id: sessionId,
+                                            slot_index: slotIndex,
+                                            status: 'COMPLETED',
+                                            file_path: targetPath,
+                                            raw_file_path: targetPath,
+                                            is_retake: 0,
+                                            retake_count: 0,
+                                            latency_ms: result.latencyMs,
+                                            shutter_ms: result.shutterMs,
+                                            transfer_ms: result.transferMs,
+                                        })
+
+                                        SessionDB.recordMediaFile({
+                                            id: `media_${attemptCaptureId}`,
+                                            session_id: sessionId,
+                                            capture_id: attemptCaptureId,
+                                            type: 'raw',
+                                            file_path: targetPath,
+                                            file_size: buffer.length,
+                                        })
+                                    } catch (dbErr) {
+                                        console.warn(
+                                            '[SessionDB] SQLite record warning:',
+                                            dbErr
+                                        )
+                                    }
+
+                                    console.log(
+                                        `[Canon Daemon] Shutter success! Saved: ${targetPath} (${sizeMb} MB) in ${result.latencyMs}ms (Idempotent: ${Boolean(result.idempotent)})`
+                                    )
+                                    return {
+                                        success: true,
+                                        data: {
+                                            savedPath: targetPath,
+                                            dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+                                            source:
+                                                result.source ||
+                                                'Canon EOS R100 (EDSDK Persistent Daemon 2.2)',
+                                            resolution:
+                                                result.resolution ||
+                                                '24MP (Full Resolution)',
+                                            fileSizeMb: sizeMb,
+                                            latencyMs: result.latencyMs,
+                                            shutterMs: result.shutterMs,
+                                            transferMs: result.transferMs,
+                                            captureId: attemptCaptureId,
+                                            sessionId,
+                                            slotIndex,
+                                            idempotent: Boolean(
+                                                result.idempotent
+                                            ),
+                                        },
+                                    }
+                                } else if (result.error) {
+                                    lastDaemonError = String(result.error)
+                                    console.warn(
+                                        `[Canon Daemon] Daemon capture returned error (attempt ${attempt}/2):`,
+                                        result.error
+                                    )
+                                    try {
+                                        SessionDB.saveCapture({
+                                            id: attemptCaptureId,
+                                            session_id: sessionId,
+                                            slot_index: slotIndex,
+                                            status: result.status || 'FAILED',
+                                            file_path: rawCapturedPath,
+                                            is_retake: 0,
+                                            retake_count: 0,
+                                            latency_ms: result.latencyMs || 0,
+                                        })
+                                    } catch {}
                                 }
+                            } else {
+                                lastDaemonError = `Canon Daemon HTTP ${daemonRes.status}`
                             }
+                        } catch (daemonErr: any) {
+                            lastDaemonError =
+                                daemonErr?.message || String(daemonErr)
+                            console.warn(
+                                `[Canon Daemon] POST /api/captures failed (attempt ${attempt}/2):`,
+                                lastDaemonError
+                            )
                         }
-                    } catch (daemonErr: any) {
-                        console.warn(
-                            '[Canon Daemon] POST /api/captures failed, trying fallback:',
-                            daemonErr.message
-                        )
+
+                        if (attempt < 2) {
+                            await new Promise((r) => setTimeout(r, 350))
+                        }
+                    }
+
+                    // Nếu Daemon vẫn đang chạy thì không spawn tiến trình EDSDK thứ 2 gây xung đột session
+                    if (await checkCanonDaemon()) {
+                        return {
+                            success: false,
+                            error: lastDaemonError,
+                        }
                     }
                 }
 

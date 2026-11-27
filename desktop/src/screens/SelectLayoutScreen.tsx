@@ -184,7 +184,9 @@ export default function SelectLayoutScreen() {
 
     if (eventConfig.captureMode !== 'selfbooth') return <ConnectedReferenceView
         screen="select-layout"
-        onNavigate={(target) => target === 'welcome' ? setScreen('welcome') : handleProceed()}
+        onNavigate={(target) => {
+            if (target !== 'welcome') handleProceed()
+        }}
         changes={{ selectedLayoutIdx: (value) => handleSelect(activeLayouts[Number(value)]) }}
     />
 
@@ -200,16 +202,9 @@ export default function SelectLayoutScreen() {
                 </div>
             </main>
 
-            {/* ── Fixed Bottom Footer: Nút Quay Lại (Trái) + Banner Giá In Thêm (Giữa) + Nút Tiếp Tục (Phải) ── */}
+            {/* ── Fixed Bottom Footer: Banner Giá In Thêm (Giữa) + Nút Tiếp Tục (Phải), ẩn nút Quay Lại sau khi nhập PIN ── */}
             <footer className="kiosk-fixed-bottom-bar poster-fixed-footer">
-                <button
-                    className="kiosk-nav-btn btn-nav-back"
-                    onClick={() => setScreen('idle')}
-                    title="Quay lại"
-                    aria-label="Quay lại"
-                >
-                    <span>Quay lại</span>
-                </button>
+                <div style={{ width: 140, flexShrink: 0 }} aria-hidden="true" />
 
                 {/* Banner Giá In Thêm ở giữa */}
                 <div className="poster-extra-banner">

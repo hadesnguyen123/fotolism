@@ -25,6 +25,16 @@ import {
 import { checkAndInstallStartupUpdate } from './autoUpdater.cjs'
 
 // ─── FOTOLISM ELECTRON BACKEND CONFIGURATION ─────────────────────────────────
+// Luôn đặt SQLite SessionDB vào thư mục userData có quyền ghi, tránh lỗi "unable to open database file"
+// khi app chạy từ thư mục cài đặt chỉ-đọc (Program Files / System32 sau Auto-Update).
+if (!process.env.FOTOLISM_DB_PATH) {
+    try {
+        process.env.FOTOLISM_DB_PATH = join(
+            app.getPath('userData'),
+            'fotolism_sessions.db'
+        )
+    } catch {}
+}
 try {
     process.loadEnvFile?.(join(__dirname, '../.env'))
 } catch {}

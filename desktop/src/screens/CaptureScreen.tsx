@@ -193,8 +193,8 @@ export default function CaptureScreen() {
     const [slots, setSlots] = useState<(CapturedPhoto | null)[]>(
         Array(totalShots).fill(null)
     )
+    // slotsRef luôn được cập nhật đồng bộ ngay trước mọi lời gọi setSlots để tránh render phụ ghi đè state cũ
     const slotsRef = useRef<(CapturedPhoto | null)[]>(slots)
-    slotsRef.current = slots
     const [retakeSlotIndex, setRetakeSlotIndex] = useState<number | null>(null)
     // Số lần đã xóa chụp lại trong dải ảnh (tối đa xóa 2 ảnh trong toàn bộ dải ảnh chụp)
     const [slotDeleteCounts, setSlotDeleteCounts] = useState<
@@ -259,8 +259,8 @@ export default function CaptureScreen() {
     const [selfboothLibrary, setSelfboothLibrary] = useState<CapturedPhoto[]>(
         []
     )
+    // selfboothLibraryRef luôn được cập nhật đồng bộ trước mọi lời gọi setSelfboothLibrary để tránh race condition khi kết thúc phiên
     const selfboothLibraryRef = useRef(selfboothLibrary)
-    selfboothLibraryRef.current = selfboothLibrary
     const activeSessionIdRef = useRef(sessionId)
     activeSessionIdRef.current = sessionId
     const prefetchedBatchesRef = useRef<Set<number>>(new Set())
@@ -778,7 +778,10 @@ export default function CaptureScreen() {
             )
 
             // 2. Chụp khung hình tại đúng 0s (người dùng đã cười tươi tạo dáng xong)
-            let photoDataUrl = grabVideoFrame()
+            // Giữ bản gốc toàn khung hình (`uncroppedLiveFrame`) để dùng làm fallback nếu Canon lỗi,
+            // chỉ crop theo tỉ lệ ô (`photoDataUrl`) cho thumbnail hiển thị tức thì trên dải ảnh.
+            const uncroppedLiveFrame = grabVideoFrame()
+            let photoDataUrl = uncroppedLiveFrame
             if (photoDataUrl) {
                 // Cắt crop theo đúng tỉ lệ chuẩn của ô layout (528x352, 544x726, 381x580)
                 photoDataUrl = await cropImageToAspect(
@@ -790,22 +793,23 @@ export default function CaptureScreen() {
             }
             const photoPath = photoDataUrl || ''
 
+            const fallbackRawDataUrl = uncroppedLiveFrame || photoPath
+
             const newPhoto: CapturedPhoto = {
                 id: `photo_${timestamp}_${targetIndex + 1}`,
-                rawPath: photoPath,
-                enhancedPath: photoPath,
+                rawPath: fallbackRawDataUrl,
+                enhancedPath: fallbackRawDataUrl,
                 compositedPath: photoPath,
                 enhanceStatus: 'pending',
                 timestamp,
             }
 
             // 3. Đẩy ảnh vào ô khung hình (Slot) NGAY LẬP TỨC (< 0.1s sau 0s)
-            setSlots((prev) => {
-                const nextSlots = [...prev]
-                nextSlots[targetIndex] = newPhoto
-                slotsRef.current = nextSlots
-                return nextSlots
-            })
+            // Cập nhật slotsRef.current đồng bộ trước setSlots để tránh race condition với React 19 batching.
+            const immediateSlots = [...slotsRef.current]
+            immediateSlots[targetIndex] = newPhoto
+            slotsRef.current = immediateSlots
+            setSlots(immediateSlots)
 
             // Reset lại retake index sau khi chụp xong
             setRetakeSlotIndex(null)
@@ -815,28 +819,31 @@ export default function CaptureScreen() {
                 !deletedPhotoIdsRef.current.has(newPhoto.id)
 
             const persistLiveViewFallback = async () => {
-                if (!photoDataUrl || !photoDataUrl.startsWith('data:image')) return
+                const fallbackSource = uncroppedLiveFrame || photoDataUrl
+                if (!fallbackSource || !fallbackSource.startsWith('data:image'))
+                    return
                 if (!isShotStillActive()) return
-                const saved = await api.storage.savePhoto(photoDataUrl, rawSavePath)
+                const saved = await api.storage.savePhoto(
+                    fallbackSource,
+                    rawSavePath
+                )
                 if (!saved?.success || !saved?.data?.savedPath) return
                 if (!isShotStillActive()) {
                     void api.storage.deleteFile(saved.data.savedPath)
                     return
                 }
                 const savedFileUrl = toFileUrl(saved.data.savedPath)
-                setSlots((prev) => {
-                    const next = [...prev]
-                    if (next[targetIndex]?.id === newPhoto.id) {
-                        next[targetIndex] = {
-                            ...next[targetIndex]!,
-                            rawPath: saved.data!.savedPath,
-                            enhancedPath: photoDataUrl || savedFileUrl,
-                            compositedPath: photoDataUrl || savedFileUrl,
-                        }
+                const next = [...slotsRef.current]
+                if (next[targetIndex]?.id === newPhoto.id) {
+                    next[targetIndex] = {
+                        ...next[targetIndex]!,
+                        rawPath: saved.data.savedPath,
+                        enhancedPath: fallbackSource || savedFileUrl,
+                        compositedPath: photoDataUrl || savedFileUrl,
                     }
                     slotsRef.current = next
-                    return next
-                })
+                    setSlots(next)
+                }
             }
 
             // Chỉ lưu ảnh gốc khi chụp; chỉ chạy AI xử lý ảnh khi hoàn tất các ô và chuyển sang màn Frame + Filter.
@@ -883,20 +890,20 @@ export default function CaptureScreen() {
                                 canonData.dataUrl ||
                                 toFileUrl(canonData.savedPath)
 
-                            setSlots((prev) => {
-                                const next = [...prev]
-                                if (next[targetIndex]?.id === newPhoto.id) {
-                                    next[targetIndex] = {
-                                        ...next[targetIndex]!,
-                                        rawPath: canonData.savedPath,
-                                        enhancedPath: canonUrl,
-                                        compositedPath: canonUrl,
-                                        enhanceStatus: 'pending',
-                                    }
+                            // Cập nhật slotsRef.current ĐỒNG BỘ trước khi finally xóa pendingCapturesRef,
+                            // tránh React 19 batching khiến handleProceedPhotobooth đọc nhầm preview cũ của ô 4.
+                            const next = [...slotsRef.current]
+                            if (next[targetIndex]?.id === newPhoto.id) {
+                                next[targetIndex] = {
+                                    ...next[targetIndex]!,
+                                    rawPath: canonData.savedPath,
+                                    enhancedPath: canonUrl,
+                                    compositedPath: canonUrl,
+                                    enhanceStatus: 'pending',
                                 }
                                 slotsRef.current = next
-                                return next
-                            })
+                                setSlots(next)
+                            }
                             setSnapshotFlyer((prev) =>
                                 prev && prev.slotIndex === targetIndex
                                     ? {
@@ -1003,9 +1010,9 @@ export default function CaptureScreen() {
         setAiProcessingError(null)
 
         try {
-            // Đợi nếu đang đếm ngược bắt khung hình hoặc tiến trình chụp/lưu nền chưa xong (tối đa 15s)
+            // Đợi nếu đang đếm ngược bắt khung hình hoặc tiến trình chụp/lưu nền chưa xong (tối đa 25s cho ảnh 24MP cuối)
             if (isCapturingShotRef.current || pendingCapturesRef.current.size > 0) {
-                const waitDeadline = Date.now() + 15000
+                const waitDeadline = Date.now() + 25000
                 await new Promise((resolve) => {
                     const interval = setInterval(() => {
                         const done =
@@ -1309,10 +1316,11 @@ export default function CaptureScreen() {
             const timestamp = Date.now()
             const photoNum = selfboothLibrary.length + 1
             ensureSelfboothPrefetched(photoNum)
+            const rootDir = fotolismRootDirRef.current
             const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
-            const rawSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\raw\\${rawFileName}`
+            const rawSavePath = `${rootDir}\\sessions\\${capturedSessionId}\\raw\\${rawFileName}`
             const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
-            const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${capturedSessionId}\\final\\${enhancedFileName}`
+            const enhancedSavePath = `${rootDir}\\sessions\\${capturedSessionId}\\final\\${enhancedFileName}`
             const selfApi = isBrowser ? mockApi : fotolismApi
             const targetSessionId = formatLocalSessionFolder(
                 session?.pinCode || sessionId
@@ -1389,7 +1397,9 @@ export default function CaptureScreen() {
                 timestamp,
             }
 
-            setSelfboothLibrary((prev) => [...prev, newPhoto])
+            const appendedLib = [...selfboothLibraryRef.current, newPhoto]
+            selfboothLibraryRef.current = appendedLib
+            setSelfboothLibrary(appendedLib)
 
             // Khi dùng Canon, preview chỉ hiển thị; chỉ ảnh cảm biến được lưu và enhance.
             if (!isCanonDaemonActive && photoDataUrl && photoDataUrl.startsWith('data:image')) {
@@ -1419,8 +1429,8 @@ export default function CaptureScreen() {
                                 return
                             }
 
-                                    setSelfboothLibrary((prev) => {
-                                        const next: CapturedPhoto[] = prev.map((p) =>
+                                    const nextLib: CapturedPhoto[] =
+                                        selfboothLibraryRef.current.map((p) =>
                                             p.id === newPhoto.id
                                                 ? {
                                                       ...p,
@@ -1431,9 +1441,8 @@ export default function CaptureScreen() {
                                                   }
                                                 : p
                                         )
-                                        selfboothLibraryRef.current = next
-                                        return next
-                                    })
+                                    selfboothLibraryRef.current = nextLib
+                                    setSelfboothLibrary(nextLib)
                                     pushSelfboothPhotoToR2(
                                         newPhoto.id,
                                         photoNum,
@@ -1528,21 +1537,22 @@ export default function CaptureScreen() {
                                 return
                             }
 
-                            setSelfboothLibrary((prev) => {
-                                const next: CapturedPhoto[] = prev.map((p) =>
+                            const nextLib: CapturedPhoto[] =
+                                selfboothLibraryRef.current.map((p) =>
                                     p.id === newPhoto.id
                                         ? {
                                               ...p,
                                               rawPath: canonData.savedPath,
                                               enhancedPath: finalPhotoUrl,
                                               compositedPath: finalPhotoUrl,
-                                              enhanceStatus: enhancementSucceeded ? 'processed' : 'failed',
+                                              enhanceStatus: enhancementSucceeded
+                                                  ? 'processed'
+                                                  : 'failed',
                                           }
                                         : p
                                 )
-                                selfboothLibraryRef.current = next
-                                return next
-                            })
+                            selfboothLibraryRef.current = nextLib
+                            setSelfboothLibrary(nextLib)
                             pushSelfboothPhotoToR2(
                                 newPhoto.id,
                                 photoNum,
@@ -1613,11 +1623,15 @@ export default function CaptureScreen() {
         setAiProgressText('Đang xử lý ảnh')
         setAiProcessingError(null)
 
-        // Đợi toàn bộ ảnh hoàn tất lưu và xử lý AI trong nền nếu đang chụp
+        // Đợi toàn bộ ảnh hoàn tất lưu và xử lý AI trong nền nếu đang chụp (tối đa 25s tránh treo vĩnh viễn)
         if (pendingCapturesRef.current.size > 0) {
+            const waitDeadline = Date.now() + 25000
             await new Promise((resolve) => {
                 const interval = setInterval(() => {
-                    if (pendingCapturesRef.current.size === 0) {
+                    if (
+                        pendingCapturesRef.current.size === 0 ||
+                        Date.now() >= waitDeadline
+                    ) {
                         clearInterval(interval)
                         resolve(true)
                     }
@@ -1630,6 +1644,7 @@ export default function CaptureScreen() {
 
         // Đảm bảo 100% kho ảnh Selfbooth đã có ảnh AI Enhance vào thư mục final (chạy song song đồng thời)
         const selfApi = isBrowser ? mockApi : fotolismApi
+        const rootDir = fotolismRootDirRef.current
         await Promise.all(
             finalPhotos.map(async (p, idx) => {
                 const hasEnhance = isPhotoEnhanced(p)
@@ -1637,11 +1652,11 @@ export default function CaptureScreen() {
                     const timestamp = p.timestamp || Date.now()
                     const photoNum = idx + 1
                     const enhancedFileName = `fotolism_enhanced_self_${photoNum}_${timestamp}.jpg`
-                    const enhancedSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\final\\${enhancedFileName}`
+                    const enhancedSavePath = `${rootDir}\\sessions\\${sessionId}\\final\\${enhancedFileName}`
                     let rawP = p.rawPath
                     if (rawP && rawP.startsWith('data:image')) {
                         const rawFileName = `${FILE_PREFIX_SELF}_${photoNum}_${timestamp}.jpg`
-                        const rawSavePath = `F:\\Fotolism_image\\sessions\\${sessionId}\\raw\\${rawFileName}`
+                        const rawSavePath = `${rootDir}\\sessions\\${sessionId}\\raw\\${rawFileName}`
                         await selfApi.storage.savePhoto(rawP, rawSavePath)
                         rawP = rawSavePath
                     }
@@ -1774,6 +1789,7 @@ export default function CaptureScreen() {
         setRetakeSlotIndex(null)
         slotDeleteCountsRef.current = {}
         setSlotDeleteCounts({})
+        selfboothLibraryRef.current = []
         setSelfboothLibrary([])
         setSelfboothSecondsLeft(totalDuration)
         setShowFinishConfirm(false)

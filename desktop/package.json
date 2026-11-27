@@ -2,7 +2,7 @@
   "name": "fotolism-desktop",
   "productName": "fotolism",
   "private": true,
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "AI-Powered Photobooth Software",
   "type": "module",
   "author": "fotolism team",

@@ -6,6 +6,7 @@
  */
 
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -91,6 +92,8 @@ let dbInstance: DatabaseSync | null = null
 /**
  * Khởi tạo hoặc lấy kết nối Singleton đến SQLite database cục bộ.
  * Tự động tạo cấu trúc bảng (schema) và chỉ mục nếu database chưa tồn tại.
+ * Ưu tiên đường dẫn có quyền ghi (`customPath` -> `FOTOLISM_DB_PATH` -> `%APPDATA%\fotolism` -> `os.tmpdir`)
+ * để tránh lỗi `unable to open database file` khi app chạy ở thư mục chỉ-đọc.
  *
  * @param customPath Đường dẫn tùy biến tới tệp database (dành cho môi trường test/benchmark).
  * @returns Thực thể DatabaseSync đã sẵn sàng giao dịch.
@@ -98,16 +101,45 @@ let dbInstance: DatabaseSync | null = null
 export function getDatabase(customPath?: string): DatabaseSync {
     if (dbInstance) return dbInstance
 
-    const dbPath =
-        customPath ||
-        process.env.FOTOLISM_DB_PATH ||
-        path.join(process.cwd(), 'fotolism_sessions.db')
-    const dir = path.dirname(dbPath)
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
+    const candidates: string[] = customPath
+        ? [customPath]
+        : [
+              ...(process.env.FOTOLISM_DB_PATH
+                  ? [process.env.FOTOLISM_DB_PATH]
+                  : []),
+              path.join(
+                  process.env.APPDATA || os.homedir() || os.tmpdir(),
+                  'fotolism',
+                  'fotolism_sessions.db'
+              ),
+              path.join(os.tmpdir(), 'fotolism_sessions.db'),
+          ]
+
+    let db: DatabaseSync | null = null
+    let lastErr: unknown = null
+    for (const dbPath of candidates) {
+        try {
+            const dir = path.dirname(dbPath)
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true })
+            }
+            db = new DatabaseSync(dbPath)
+            db.exec('PRAGMA busy_timeout = 5000;')
+            break
+        } catch (err) {
+            lastErr = err
+            console.warn(
+                `[SessionDB] Không thể mở SQLite tại "${dbPath}", thử đường dẫn dự phòng:`,
+                err
+            )
+        }
     }
 
-    const db = new DatabaseSync(dbPath)
+    if (!db) {
+        throw lastErr instanceof Error
+            ? lastErr
+            : new Error('unable to open database file')
+    }
 
     // Initialize SQLite Schema according to Fotolism 2.2 Architecture (FR-06)
     db.exec(`
