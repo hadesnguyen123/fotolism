@@ -1,7 +1,7 @@
 /**
  * @file SelfboothSetupScreen.tsx
  * Màn hình cấu hình trước khi chụp phòng tự chụp (Selfbooth):
- * chọn tỷ lệ khung ảnh, chọn bộ lọc màu (Nature, B&W, Retro) và hiển thị thông tin thời gian phiên chụp.
+ * chọn tỷ lệ khung ảnh, chọn bộ lọc màu (Nature, B&W, Retro, Snow) và hiển thị thông tin thời gian phiên chụp.
  * Phụ thuộc: react, store/appStore, lib/api.
  */
 
@@ -9,41 +9,14 @@ import { useState, useEffect, useRef } from 'react'
 import {
     useAppStore,
     ALL_LAYOUTS,
+    SELFBOOTH_FILTERS,
     type ColorFilterItem,
 } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Check } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
 import { CANON_DAEMON_BASE_URL } from '../lib/constants'
-import { BW_CSS_FILTER } from '../config/bwFilter'
 import './SelfboothSetupScreen.css'
-
-// Bộ 3 filter riêng cho chế độ Selfbooth: Nature, B&W, Retro
-const SELFBOOTH_FILTERS: ColorFilterItem[] = [
-    {
-        id: 'normal',
-        name: 'Nature',
-        cssFilter: 'none',
-        tag: '',
-        previewColor: '#E4D2C3',
-    },
-    {
-        id: 'vintage_noir',
-        name: 'B&W',
-        cssFilter: BW_CSS_FILTER,
-        tag: '',
-        previewColor: '#262626',
-    },
-    {
-        id: 'retro_90s',
-        name: 'Retro',
-        cssFilter:
-            'contrast(0.92) brightness(0.90) sepia(0.28) saturate(0.92) hue-rotate(-6deg)',
-        tag: '',
-        previewColor: '#8B4A39',
-        hasGrain: true,
-    },
-]
 
 export default function SelfboothSetupScreen() {
     const {

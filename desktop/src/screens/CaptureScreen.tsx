@@ -11,6 +11,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
     useAppStore,
     COLOR_FILTERS,
+    SELFBOOTH_FILTERS,
     type CapturedPhoto,
 } from '../store/appStore'
 import { fotolismApi, isBrowser, mockApi, api } from '../lib/api'
@@ -1978,7 +1979,10 @@ export default function CaptureScreen() {
                         <div className="flyout-content">
                             <div className="filter-presets-container">
                                 <div className="filter-presets-list">
-                                    {COLOR_FILTERS.map((filter) => {
+                                    {(isSelfboothMode
+                                        ? SELFBOOTH_FILTERS
+                                        : COLOR_FILTERS
+                                    ).map((filter) => {
                                         const isSelected =
                                             selectedFilter?.id === filter.id
                                         return (

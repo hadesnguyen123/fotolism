@@ -2,7 +2,7 @@
 Fotolism AI Beauty Engine — Style LUT Manager & Cache
 Quản lý, lưu bộ nhớ đệm (cache) và nạp bảng tra cứu màu (LUT) của các Style.
 Hỗ trợ kiểm tra mtime (file modification time) để tự động nạp lại khi file thay đổi trên đĩa.
-Phụ thuộc: cv2, numpy, core.retro.
+Phụ thuộc: cv2, numpy, core.retro, core.snow.
 """
 import json
 import logging
@@ -13,6 +13,7 @@ import cv2
 
 from core.config import RESOURCE_DIR
 from core.retro import apply_fast_film_grain_u8, apply_retro
+from core.snow import apply_snow
 
 logger = logging.getLogger("ai_service.lut_manager")
 
@@ -34,6 +35,8 @@ _PROCEDURAL_STYLES = (
     "vintage",
     "vintage_brown",
     "warm_film",
+    "snow",
+    "snow_png",
 )
 
 
@@ -184,6 +187,9 @@ class LUTManager:
         eff_intensity = float(np.clip(intensity, 0.0, 1.0))
         if not sid or sid in ("none", "raw", "original", "natural", "normal", "basic") or eff_intensity <= 1e-4:
             return img_bgr
+
+        if sid in ("snow", "snow_png"):
+            return apply_snow(img_bgr, intensity=eff_intensity)
 
         if sid in ("retro", "retro_90s", "vintage", "vintage_brown", "warm_film"):
             return apply_retro(

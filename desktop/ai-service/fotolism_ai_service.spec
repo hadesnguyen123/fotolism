@@ -12,6 +12,7 @@ datas = [
     ("data/face_detection_yunet_2023mar.onnx", "data"),
     ("data/bw-preset.json", "data"),
     ("data/retro-chocolates-lut.json", "data"),
+    ("data/snow-overlay.png", "data"),
     ("../public/mediapipe/models/face_landmarker.task", "mediapipe/models"),
 ] + mp_datas + mpl_datas
 
