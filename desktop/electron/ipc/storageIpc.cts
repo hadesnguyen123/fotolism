@@ -286,6 +286,7 @@ export function registerStorageIpc(): void {
     files: Array<{
         imageId: string
         filePath: string
+        targetFileName?: string
         isFinal?: boolean
         sizeBytes?: number
     }>
@@ -347,14 +348,28 @@ export function registerStorageIpc(): void {
             }))
             .filter((f) => f.filePath && fs.existsSync(f.filePath))
 
+        // Tra cứu sẵn các task đã UPLOADED/UPLOADING của phiên để không xin lại URL và không đẩy trùng lần 2
+        const existingTasksById = new Map<string, UploadTaskRecord>()
+        try {
+            for (const t of SessionDB.getUploadTasksForSession(sessionId)) {
+                existingTasksById.set(t.id, t)
+            }
+        } catch {}
+        const prefetchedMap = selfboothPrefetchedUrls.get(sessionId)
+
         const validFiles: Array<{
             imageId: string
             filePath: string
+            targetName: string
             isFinal?: boolean
             isThumbnail?: boolean
             uploadType: 'original' | 'final' | 'thumbnail'
         }> = []
         const seenTaskIds = new Set<string>()
+        const urlMap = new Map<
+            string,
+            { putUrl: string; objectKey: string; expiresInSec: number }
+        >()
 
         for (const file of normalizedValid) {
             const uploadType: 'original' | 'final' | 'thumbnail' = file.isThumbnail
@@ -362,51 +377,120 @@ export function registerStorageIpc(): void {
                 : file.isFinal
                   ? 'final'
                   : 'original'
+            const targetName =
+                file.targetFileName || path.basename(file.filePath)
+            const mainTaskId = `task_${sessionId}_${file.imageId}`
+            const existingMain = existingTasksById.get(mainTaskId)
 
             if (!seenTaskIds.has(file.imageId)) {
                 seenTaskIds.add(file.imageId)
-                const stat = fs.statSync(file.filePath)
-                const fileName = path.basename(file.filePath)
-                validFiles.push({ ...file, uploadType })
-                filesPayload.push({
-                    fileName,
-                    type: uploadType,
-                    sizeBytes: stat.size,
-                    contentType: fileName.toLowerCase().endsWith('.webp')
-                        ? 'image/webp'
-                        : 'image/jpeg',
-                })
+                // Bỏ qua nếu ảnh này đã được đẩy xong hoặc đang đẩy lên R2 trong lúc chụp (tránh nhân đôi ảnh Selfbooth)
+                const alreadyHandled =
+                    existingMain &&
+                    (existingMain.status === 'UPLOADED' ||
+                        existingMain.status === 'UPLOADING')
+                if (!alreadyHandled) {
+                    const stat = fs.statSync(file.filePath)
+                    validFiles.push({ ...file, targetName, uploadType })
+                    const prefetched =
+                        prefetchedMap?.get(`${uploadType}:${targetName}`) ||
+                        prefetchedMap?.get(targetName)
+                    if (
+                        prefetched &&
+                        prefetched.expiresAt > Date.now() + 30000
+                    ) {
+                        urlMap.set(`${uploadType}:${targetName}`, {
+                            putUrl: prefetched.putUrl,
+                            objectKey: prefetched.objectKey,
+                            expiresInSec: Math.max(
+                                60,
+                                Math.floor(
+                                    (prefetched.expiresAt - Date.now()) / 1000
+                                )
+                            ),
+                        })
+                    } else {
+                        filesPayload.push({
+                            fileName: targetName,
+                            type: uploadType,
+                            sizeBytes: stat.size,
+                            contentType: targetName
+                                .toLowerCase()
+                                .endsWith('.webp')
+                                ? 'image/webp'
+                                : 'image/jpeg',
+                        })
+                    }
+                }
             }
 
             if (uploadType === 'original') {
                 const thumbId = `${file.imageId}_thumb`
-                if (!seenTaskIds.has(thumbId)) {
-                    const thumb = ensureLocalThumbnail(file.filePath, sessionId)
+                const thumbTaskId = `task_${sessionId}_${thumbId}`
+                const existingThumb = existingTasksById.get(thumbTaskId)
+                const thumbAlreadyHandled =
+                    existingThumb &&
+                    (existingThumb.status === 'UPLOADED' ||
+                        existingThumb.status === 'UPLOADING')
+
+                if (!seenTaskIds.has(thumbId) && !thumbAlreadyHandled) {
+                    const thumb = ensureLocalThumbnail(
+                        file.filePath,
+                        sessionId,
+                        targetName
+                    )
                     if (thumb) {
                         seenTaskIds.add(thumbId)
                         const thumbStat = fs.statSync(thumb.filePath)
                         validFiles.push({
                             imageId: thumbId,
                             filePath: thumb.filePath,
+                            targetName: thumb.fileName,
                             isFinal: false,
                             isThumbnail: true,
                             uploadType: 'thumbnail',
                         })
-                        filesPayload.push({
-                            fileName: thumb.fileName,
-                            type: 'thumbnail',
-                            sizeBytes: thumbStat.size,
-                            contentType: 'image/jpeg',
-                        })
+                        const prefetchedThumb = prefetchedMap?.get(
+                            `thumbnail:${thumb.fileName}`
+                        )
+                        if (
+                            prefetchedThumb &&
+                            prefetchedThumb.expiresAt > Date.now() + 30000
+                        ) {
+                            urlMap.set(`thumbnail:${thumb.fileName}`, {
+                                putUrl: prefetchedThumb.putUrl,
+                                objectKey: prefetchedThumb.objectKey,
+                                expiresInSec: Math.max(
+                                    60,
+                                    Math.floor(
+                                        (prefetchedThumb.expiresAt -
+                                            Date.now()) /
+                                            1000
+                                    )
+                                ),
+                            })
+                        } else {
+                            filesPayload.push({
+                                fileName: thumb.fileName,
+                                type: 'thumbnail',
+                                sizeBytes: thumbStat.size,
+                                contentType: 'image/jpeg',
+                            })
+                        }
                     }
                 }
             }
         }
 
         if (validFiles.length === 0) {
+            r2UploadWorker.triggerProcessing()
             return {
-                success: false,
-                error: 'Không tìm thấy file ảnh hợp lệ trên đĩa để tải lên R2',
+                success: true,
+                data: {
+                    sessionId,
+                    enqueuedCount: 0,
+                    offlineQueued: false,
+                },
             }
         }
 
@@ -427,12 +511,8 @@ export function registerStorageIpc(): void {
         }
         const sessionDate = existingSession?.started_at || new Date().toISOString()
 
-        // 2. Chia batch tối đa 50 file/lượt xin Presigned PUT URLs (tránh vượt giới hạn payload khi chụp > 50 ảnh)
+        // 2. Chia batch tối đa 50 file/lượt xin Presigned PUT URLs (chỉ cho những file chưa có URL pre-fetch)
         const effectiveCms = cmsUrl || r2UploadWorker.getCmsUrl()
-        const urlMap = new Map<
-            string,
-            { putUrl: string; objectKey: string; expiresInSec: number }
-        >()
         let cmsFolderKey: string | undefined
         const URL_BATCH_SIZE = 50
         for (let i = 0; i < filesPayload.length; i += URL_BATCH_SIZE) {
@@ -488,7 +568,7 @@ export function registerStorageIpc(): void {
             Omit<UploadTaskRecord, 'created_at' | 'updated_at'>
         > = []
         for (const file of validFiles) {
-            const fileName = path.basename(file.filePath)
+            const fileName = file.targetName
             const urlInfo =
                 urlMap.get(`${file.uploadType}:${fileName}`) ||
                 urlMap.get(fileName)
@@ -1054,6 +1134,7 @@ export function registerStorageIpc(): void {
                 const finalFilesToEnqueue: Array<{
                     imageId: string
                     filePath: string
+                    targetFileName?: string
                     isFinal: boolean
                 }> = []
 
@@ -1139,6 +1220,7 @@ export function registerStorageIpc(): void {
                             finalFilesToEnqueue.push({
                                 imageId: s.id || `shot_${i + 1}`,
                                 filePath: finalTarget,
+                                targetFileName: enhancedBaseName,
                                 isFinal: false,
                             })
                         }

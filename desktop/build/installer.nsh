@@ -1,5 +1,6 @@
 ; Fotolism Kiosk NSIS Installer Custom Script
-; Thêm bước xác nhận chế độ cài đặt (Photobooth hoặc Selfbooth) và lưu vào resources\kiosk-mode.json
+; Thêm bước xác nhận chế độ cài đặt (Photobooth hoặc Selfbooth) và lưu bền vững vào
+; resources\kiosk-mode.json + %APPDATA%\fotolism-desktop\kiosk-mode.json để không bị reset khi Auto-Update.
 
 !ifndef BUILD_UNINSTALLER
   !include "nsDialogs.nsh"
@@ -9,9 +10,55 @@
   Var RadioPhotobooth
   Var RadioSelfbooth
   Var SelectedKioskMode
+  Var KioskModeFilePath
+  Var KioskModeFileContent
+  Var KioskModeIdx
+  Var KioskModeLen
+  Var KioskModeSlice
+
+  ; Đọc file kiosk-mode.json (nếu tồn tại) và cập nhật $SelectedKioskMode theo nội dung bên trong
+  Function TryReadKioskModeFile
+    Pop $KioskModeFilePath
+    ${IfNot} ${FileExists} "$KioskModeFilePath"
+      Return
+    ${EndIf}
+
+    ClearErrors
+    FileOpen $0 "$KioskModeFilePath" r
+    ${If} ${Errors}
+      Return
+    ${EndIf}
+    FileRead $0 $KioskModeFileContent
+    FileClose $0
+
+    ; Tìm chuỗi "selfbooth" (9 ký tự)
+    StrLen $KioskModeLen $KioskModeFileContent
+    StrCpy $KioskModeIdx 0
+    ${DoWhile} $KioskModeIdx < $KioskModeLen
+      StrCpy $KioskModeSlice $KioskModeFileContent 9 $KioskModeIdx
+      ${If} $KioskModeSlice == "selfbooth"
+        StrCpy $SelectedKioskMode "selfbooth"
+        Return
+      ${EndIf}
+      StrCpy $KioskModeSlice $KioskModeFileContent 10 $KioskModeIdx
+      ${If} $KioskModeSlice == "photobooth"
+        StrCpy $SelectedKioskMode "photobooth"
+        Return
+      ${EndIf}
+      IntOp $KioskModeIdx $KioskModeIdx + 1
+    ${Loop}
+  FunctionEnd
 
   !macro customInit
     StrCpy $SelectedKioskMode "photobooth"
+    ; Đọc sẵn chế độ cũ TRƯỚC khi uninstaller dọn $INSTDIR khi update:
+    ; ưu tiên bản sao bền vững trong %APPDATA%\fotolism-desktop, sau đó %APPDATA%\fotolism và $INSTDIR\resources.
+    Push "$INSTDIR\resources\kiosk-mode.json"
+    Call TryReadKioskModeFile
+    Push "$APPDATA\fotolism\kiosk-mode.json"
+    Call TryReadKioskModeFile
+    Push "$APPDATA\fotolism-desktop\kiosk-mode.json"
+    Call TryReadKioskModeFile
   !macroend
 
   !macro customPageAfterChangeDir
@@ -59,22 +106,23 @@
 
   !macro customInstall
     CreateDirectory "$INSTDIR\resources"
-    ; Khi Auto-Update cài âm thầm (/S), trang chọn chế độ bị bỏ qua nên giữ nguyên kiosk-mode.json sẵn có
-    ; để tránh ghi đè nhầm máy Selfbooth về photobooth. Chỉ ghi mới nếu cài tương tác hoặc chưa có file.
-    ${If} ${Silent}
-      ${IfNot} ${FileExists} "$INSTDIR\resources\kiosk-mode.json"
-        FileOpen $0 "$INSTDIR\resources\kiosk-mode.json" w
-        FileWrite $0 '{"captureMode":"$SelectedKioskMode"}'
-        FileClose $0
-      ${EndIf}
-    ${Else}
-      FileOpen $0 "$INSTDIR\resources\kiosk-mode.json" w
-      FileWrite $0 '{"captureMode":"$SelectedKioskMode"}'
-      FileClose $0
-    ${EndIf}
+    CreateDirectory "$APPDATA\fotolism-desktop"
+
+    ; Ghi chế độ vào cả resources\kiosk-mode.json lẫn bản sao bền vững ở %APPDATA%\fotolism-desktop\kiosk-mode.json.
+    ; Khi Auto-Update cài âm thầm (/S), $SelectedKioskMode đã được nạp lại từ bản cũ ở customInit nên không bị reset về photobooth.
+    FileOpen $0 "$INSTDIR\resources\kiosk-mode.json" w
+    FileWrite $0 '{"captureMode":"$SelectedKioskMode"}'
+    FileClose $0
+
+    FileOpen $0 "$APPDATA\fotolism-desktop\kiosk-mode.json" w
+    FileWrite $0 '{"captureMode":"$SelectedKioskMode"}'
+    FileClose $0
   !macroend
 !endif
 
 !macro customUnInstall
-  Delete "$INSTDIR\resources\kiosk-mode.json"
+  ; Chỉ xóa resources\kiosk-mode.json khi gỡ cài đặt hẳn; giữ nguyên khi đang Auto-Update/nâng cấp
+  ${ifNot} ${isUpdated}
+    Delete "$INSTDIR\resources\kiosk-mode.json"
+  ${endIf}
 !macroend

@@ -2,7 +2,7 @@
 Fotolism AI Beauty Engine — Bộ lọc Retro (từ Adobe XMP Retro 2 + Chocolates 03)
 Áp dụng sau bước AI Beauty Engine theo chuẩn: Original -> AI Beauty -> Retro -> Export.
 Giải mã trực tiếp 3D RGB LUT `Chocolates 03` (sRGB 8x8x8) kết hợp Calibration, HSL,
-ToneCurvePV2012 `(0,19)-(163,134)-(255,208)`, hiệu ứng Glow 38 (OpenCV uint8) và hạt film tuần hoàn.
+ToneCurvePV2012 `(0,19)-(163,134)-(255,208)`, hiệu ứng Diffusion Glow 24 (OpenCV uint8) và hạt film tuần hoàn.
 Phụ thuộc: cv2, numpy, PIL, pydantic, core.config.
 """
 from collections import OrderedDict
@@ -52,10 +52,11 @@ class RetroConfig(BaseModel):
     calGreenSat: float = Field(-1.0, ge=-100.0, le=100.0)
     calBlueHue: float = Field(7.0, ge=-50.0, le=50.0)
     calBlueSat: float = Field(9.0, ge=-100.0, le=100.0)
-    # Glow & Grain
-    glow: float = Field(38.0, ge=0.0, le=100.0)
+    # Glow (Lightroom Style 0 = Diffusion: halation lan mềm từ highlight) & Grain
+    glow: float = Field(24.0, ge=0.0, le=100.0)
     glowRange: float = Field(50.0, ge=0.0, le=100.0)
     glowSpread: float = Field(50.0, ge=0.0, le=100.0)
+    glowWarmth: float = Field(0.0, ge=-100.0, le=100.0)
     grain: float = Field(0.0, ge=0.0, le=0.5)
 
 
@@ -312,13 +313,54 @@ def _get_retro_3d_lut(p: RetroConfig) -> ImageFilter.Color3DLUT:
     return lut
 
 
+def _apply_diffusion_glow(img_bgr: np.ndarray, p: RetroConfig) -> np.ndarray:
+    """Hiệu ứng Glow chuẩn Lightroom Style = Diffusion (Black Pro-Mist halation).
+    Tách vùng highlight TRƯỚC khi blur 2 tầng (inner halo + wide atmospheric diffusion)
+    rồi Screen blend để ánh sáng lan quầng mềm tự nhiên sang viền tối xung quanh.
+    """
+    h, w = img_bgr.shape[:2]
+    if p.glow <= 0.5 or w < 32 or h < 32:
+        return img_bgr
+
+    small_w, small_h = max(16, w // 4), max(16, h // 4)
+    small_f = cv2.resize(img_bgr, (small_w, small_h), interpolation=cv2.INTER_AREA).astype(np.float32) * (1.0 / 255.0)
+
+    # 1. Tách highlight TRƯỚC khi blur (Range càng cao càng lấy thêm mid-highlight)
+    lum = 0.114 * small_f[..., 0] + 0.587 * small_f[..., 1] + 0.299 * small_f[..., 2]
+    thresh = 0.72 - (p.glowRange / 100.0) * 0.42
+    t = np.clip((lum - thresh) / max(0.18, 1.0 - thresh), 0.0, 1.0)
+    hl_mask = t * t * (3.0 - 2.0 * t)
+    hl_src = small_f * hl_mask[..., np.newaxis]
+
+    # 2. Diffusion 2 tầng theo GlowSpread: quầng gần mịn da + quầng rộng lan sang viền tối (halation)
+    ref_dim = float(max(small_w, small_h))
+    spread_norm = float(np.clip(p.glowSpread / 100.0, 0.0, 1.0))
+    sigma_tight = max(1.5, (0.008 + spread_norm * 0.012) * ref_dim)
+    sigma_wide = max(4.0, (0.025 + spread_norm * 0.050) * ref_dim)
+    blur_tight = cv2.GaussianBlur(hl_src, (0, 0), sigma_tight)
+    blur_wide = cv2.GaussianBlur(hl_src, (0, 0), sigma_wide)
+    diffused = blur_tight * 0.45 + blur_wide * 0.55
+
+    if abs(p.glowWarmth) > 0.5:
+        wm = (p.glowWarmth / 100.0) * 0.25
+        diffused[..., 2] *= 1.0 + wm
+        diffused[..., 0] *= max(0.5, 1.0 - wm)
+
+    # 3. Upsample + Screen blend nhanh trên uint8: out = img + (1 - img) * (diffused * strength)
+    strength = float(np.clip((p.glow / 100.0) * 0.85, 0.0, 1.25))
+    bloom_u8 = np.clip(diffused * (strength * 255.0), 0.0, 255.0).astype(np.uint8)
+    bloom_up = cv2.resize(bloom_u8, (w, h), interpolation=cv2.INTER_LINEAR)
+    delta = cv2.multiply(cv2.bitwise_not(img_bgr), bloom_up, scale=1.0 / 255.0)
+    return cv2.add(img_bgr, delta)
+
+
 def apply_retro(
     img_bgr: np.ndarray,
     config: Optional[Union[RetroConfig, Dict[str, Any]]] = None,
     skin_mask: Optional[np.ndarray] = None,
     intensity: float = 1.0,
 ) -> np.ndarray:
-    """Áp dụng bộ lọc màu Retro duy nhất (Retro 2 XMP + Chocolates 03 LUT + Glow) lên ảnh BGR."""
+    """Áp dụng bộ lọc màu Retro duy nhất (Retro 2 XMP + Chocolates 03 LUT + Diffusion Glow 24) lên ảnh BGR."""
     del skin_mask
     eff_int = float(np.clip(intensity, 0.0, 1.0))
     if img_bgr is None or img_bgr.size == 0 or eff_int <= 1e-4:
@@ -339,23 +381,10 @@ def apply_retro(
     graded_rgb = np.asarray(Image.fromarray(img_rgb).filter(lut), dtype=np.uint8)
     out_bgr = cv2.cvtColor(graded_rgb, cv2.COLOR_RGB2BGR)
 
-    h, w = out_bgr.shape[:2]
-    # Glow (Lightroom Creative Soft Glow: xử lý trực tiếp trên uint8 qua OpenCV SIMD để tối ưu tốc độ)
-    if p.glow > 0.5 and w >= 32 and h >= 32:
-        small_w, small_h = max(16, w // 4), max(16, h // 4)
-        small = cv2.resize(out_bgr, (small_w, small_h), interpolation=cv2.INTER_AREA)
-        sigma = max(2.0, (0.015 + (p.glowSpread / 100.0) * 0.028) * max(small_w, small_h))
-        bloom_up = cv2.resize(cv2.GaussianBlur(small, (0, 0), sigma), (w, h), interpolation=cv2.INTER_LINEAR)
-        lum_u8 = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2GRAY)
-        range_thresh = 0.56 - (p.glowRange / 100.0) * 0.24
-        lum_axis = np.arange(256, dtype=np.float32) / 255.0
-        alpha_lut = np.clip((lum_axis - range_thresh) / max(0.15, 1.0 - range_thresh), 0.0, 1.0) * np.clip((p.glow / 100.0) * 0.26, 0.0, 0.85)
-        w_map = cv2.LUT(lum_u8, np.round(alpha_lut * 255.0).astype(np.uint8))
-        w_map3 = cv2.merge([w_map, w_map, w_map])
-        w_bloom = cv2.multiply(bloom_up, w_map3, scale=1.0 / 255.0)
-        delta = cv2.multiply(cv2.bitwise_not(out_bgr), w_bloom, scale=1.0 / 255.0)
-        out_bgr = cv2.add(out_bgr, delta)
+    # Glow chuẩn Lightroom Diffusion (halation lan mềm từ highlight)
+    out_bgr = _apply_diffusion_glow(out_bgr, p)
 
+    h, w = out_bgr.shape[:2]
     if p.texture < -0.5 and w >= 16 and h >= 16:
         tex_alpha = float(np.clip(-p.texture * 0.0025, 0.0, 0.18))
         small = cv2.resize(out_bgr, (max(8, w // 4), max(8, h // 4)), interpolation=cv2.INTER_AREA)

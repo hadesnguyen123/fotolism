@@ -245,7 +245,11 @@ export class R2UploadWorker {
             )
             return
         }
-        const fileName = task.file_path.split(/[\\/]/).pop() || task.image_id
+        const localFileName =
+            task.file_path.split(/[\\/]/).pop() || task.image_id
+        const fileName =
+            (task.object_key && task.object_key.split('/').pop()) ||
+            localFileName
 
         // 1. Kiểm tra file trên Local SSD
         if (!fs.existsSync(task.file_path)) {

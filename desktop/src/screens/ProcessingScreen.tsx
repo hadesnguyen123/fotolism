@@ -29,6 +29,7 @@ import {
     buildGalleryUrl,
     extractRawPin,
     formatLocalSessionFolder,
+    hashPinTo10Digits,
     isTestSessionPin,
 } from '../lib/pinUtils'
 
@@ -303,6 +304,60 @@ export default function ProcessingScreen() {
                         }
                         await new Promise((resolve) => setTimeout(resolve, 500))
                     }
+
+                    // CMS Readiness Gate: xác minh trực tiếp API /api/gallery/<token> trên CMS đã trả đủ ảnh READY trước khi mở mã QR
+                    const cleanCmsUrl = (cmsUrl || '').replace(/\/$/, '')
+                    if (cleanCmsUrl) {
+                        const galleryToken = hashPinTo10Digits(rawPin)
+                        const expectedPhotos = sourcePhotos.length
+                        const readinessDeadline = Date.now() + 20000
+                        let cmsReady = false
+
+                        while (Date.now() < readinessDeadline) {
+                            if (!isMountedRef.current) return
+                            try {
+                                const checkRes = await fetch(
+                                    `${cleanCmsUrl}/api/gallery/${galleryToken}`,
+                                    {
+                                        method: 'GET',
+                                        cache: 'no-store',
+                                        headers: { 'Cache-Control': 'no-cache' },
+                                        signal: AbortSignal.timeout(8000),
+                                    }
+                                )
+                                if (checkRes.ok) {
+                                    const checkData = await checkRes.json()
+                                    const returnedCount = Array.isArray(
+                                        checkData?.photos
+                                    )
+                                        ? checkData.photos.length
+                                        : 0
+                                    if (
+                                        checkData?.success === true &&
+                                        returnedCount >= expectedPhotos &&
+                                        checkData?.syncStatus?.isComplete !== false
+                                    ) {
+                                        cmsReady = true
+                                        break
+                                    }
+                                }
+                            } catch (verifyErr) {
+                                console.warn(
+                                    '[ProcessingScreen] CMS readiness check retry:',
+                                    verifyErr
+                                )
+                            }
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1500)
+                            )
+                        }
+
+                        if (!cmsReady) {
+                            throw new Error(
+                                'Kho ảnh Cloud đang hoàn tất đồng bộ. Vui lòng bấm Thử lại để nhận mã QR.'
+                            )
+                        }
+                    }
                 }
             } else {
                 console.log('[ProcessingScreen] Mã test 1234: đã xử lý & lưu ảnh vào session_1234, không đẩy lên Cloud.')
@@ -323,9 +378,8 @@ export default function ProcessingScreen() {
                 console.warn('[ProcessingScreen] QR generation warning:', qrErr)
             }
 
-            // ── BƯỚC 4: Chuyển Sang Màn Hình Review Cuối Cùng ──
-            // Selfbooth: chờ thêm 15s sau khi đã đẩy lên R2 và sẵn sàng QR để đảm bảo đồng bộ Cloud hoàn toàn
-            const transitionDelayMs = isSelfbooth ? 15000 : 600
+            // ── BƯỚC 4: Chuyển Sang Màn Hình Review Cuối Cùng (chỉ khi CMS đã xác nhận sẵn sàng 100%) ──
+            const transitionDelayMs = 400
             if (isMountedRef.current && !hasNavigatedRef.current) {
                 hasNavigatedRef.current = true
                 if (navTimerRef.current) clearTimeout(navTimerRef.current)

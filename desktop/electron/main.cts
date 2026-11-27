@@ -7,8 +7,8 @@
  */
 
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
 import {
     registerCameraIpc,
     ensureCanonDaemon,
@@ -38,16 +38,63 @@ const VITE_DEV_SERVER_URL =
     process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173'
 
 /**
- * Đọc chế độ Kiosk đã chọn khi cài đặt (từ `resources/kiosk-mode.json`) hoặc từ biến môi trường dev.
+ * Lấy đường dẫn bản sao bền vững `kiosk-mode.json` nằm trong `%APPDATA%\fotolism-desktop`
+ * (không bị trình gỡ cài đặt NSIS xóa khi Auto-Update).
+ */
+function getPersistentKioskModePath(): string | null {
+    try {
+        return join(app.getPath('appData'), 'fotolism-desktop', 'kiosk-mode.json')
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Đồng bộ bản sao bền vững `kiosk-mode.json` trong `%APPDATA%\fotolism-desktop`
+ * để luôn giữ đúng chế độ Photobooth/Selfbooth trước và sau mỗi lần Auto-Update.
+ */
+function syncPersistentKioskMode(mode: 'photobooth' | 'selfbooth'): void {
+    const persistentPath = getPersistentKioskModePath()
+    if (!persistentPath) return
+    try {
+        if (existsSync(persistentPath)) {
+            const existing = JSON.parse(readFileSync(persistentPath, 'utf-8')) as {
+                captureMode?: string
+            }
+            if (existing.captureMode === mode) return
+        }
+        mkdirSync(dirname(persistentPath), { recursive: true })
+        writeFileSync(
+            persistentPath,
+            JSON.stringify({ captureMode: mode }),
+            'utf-8'
+        )
+    } catch {
+        // Không làm gián đoạn khởi động Kiosk nếu không ghi được bản sao dự phòng
+    }
+}
+
+/**
+ * Đọc chế độ Kiosk đã chọn khi cài đặt (từ `resources/kiosk-mode.json`, bản sao bền vững
+ * `%APPDATA%\fotolism-desktop\kiosk-mode.json`, `userData/kiosk-mode.json`) hoặc biến môi trường dev.
  */
 function resolveInstalledKioskMode(): 'photobooth' | 'selfbooth' | undefined {
     if (KIOSK_MODE === 'photobooth' || KIOSK_MODE === 'selfbooth') {
         return KIOSK_MODE
     }
+    const persistentPath = getPersistentKioskModePath()
+    let userDataModePath: string | null = null
+    try {
+        userDataModePath = join(app.getPath('userData'), 'kiosk-mode.json')
+    } catch {
+        userDataModePath = null
+    }
     const candidates = [
         ...(process.resourcesPath
             ? [join(process.resourcesPath, 'kiosk-mode.json')]
             : []),
+        ...(persistentPath ? [persistentPath] : []),
+        ...(userDataModePath ? [userDataModePath] : []),
         join(app.getAppPath(), 'kiosk-mode.json'),
     ]
     for (const filePath of candidates) {
@@ -60,6 +107,7 @@ function resolveInstalledKioskMode(): 'photobooth' | 'selfbooth' | undefined {
                 parsed.captureMode === 'photobooth' ||
                 parsed.captureMode === 'selfbooth'
             ) {
+                syncPersistentKioskMode(parsed.captureMode)
                 return parsed.captureMode
             }
         } catch {
@@ -155,6 +203,9 @@ if (!gotTheLock) {
     })
 
     app.whenReady().then(async () => {
+        // Đồng bộ bản sao bền vững kiosk-mode.json vào %APPDATA%\fotolism-desktop TRƯỚC khi auto-update chạy
+        resolveInstalledKioskMode()
+
         // Kiểm tra & tự cài bản cập nhật mới từ GitHub Releases trước khi vào màn hình Kiosk
         const isInstallingUpdate = await checkAndInstallStartupUpdate(() => {
             stopCanonDaemon()
