@@ -15,7 +15,7 @@ import {
 import { fotolismApi, isBrowser, mockApi } from '../lib/api'
 import { Check } from 'lucide-react'
 import { BRAND_LOGO_SRC } from '../lib/brandLogo'
-import { CANON_DAEMON_BASE_URL } from '../lib/constants'
+import { CANON_DAEMON_BASE_URL, resolveAssetUrl } from '../lib/constants'
 import './SelfboothSetupScreen.css'
 
 export default function SelfboothSetupScreen() {
@@ -222,6 +222,23 @@ export default function SelfboothSetupScreen() {
                                             ? activeFilter.cssFilter
                                             : undefined,
                                     transform: 'scaleX(-1)',
+                                }}
+                            />
+                        )}
+
+                        {activeFilter.id === 'snow' && (
+                            <img
+                                src={resolveAssetUrl('/filters/snow-overlay.png')}
+                                alt=""
+                                aria-hidden="true"
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    pointerEvents: 'none',
+                                    zIndex: 2,
                                 }}
                             />
                         )}

@@ -22,6 +22,7 @@ import {
     DEFAULT_SELFBOOTH_DURATION_SECONDS,
     isRemoteTriggerEvent,
     CANON_DAEMON_BASE_URL,
+    resolveAssetUrl,
 } from '../lib/constants'
 import {
     BeautyCameraView,
@@ -2205,6 +2206,22 @@ export default function CaptureScreen() {
                                     <div
                                         className="retro-film-grain-overlay"
                                         style={{ zIndex: 3 }}
+                                    />
+                                )}
+                                {selectedFilter?.id === 'snow' && (
+                                    <img
+                                        src={resolveAssetUrl('/filters/snow-overlay.png')}
+                                        alt=""
+                                        aria-hidden="true"
+                                        style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            pointerEvents: 'none',
+                                            zIndex: 3,
+                                        }}
                                     />
                                 )}
                                 {/* Thẻ video nguồn dự phòng cấp thấp luôn phát stream camera */}
