@@ -131,6 +131,12 @@ export function cleanFilePath(p?: string): string {
     } else if (cleaned.startsWith('file://')) {
         cleaned = cleaned.slice(7)
     }
+    // Loại bỏ tiền tố đường dẫn mở rộng Windows (\\?\ hoặc //?/ hoặc ?/) và query string cache-bust (?r=...)
+    cleaned = cleaned.replace(/^(\\\\\?\\|\/\/\?\/|\?\/)/, '')
+    const queryIdx = cleaned.indexOf('?')
+    if (queryIdx > 0) {
+        cleaned = cleaned.slice(0, queryIdx)
+    }
     if (/^\/[a-zA-Z]:/.test(cleaned)) {
         cleaned = cleaned.slice(1)
     }
@@ -1338,13 +1344,8 @@ export function registerStorageIpc(): void {
                         }
                     }
 
-                    if (fs.existsSync(finalPairedTarget)) {
-                        finalFilesToEnqueue.push({
-                            imageId: 'final_paired_print',
-                            filePath: finalPairedTarget,
-                            isFinal: true,
-                        })
-                    }
+                    // Bản scale/ghép đôi (_scaled / _paired_4x6) chỉ lưu cục bộ phục vụ in ấn DNP,
+                    // không đẩy lên Cloud R2 để khách quét QR chỉ nhận đúng ảnh final chuẩn (fotolism_final_4x6 / fotolism_final_2x6).
                 }
 
                 // 3. Đẩy folder final này lên R2 (bỏ qua nếu là phiên test 1234 của Photobooth; Selfbooth luôn đẩy)

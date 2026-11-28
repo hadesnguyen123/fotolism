@@ -47,7 +47,13 @@ export function toFileUrl(filePath?: string | null): string {
     if (!trimmed) return ''
     if (/^(data:|blob:|https?:|\.\/)/i.test(trimmed)) return trimmed
     if (/^\/backup-slots\//i.test(trimmed)) return `.${trimmed}`
-    const stripped = trimmed.replace(/^file:\/+/i, '').replace(/\\/g, '/').replace(/^\/+/, '')
+    // Loại bỏ tiền tố đường dẫn mở rộng Windows (\\?\ hoặc //?/ hoặc ?/) trước khi tạo file:///
+    const stripped = trimmed
+        .replace(/^file:\/+/i, '')
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '')
+        .replace(/^\?\//, '')
+        .replace(/^\/+/, '')
     if (!stripped) return ''
     return `file:///${stripped}`
 }
@@ -63,9 +69,13 @@ export function fromFileUrl(value?: string | null): string {
     const trimmed = (value || '').trim()
     if (!trimmed || /^(data:|blob:|https?:|\.\/)/i.test(trimmed)) return ''
     if (/^file:/i.test(trimmed)) {
-        return trimmed.replace(/^file:\/+/i, '').replace(/^\/+/, '')
+        return trimmed
+            .replace(/^file:\/+/i, '')
+            .replace(/^\/+/, '')
+            .replace(/^\?\//, '')
+            .replace(/^\/+/, '')
     }
-    return trimmed
+    return trimmed.replace(/^(\\\\\?\\|\/\/\?\/|\?\/)/, '')
 }
 
 /**

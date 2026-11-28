@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import {
     DEFAULT_EVENT_NAME,
     DEFAULT_ADMIN_PIN,
+    DEFAULT_STAFF_PAYMENT_PIN,
     DEFAULT_ACCOUNT_HOLDER,
     DEFAULT_BANK_BIN,
     DEFAULT_BANK_NAME,
@@ -53,6 +54,7 @@ export interface EventConfig {
     timelapseSpeed: number
     saveDirectory: string
     adminPin: string
+    staffPaymentPin: string
 }
 
 /**
@@ -112,6 +114,7 @@ export const DEFAULT_EVENT_CONFIG: EventConfig = {
     timelapseSpeed: DEFAULT_TIMELAPSE_SPEED,
     saveDirectory: SAVE_ROOT_DIR,
     adminPin: DEFAULT_ADMIN_PIN,
+    staffPaymentPin: DEFAULT_STAFF_PAYMENT_PIN,
 }
 
 export function loadSavedEventConfig(): Partial<EventConfig> {

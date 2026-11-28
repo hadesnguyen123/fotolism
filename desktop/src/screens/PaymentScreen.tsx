@@ -12,6 +12,7 @@ import { calculateCouponsDiscount } from '../config/coupons'
 import {
     DEFAULT_ACCOUNT_HOLDER,
     DEFAULT_ADMIN_PIN,
+    DEFAULT_STAFF_PAYMENT_PIN,
     DEFAULT_BANK_BIN,
     DEFAULT_BANK_NAME,
     DEFAULT_ACCOUNT_NUMBER,
@@ -250,8 +251,9 @@ export default function PaymentScreen() {
         setCurrentQrUrl(localVietQrUrl || sepayQrUrl)
     }, [localVietQrUrl, sepayQrUrl])
 
-    // Đếm ngược phiên thanh toán (1p30s) — hết giờ tự động quay lại màn chờ
+    // Photobooth: không đếm ngược thời gian thanh toán; chỉ giữ đếm ngược nếu chạy chế độ khác
     useEffect(() => {
+        if (eventConfig.captureMode !== 'selfbooth') return
         if (paymentSuccess) return
         if (secondsLeft <= 0) {
             setScreen('welcome')
@@ -262,7 +264,7 @@ export default function PaymentScreen() {
         }, 1000)
 
         return () => clearInterval(timer)
-    }, [secondsLeft, paymentSuccess, setScreen])
+    }, [secondsLeft, paymentSuccess, setScreen, eventConfig.captureMode])
 
     function formatCountdown(sec: number): string {
         const mins = Math.floor(sec / 60)
@@ -323,18 +325,12 @@ export default function PaymentScreen() {
         setScreen,
     ])
 
-    // Xác nhận bởi nhân viên qua mã PIN
+    // Xác nhận bởi nhân viên qua mã PIN riêng (mặc định 88664422, có thể thay đổi trong Admin)
     async function handleVerifyStaffPin(pinInput: string) {
-        const validPin = eventConfig.adminPin || '888888'
-        const allowedPins = [
-            validPin,
-            '888888',
-            '8888',
-            '123456',
-            '9999',
-            '1234',
-        ]
-        if (allowedPins.includes(pinInput.trim())) {
+        const expectedPin = (
+            eventConfig.staffPaymentPin || DEFAULT_STAFF_PAYMENT_PIN
+        ).trim()
+        if (pinInput.trim() === expectedPin) {
             setShowStaffPinModal(false)
             setStaffPinError(false)
             setPaymentSuccess(true)

@@ -52,6 +52,9 @@ export const APP_DOMAIN = 'fotolism.app'
 /** Mã PIN quản trị mặc định (Có thể thiết lập mã PIN riêng trong Cài Đặt) */
 export const DEFAULT_ADMIN_PIN = '8888'
 
+/** Mã PIN nhân viên mặc định tại màn hình thanh toán (Có thể thay đổi trong Admin) */
+export const DEFAULT_STAFF_PAYMENT_PIN = '88664422'
+
 // ── 3. File System & Storage ──
 /** Tên thư mục lưu ảnh */
 export const SAVE_FOLDER_NAME = 'Fotolism_image'

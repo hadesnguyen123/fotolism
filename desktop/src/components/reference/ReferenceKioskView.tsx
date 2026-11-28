@@ -1861,7 +1861,12 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                 </p>
               </div>
 
-              <div className="timer-shell" data-node-id="0:328">
+              <div
+                className="timer-shell"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+                data-node-id="0:328"
+              >
                 <div className="timer-oval-img" data-node-id="0:329">
                   <img alt="" src={`${REFERENCE_ASSET_BASE}p_ellipse4.svg`} />
                 </div>

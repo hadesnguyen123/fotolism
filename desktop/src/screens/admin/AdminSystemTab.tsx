@@ -15,7 +15,10 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { fotolismApi, isBrowser } from '../../lib/api'
-import { ENV_CMS_URL } from '../../lib/constants'
+import {
+    DEFAULT_STAFF_PAYMENT_PIN,
+    ENV_CMS_URL,
+} from '../../lib/constants'
 
 interface AdminSystemTabProps {
     isNetworkOnline: boolean
@@ -34,7 +37,7 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
     isCopiedToken,
     handleCopyToken,
 }) => {
-    const { deviceConfig, setDeviceConfig } =
+    const { deviceConfig, setDeviceConfig, eventConfig, setEventConfig } =
         useAppStore()
 
     const [shutterSoundEnabled, setShutterSoundEnabled] =
@@ -42,7 +45,26 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
     const [countdownSoundEnabled, setCountdownSoundEnabled] =
         useState<boolean>(true)
     const [showToken, setShowToken] = useState<boolean>(false)
+    const [showStaffPin, setShowStaffPin] = useState<boolean>(false)
+    const [staffPinInput, setStaffPinInput] = useState<string>(
+        () => eventConfig.staffPaymentPin || DEFAULT_STAFF_PAYMENT_PIN
+    )
+    const [staffPinSavedNotice, setStaffPinSavedNotice] = useState<
+        string | null
+    >(null)
     const [heartbeatInterval, setHeartbeatInterval] = useState<number>(30)
+
+    const handleSaveStaffPaymentPin = () => {
+        const cleaned = staffPinInput.replace(/\D/g, '').slice(0, 8)
+        if (cleaned.length < 4) {
+            setStaffPinSavedNotice('Mã PIN phải gồm từ 4 đến 8 chữ số.')
+            return
+        }
+        setStaffPinInput(cleaned)
+        setEventConfig({ staffPaymentPin: cleaned })
+        setStaffPinSavedNotice('Đã lưu mã PIN nhân viên thành công.')
+        setTimeout(() => setStaffPinSavedNotice(null), 3000)
+    }
 
     // Cloudflare R2 Upload Worker State
     const [r2QueueStats, setR2QueueStats] = useState<{
@@ -108,6 +130,116 @@ export const AdminSystemTab: React.FC<AdminSystemTabProps> = ({
                     <Cpu size={28} strokeWidth={2.4} />
                     <h2 className="tab-pane-title">Hệ Thống</h2>
                 </div>
+            </div>
+
+            {/* ── Card 1b: Mã PIN Nhân Viên Xác Nhận Thanh Toán ── */}
+            <div className="panel-card-touch">
+                <div className="panel-card-header">
+                    <div className="panel-title-group">
+                        <Shield size={24} strokeWidth={2.2} />
+                        <span className="panel-title-text">
+                            Mã PIN Nhân Viên (Màn Thanh Toán)
+                        </span>
+                    </div>
+                </div>
+
+                <div
+                    style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: '12px',
+                    }}
+                >
+                    <div
+                        style={{
+                            position: 'relative',
+                            flex: '1 1 240px',
+                            maxWidth: '340px',
+                        }}
+                    >
+                        <input
+                            type={showStaffPin ? 'text' : 'password'}
+                            inputMode="numeric"
+                            maxLength={8}
+                            value={staffPinInput}
+                            onChange={(e) =>
+                                setStaffPinInput(
+                                    e.target.value.replace(/\D/g, '').slice(0, 8)
+                                )
+                            }
+                            placeholder={DEFAULT_STAFF_PAYMENT_PIN}
+                            className="form-select-touch"
+                            style={{
+                                width: '100%',
+                                paddingRight: '44px',
+                                letterSpacing: showStaffPin ? '2px' : '4px',
+                                fontWeight: 700,
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowStaffPin((v) => !v)}
+                            aria-label={showStaffPin ? 'Ẩn mã PIN' : 'Hiện mã PIN'}
+                            style={{
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#6b4f45',
+                                display: 'flex',
+                                alignItems: 'center',
+                            }}
+                        >
+                            {showStaffPin ? (
+                                <EyeOff size={18} />
+                            ) : (
+                                <Eye size={18} />
+                            )}
+                        </button>
+                    </div>
+                    <button
+                        type="button"
+                        className="btn-touch-primary"
+                        onClick={handleSaveStaffPaymentPin}
+                        style={{ minWidth: '140px' }}
+                    >
+                        Lưu mã PIN
+                    </button>
+                    <button
+                        type="button"
+                        className="btn-touch-outline"
+                        onClick={() => {
+                            setStaffPinInput(DEFAULT_STAFF_PAYMENT_PIN)
+                            setEventConfig({
+                                staffPaymentPin: DEFAULT_STAFF_PAYMENT_PIN,
+                            })
+                            setStaffPinSavedNotice(
+                                `Đã khôi phục mặc định (${DEFAULT_STAFF_PAYMENT_PIN}).`
+                            )
+                            setTimeout(() => setStaffPinSavedNotice(null), 3000)
+                        }}
+                    >
+                        Mặc định ({DEFAULT_STAFF_PAYMENT_PIN})
+                    </button>
+                </div>
+                {staffPinSavedNotice && (
+                    <p
+                        style={{
+                            marginTop: '10px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: staffPinSavedNotice.includes('phải')
+                                ? '#d9480f'
+                                : '#2b8a3e',
+                        }}
+                    >
+                        {staffPinSavedNotice}
+                    </p>
+                )}
             </div>
 
             {/* ── Card 2: Âm Thanh & Đếm Ngược ── */}

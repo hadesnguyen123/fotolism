@@ -417,6 +417,8 @@ export function registerWindowAndConfigIpc(): void {
                 if (!result.success || result.data?.status !== 'processed' || !result.data?.enhancedPath) {
                     return { success: false, error: result.error || result.data?.message || 'AI chưa xử lý ảnh thành công' }
                 }
+                // Loại bỏ tiền tố đường dẫn mở rộng Windows (\\?\) mà Python Path.resolve() có thể trả về
+                result.data.enhancedPath = result.data.enhancedPath.replace(/^\\\\\?\\/, '')
 
                 // Retry ngắn khi Windows Defender/AV tạm khóa file vừa os.replace gây EBUSY/EPERM/stat lỗi tức thời
                 let lastVerifyErr: any = null

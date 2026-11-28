@@ -70,13 +70,13 @@ export default function NumericKeypadModal({
             if (isLoading || successMessage) return
             setValue((prev) => {
                 const next = prev.length < maxLength ? prev + digit : prev
-                if (next === '1234') {
+                if (!mask && next === '1234') {
                     setTimeout(() => onSubmit('1234'), 50)
                 }
                 return next
             })
         },
-        [isLoading, successMessage, maxLength, onSubmit]
+        [isLoading, successMessage, maxLength, mask, onSubmit]
     )
 
     // Xóa 1 chữ số cuối
