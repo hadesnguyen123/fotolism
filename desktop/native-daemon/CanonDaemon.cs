@@ -129,6 +129,15 @@ namespace FotolismCanonDaemon {
         private static readonly List<StructuredLog> RecentLogs = new List<StructuredLog>();
         private static readonly object LogsLock = new object();
 
+        // Cached camera telemetry updated strictly on the Main STA Thread (EDSDK is NOT thread-safe)
+        private static uint CachedAeMode = 0;
+        private static uint CachedTv = 0;
+        private static uint CachedAv = 0;
+        private static uint CachedIso = 0;
+        private static uint CachedBattery = 0;
+        private static DateTime LastTelemetryRefresh = DateTime.MinValue;
+        private static volatile bool WakeRequested = false;
+
         /// <summary>
         /// Ghi nhật ký có cấu trúc JSON ra console và lưu đệm 60 bản ghi gần nhất phục vụ endpoint /diagnostics.
         /// </summary>
@@ -347,14 +356,35 @@ namespace FotolismCanonDaemon {
             while (!ShouldExit) {
                 EnsureCameraConnected(ref backoffMs);
 
-                // Anti-sleep keepalive: every 15s send ExtendShutDownTimer
-                if (CurrentState != CameraState.DISCONNECTED && CameraRef != IntPtr.Zero && (DateTime.Now - lastKeepAlive).TotalSeconds > 15) {
+                // Anti-sleep keepalive & deferred /wake command: execute strictly on Main STA Thread
+                if (CurrentState != CameraState.DISCONNECTED && CameraRef != IntPtr.Zero && (WakeRequested || (DateTime.Now - lastKeepAlive).TotalSeconds > 15)) {
+                    WakeRequested = false;
                     uint extErr = EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
                     if (extErr == 0x00000061 || extErr == 0x00002003) {
                         Log("WARN", "KEEPALIVE_INVALID_HANDLE", "ExtendShutDownTimer returned invalid handle (0x" + extErr.ToString("X8") + "). Triggering reconnect.");
                         TriggerCameraReset("KeepAlive invalid handle");
                     }
                     lastKeepAlive = DateTime.Now;
+                }
+
+                // Refresh camera properties strictly on STA thread every 2s when idle
+                if (CameraRef != IntPtr.Zero && (CurrentState == CameraState.READY || CurrentState == CameraState.LIVEVIEW) && (DateTime.Now - LastTelemetryRefresh).TotalSeconds >= 2.0) {
+                    LastTelemetryRefresh = DateTime.Now;
+                    uint ae = 0, tv = 0, av = 0, iso = 0, bat = 0;
+                    uint pErr = EdsGetPropertyData(CameraRef, kEdsPropID_AEModeSelect, 0, sizeof(uint), out ae);
+                    if (pErr == 0x00000061 || pErr == 0x00002003) {
+                        TriggerCameraReset("Telemetry query invalid handle 0x" + pErr.ToString("X8"));
+                    } else if (pErr == 0) {
+                        EdsGetPropertyData(CameraRef, kEdsPropID_Tv, 0, sizeof(uint), out tv);
+                        EdsGetPropertyData(CameraRef, kEdsPropID_Av, 0, sizeof(uint), out av);
+                        EdsGetPropertyData(CameraRef, kEdsPropID_ISOSpeed, 0, sizeof(uint), out iso);
+                        EdsGetPropertyData(CameraRef, kEdsPropID_BatteryLevel, 0, sizeof(uint), out bat);
+                        CachedAeMode = ae;
+                        CachedTv = tv;
+                        CachedAv = av;
+                        CachedIso = iso;
+                        CachedBattery = bat;
+                    }
                 }
 
                 // Check Command Queue for Shutter Trigger
@@ -385,6 +415,15 @@ namespace FotolismCanonDaemon {
         /// Chạy độc quyền trên luồng chính STA để tuân thủ luồng COM/PTP của Canon EDSDK.
         /// </summary>
         static void ExecuteShutter(CaptureRecord job) {
+            // Bỏ qua các lệnh đã hết hạn chờ HTTP (> 10s trong hàng đợi) để tránh tồn đọng gây chụp muộn/nghẽn
+            if ((DateTime.Now - job.CreatedAt).TotalSeconds > 10.0) {
+                job.Status = CaptureStatus.TIMED_OUT;
+                job.ErrorMessage = "Capture request expired in queue before execution";
+                job.DoneEvent.Set();
+                Log("WARN", "CAPTURE_EXPIRED_IN_QUEUE", "Skipping stale queued capture", job.SessionId, job.CaptureId);
+                return;
+            }
+
             if (CurrentState == CameraState.DISCONNECTED || CameraRef == IntPtr.Zero) {
                 job.Status = CaptureStatus.FAILED;
                 job.ErrorMessage = "Camera is disconnected. Shutter rejected.";
@@ -410,6 +449,16 @@ namespace FotolismCanonDaemon {
             uint errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely_NonAF);
             Log("INFO", "SHUTTER_RESULT", "Shutter command returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
 
+            // Nếu máy đang bận kéo EVF hoặc xả buffer (0x81 DeviceBusy), nhả nút và thử lại tối đa 2 lần
+            for (int busyRetry = 1; busyRetry <= 2 && errShoot == 0x00000081; busyRetry++) {
+                Log("WARN", "CAMERA_BUSY", string.Format("Camera returned 0x81 (DeviceBusy). Retry {0}/2 after releasing shutter...", busyRetry), job.SessionId, job.CaptureId);
+                EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
+                EdsGetEvent();
+                Thread.Sleep(150);
+                errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely_NonAF);
+                Log("INFO", "SHUTTER_RETRY_RESULT", string.Format("Shutter retry {0}/2 returned: 0x{1:X8}", busyRetry, errShoot), job.SessionId, job.CaptureId);
+            }
+
             if (errShoot == 0x00000061 || errShoot == 0x00002003) {
                 Log("ERROR", "SHUTTER_INVALID_HANDLE", "Shutter command failed with invalid handle. Triggering reconnect.", job.SessionId, job.CaptureId);
                 TriggerCameraReset("Shutter invalid handle 0x" + errShoot.ToString("X8"));
@@ -434,27 +483,32 @@ namespace FotolismCanonDaemon {
                     ActiveCapture = null;
                     ActiveTmpPath = "";
                 }
+                CurrentState = CameraState.READY;
                 job.DoneEvent.Set();
                 return;
             }
 
-            // If camera was busy pulling EVF frame (0x00000081 DeviceBusy), release and retry ONCE after 60ms
-            if (errShoot == 0x00000081) {
-                Log("WARN", "CAMERA_BUSY", "Camera returned 0x81 (DeviceBusy). Pausing 60ms and retrying once...", job.SessionId, job.CaptureId);
-                Thread.Sleep(60);
+            // Nếu lệnh nhấn cò vẫn trả lỗi khác 0 -> thoát sớm và reset session thay vì treo 6s chờ sự kiện không bao giờ tới
+            if (errShoot != 0) {
+                Log("ERROR", "SHUTTER_COMMAND_FAILED", "Shutter command failed with 0x" + errShoot.ToString("X8") + ". Resetting EDSDK session.", job.SessionId, job.CaptureId);
                 EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
-                Thread.Sleep(30);
-                errShoot = EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely_NonAF);
-                Log("INFO", "SHUTTER_RETRY_RESULT", "Shutter retry returned: 0x" + errShoot.ToString("X8"), job.SessionId, job.CaptureId);
+                job.Status = CaptureStatus.FAILED;
+                job.ErrorMessage = "Canon shutter command failed (0x" + errShoot.ToString("X8") + ")";
+                FailedCapturesCount++;
+                lock (ActiveCaptureLock) {
+                    ActiveCapture = null;
+                    ActiveTmpPath = "";
+                }
+                TriggerCameraReset("Shutter error 0x" + errShoot.ToString("X8"));
+                job.DoneEvent.Set();
+                return;
             }
 
             shutterSw.Stop();
             job.ShutterLatencyMs = shutterSw.ElapsedMilliseconds;
 
-            // Wait for transfer event callback with timeout
-            // Typical EOS R100 exposure + USB transfer is ~1.0 - 1.4 seconds.
-            // Timeout limit: 6.0 seconds.
-            int pollSteps = 120; // 120 * 50ms = 6000ms
+            // Wait for transfer event callback with timeout (5.5s < 9.5s HTTP wait so DoneEvent always fires first)
+            int pollSteps = 110; // 110 * 50ms = 5500ms
             for (int i = 0; i < pollSteps; i++) {
                 EdsGetEvent();
                 if (job.Status == CaptureStatus.COMPLETED || job.Status == CaptureStatus.FAILED) break;
@@ -473,10 +527,12 @@ namespace FotolismCanonDaemon {
             totalSw.Stop();
             job.TotalLatencyMs = totalSw.ElapsedMilliseconds;
 
+            bool timedOut = false;
             if (job.Status != CaptureStatus.COMPLETED) {
                 if (job.Status == CaptureStatus.CAPTURING || job.Status == CaptureStatus.TRANSFERRING) {
                     job.Status = CaptureStatus.TIMED_OUT;
-                    job.ErrorMessage = "Timeout: File transfer did not complete within 6000ms";
+                    job.ErrorMessage = "Timeout: File transfer did not complete within 5500ms";
+                    timedOut = true;
                     try { if (File.Exists(ActiveTmpPath)) File.Delete(ActiveTmpPath); } catch {}
                 }
                 FailedCapturesCount++;
@@ -492,8 +548,12 @@ namespace FotolismCanonDaemon {
                 ActiveTmpPath = "";
             }
 
-            // Restore Live View / Ready State
-            CurrentState = CameraState.READY;
+            // Nếu phiên chụp bị treo không trả file -> reset EDSDK session ngay để lần chụp lại kế tiếp kết nối sạch
+            if (timedOut) {
+                TriggerCameraReset("Capture transfer timeout");
+            } else {
+                CurrentState = CameraState.READY;
+            }
             job.DoneEvent.Set();
         }
 
@@ -645,26 +705,14 @@ namespace FotolismCanonDaemon {
 
                 // ─── 1. STATUS & CAMERA DIAGNOSTICS (FR-01, FR-09) ───────────────────
                 if (path == "/status") {
-                    uint aeMode = 0, tv = 0, av = 0, iso = 0, battery = 0;
-                    if (CameraRef != IntPtr.Zero && (CurrentState == CameraState.READY || CurrentState == CameraState.LIVEVIEW)) {
-                        uint pErr = EdsGetPropertyData(CameraRef, kEdsPropID_AEModeSelect, 0, sizeof(uint), out aeMode);
-                        if (pErr == 0x00000061 || pErr == 0x00002003) {
-                            TriggerCameraReset("Status query invalid handle 0x" + pErr.ToString("X8"));
-                        } else {
-                            EdsGetPropertyData(CameraRef, kEdsPropID_Tv, 0, sizeof(uint), out tv);
-                            EdsGetPropertyData(CameraRef, kEdsPropID_Av, 0, sizeof(uint), out av);
-                            EdsGetPropertyData(CameraRef, kEdsPropID_ISOSpeed, 0, sizeof(uint), out iso);
-                            EdsGetPropertyData(CameraRef, kEdsPropID_BatteryLevel, 0, sizeof(uint), out battery);
-                        }
-                    }
-
-                    bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.ERROR && CurrentState != CameraState.RECOVERING);
+                    // Đọc hoàn toàn từ bộ đệm được cập nhật trên luồng STA chính, tuyệt đối không gọi EDSDK từ ThreadPool
+                    bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.CONNECTING && CurrentState != CameraState.ERROR && CurrentState != CameraState.RECOVERING);
                     string json = string.Format(
                         "{{\"connected\":{0},\"evfReady\":{1},\"cameraState\":\"{2}\",\"aeMode\":{3},\"tv\":\"0x{4:X}\",\"av\":\"0x{5:X}\",\"iso\":\"0x{6:X}\",\"battery\":{7},\"fps\":{8:F1},\"latencyMs\":{9},\"reconnectCount\":{10}}}",
                         isConn ? "true" : "false",
                         (LatestEvfFrame != null && isConn) ? "true" : "false",
                         CurrentState.ToString(),
-                        aeMode, tv, av, iso, battery,
+                        CachedAeMode, CachedTv, CachedAv, CachedIso, CachedBattery,
                         MeasuredEvfFps, MeasuredEvfLatencyMs, ReconnectCount
                     );
                     SendJson(ctx, json, isHead);
@@ -672,21 +720,18 @@ namespace FotolismCanonDaemon {
                 }
 
                 if (path == "/wake" || path == "/api/camera/wake") {
-                    bool awakened = false;
-                    if (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING) {
-                        uint extErr = EdsSendCommand(CameraRef, kEdsCameraCommand_ExtendShutDownTimer, 0);
-                        awakened = (extErr == 0);
-                        Log("INFO", "WAKE_REQUEST", "Wake command sent: ExtendShutDownTimer returned 0x" + extErr.ToString("X8"));
-                        if (extErr == 0x00000061 || extErr == 0x00002003) {
-                            TriggerCameraReset("Wake invalid handle");
-                        }
+                    bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING);
+                    if (isConn) {
+                        // Ủy quyền lệnh ExtendShutDownTimer về luồng STA chính để đảm bảo an toàn luồng EDSDK
+                        WakeRequested = true;
+                        Log("INFO", "WAKE_REQUEST", "Wake command queued for STA thread.");
                     } else {
                         Log("INFO", "WAKE_DISCONNECTED", "Wake requested while camera disconnected. Forcing rapid reconnect poll.");
                     }
                     string wakeJson = string.Format(
                         "{{\"success\":{0},\"connected\":{1},\"cameraState\":\"{2}\"}}",
-                        awakened ? "true" : "false",
-                        (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.RECOVERING) ? "true" : "false",
+                        isConn ? "true" : "false",
+                        isConn ? "true" : "false",
                         CurrentState.ToString()
                     );
                     SendJson(ctx, wakeJson, isHead);
@@ -836,8 +881,8 @@ namespace FotolismCanonDaemon {
                     IdempotencyMap[captureId] = newJob;
                     CommandQueue.Enqueue(newJob);
 
-                    // Wait for completion (up to 7 seconds)
-                    bool finished = newJob.DoneEvent.WaitOne(7000);
+                    // Wait for completion (up to 9.5 seconds > 5.5s ExecuteShutter timeout)
+                    bool finished = newJob.DoneEvent.WaitOne(9500);
 
                     string responseJson;
                     if (finished && newJob.Status == CaptureStatus.COMPLETED) {
@@ -851,7 +896,7 @@ namespace FotolismCanonDaemon {
                             newJob.TransferLatencyMs
                         );
                     } else {
-                        string err = finished ? (newJob.ErrorMessage ?? "Capture execution failed") : "Timeout: Camera daemon did not finish within 7000ms";
+                        string err = finished ? (newJob.ErrorMessage ?? "Capture execution failed") : "Timeout: Camera daemon did not finish within 9500ms";
                         responseJson = string.Format(
                             "{{\"success\":false,\"status\":\"{0}\",\"idempotent\":false,\"captureId\":\"{1}\",\"error\":\"{2}\"}}",
                             newJob.Status.ToString(), newJob.CaptureId, err.Replace("\\", "\\\\").Replace("\"", "\\\"")

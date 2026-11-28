@@ -604,7 +604,12 @@ export function registerCameraIpc(): void {
                         }
 
                         if (attempt < 2) {
-                            await new Promise((r) => setTimeout(r, 350))
+                            // Nếu daemon vừa reset phiên EDSDK sau lỗi/timeout, chờ máy ảnh kết nối lại (tối đa ~2.5s) trước khi chụp lại
+                            await new Promise((r) => setTimeout(r, 400))
+                            for (let wait = 0; wait < 8; wait++) {
+                                if (await checkCanonDaemon()) break
+                                await new Promise((r) => setTimeout(r, 250))
+                            }
                         }
                     }
 
