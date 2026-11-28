@@ -98,12 +98,24 @@ async function loadSlotImageWithFallback(
     }
 
     let lastErr: unknown
-    for (const cand of candidates) {
+    for (let idx = 0; idx < candidates.length; idx++) {
+        const cand = candidates[idx]
         try {
             return await loadImage(cand)
         } catch (err) {
-            lastErr = err
-            console.warn(`[canvasCompositor] Candidate failed (${cand}), trying next fallback:`, err)
+            // Với ứng viên ưu tiên đầu tiên (ảnh AI trong final/), thử tải lại 1 lần sau 200ms trước khi rơi xuống ảnh gốc raw/
+            if (idx === 0 && /^file:\/\//i.test(cand)) {
+                try {
+                    await new Promise((r) => setTimeout(r, 200))
+                    const bustUrl = `${cand}${cand.includes('?') ? '&' : '?'}r=${Date.now()}`
+                    return await loadImage(bustUrl)
+                } catch (retryErr) {
+                    lastErr = retryErr
+                }
+            } else {
+                lastErr = err
+            }
+            console.warn(`[canvasCompositor] Candidate failed (${cand}), trying next fallback:`, lastErr)
         }
     }
     throw lastErr || new Error('All photo candidates failed to load')
@@ -551,10 +563,10 @@ export function sampleImageEdgeColor(img: CanvasImageSource): string {
 // Kích thước pixel gốc @ 600 DPI của khổ `PR (4x6)` trên driver DNP DS-RX1 (PageBounds = 413 x 615 trăm-inch)
 const DNP_PR_4X6_W = 2478
 const DNP_PR_4X6_H = 3690
-// Vùng hiển thị thiết kế trên canvas 2478x3690:
-// - Ngang 2376px (mỗi dải 2x6 = 1188px) -> chừa 51px (~2.16mm) mỗi bên trái/phải (đã bù thêm +0.5mm/bên chống lẹm thực tế của DS-RX1)
+// Vùng hiển thị thiết kế chuẩn 4x6 @ 600 DPI trên canvas 2478x3690:
+// - Ngang 2400px (mỗi dải 2x6 = 1200px) -> chừa 39px (~1.65mm) mỗi bên trái/phải
 // - Dọc 3600px -> chừa 45px (~1.90mm) mỗi đầu trên/dưới
-const PHYSICAL_4X6_W = 2376
+const PHYSICAL_4X6_W = 2400
 const PHYSICAL_4X6_H = 3600
 
 /**

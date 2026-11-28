@@ -329,7 +329,7 @@ export default function ReferenceKioskView(props: ReferenceProps) {
   // Screen 6: Frame & Filter state
   const [selectedFrameIdx, setSelectedFrameIdx] = useReferenceState<number>(props, "selectedFrameIdx", 0);
   const [selectedFilterIdx, setSelectedFilterIdx] = useReferenceState<number>(props, "selectedFilterIdx", 0);
-  const [photoOffsets, setPhotoOffsets] = useReferenceState<{ x: number; y: number }[]>(props, "photoOffsets", [
+  const [photoOffsets] = useReferenceState<{ x: number; y: number }[]>(props, "photoOffsets", [
     { x: 0, y: 0 },
     { x: 0, y: 0 },
     { x: 0, y: 0 },
@@ -394,34 +394,13 @@ export default function ReferenceKioskView(props: ReferenceProps) {
   const triggerCaptureSlot = (slotIdx: number) => props.onCapture?.(slotIdx);
   const handleStartShoot = () => props.onCapture?.();
 
+  // Khóa toàn bộ thao tác kéo căn chỉnh vị trí ảnh trong ô (ngang & dọc)
   const handleSlotPointerDown = (
-    index: number,
-    e: React.PointerEvent<HTMLDivElement>
-  ) => {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDraggingSlot({
-      index,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: photoOffsets[index].x,
-      origY: photoOffsets[index].y,
-    });
-  };
+    _index: number,
+    _e: React.PointerEvent<HTMLDivElement>
+  ) => {};
 
-  const handleGlobalMouseMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingSlot) return;
-    const dx = (e.clientX - draggingSlot.startX) / viewport.scale;
-    const dy = (e.clientY - draggingSlot.startY) / viewport.scale;
-    setPhotoOffsets((prev) => {
-      const next = [...prev];
-      next[draggingSlot.index] = {
-        x: Math.max(-45, Math.min(45, draggingSlot.origX + dx)),
-        y: Math.max(-35, Math.min(35, draggingSlot.origY + dy)),
-      };
-      return next;
-    });
-  };
+  const handleGlobalMouseMove = (_e: React.PointerEvent<HTMLDivElement>) => {};
 
   const handleGlobalMouseUp = () => {
     if (draggingSlot) setDraggingSlot(null);
@@ -2865,10 +2844,9 @@ export default function ReferenceKioskView(props: ReferenceProps) {
                         height: 123.711,
                         borderRadius: 3.256,
                         overflow: 'hidden',
-                        cursor: 'grab', touchAction: 'none',
+                        cursor: 'default',
                       }}
                       data-node-id={nodeIds[slotIdx]}
-                      title="Kéo để căn chỉnh vị trí ảnh"
                     >
                       <img
                         alt=""

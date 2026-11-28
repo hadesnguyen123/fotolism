@@ -11,7 +11,12 @@ import {
     generateStripComposite,
     preparePrintImageForDNP,
 } from '../lib/canvasCompositor'
-import { buildPhotoUrlCandidates } from '../lib/photoboothSlotIntegrity'
+import {
+    buildPhotoUrlCandidates,
+    fromFileUrl,
+    toFileUrl,
+} from '../lib/photoboothSlotIntegrity'
+import { isPhotoEnhanced } from '../lib/enhanceState'
 import { fotolismApi, isBrowser as isBrowserEnv, mockApi } from '../lib/api'
 import { cloudSyncService } from '../services/cloudSyncService'
 import {
@@ -61,7 +66,12 @@ export default function ProcessingScreen() {
             useAppStore.getState().setIsSyncingMedia(true)
             useAppStore.getState().setMediaSyncError(null)
 
-            const photos = session?.photos || []
+            const api = isBrowser ? mockApi : fotolismApi
+            const sessionId = formatLocalSessionFolder(
+                session?.pinCode || session?.sessionId
+            )
+
+            let photos = session?.photos || []
             let stripUrl: string | null = null
 
             let pairedPrintUrl: string | null = null
@@ -69,6 +79,108 @@ export default function ProcessingScreen() {
                 useAppStore.getState().printScale || DEFAULT_PRINT_SCALE
 
             if (!isSelfbooth) {
+                // Trước khi ghép dải ảnh thành phẩm, đảm bảo mọi ô không phải backup đều dùng đúng file AI trong `final/`
+                // (phục hồi nếu file enhance đã tồn tại trên đĩa hoặc retry enhance 1 lần nếu CaptureScreen bị fallback về `raw/`).
+                if (!isBrowser && photos.length > 0) {
+                    let rootDir = 'F:\\Fotolism_image'
+                    try {
+                        const dlRes = await api.storage.getDownloadsPath()
+                        if (dlRes?.success && dlRes?.data?.path) {
+                            rootDir = dlRes.data.path
+                        }
+                    } catch {}
+
+                    let recoveredAny = false
+                    const resolvedPhotos = await Promise.all(
+                        photos.map(async (p, idx) => {
+                            if (!p || p.isBackup) return p
+                            const enhDisk = fromFileUrl(p.enhancedPath)
+                            const isInFinalDir = Boolean(
+                                enhDisk && /[\\/]final[\\/]/i.test(enhDisk)
+                            )
+                            if (isPhotoEnhanced(p) && isInFinalDir) {
+                                return p
+                            }
+
+                            const expectedEnhPath = `${rootDir}\\sessions\\${sessionId}\\final\\fotolism_enhanced_${idx + 1}_${p.timestamp || Date.now()}.jpg`
+                            try {
+                                const diskCheck =
+                                    await api.storage.verifyFile(
+                                        expectedEnhPath
+                                    )
+                                if (
+                                    diskCheck?.success &&
+                                    diskCheck?.data?.exists
+                                ) {
+                                    const recoveredUrl = toFileUrl(
+                                        diskCheck.data.resolvedPath ||
+                                            expectedEnhPath
+                                    )
+                                    recoveredAny = true
+                                    console.log(
+                                        `[ProcessingScreen] Phục hồi ảnh AI từ final/ cho ô ${idx + 1} trước khi ghép dải: ${recoveredUrl}`
+                                    )
+                                    return {
+                                        ...p,
+                                        enhancedPath: recoveredUrl,
+                                        compositedPath: recoveredUrl,
+                                        enhanceStatus: 'processed' as const,
+                                    }
+                                }
+                            } catch {}
+
+                            const rawDisk = fromFileUrl(p.rawPath)
+                            if (rawDisk) {
+                                try {
+                                    const enhRes = await api.ai.enhance(
+                                        rawDisk,
+                                        50,
+                                        'white_pink_v2',
+                                        'natural',
+                                        expectedEnhPath
+                                    )
+                                    if (
+                                        enhRes?.success &&
+                                        enhRes?.data?.enhancedPath
+                                    ) {
+                                        const checkEnh =
+                                            await api.storage.verifyFile(
+                                                enhRes.data.enhancedPath
+                                            )
+                                        if (
+                                            checkEnh?.success &&
+                                            checkEnh?.data?.exists
+                                        ) {
+                                            const enhUrl = toFileUrl(
+                                                checkEnh.data.resolvedPath ||
+                                                    enhRes.data.enhancedPath
+                                            )
+                                            recoveredAny = true
+                                            return {
+                                                ...p,
+                                                enhancedPath: enhUrl,
+                                                compositedPath: enhUrl,
+                                                enhanceStatus:
+                                                    'processed' as const,
+                                            }
+                                        }
+                                    }
+                                } catch (retryErr) {
+                                    console.warn(
+                                        `[ProcessingScreen] Retry AI enhance warning for slot ${idx + 1}:`,
+                                        retryErr
+                                    )
+                                }
+                            }
+                            return p
+                        })
+                    )
+                    if (recoveredAny) {
+                        photos = resolvedPhotos
+                        useAppStore.getState().setSessionPhotos(resolvedPhotos)
+                    }
+                }
+
                 // Photobooth: Ghép Khung Ảnh Thành Phẩm 1 lần từ ảnh `enhancedPath` (`natural`) và WebGL2/Canvas filter
                 // Kèm danh sách ứng viên dự phòng (`enhancedPath -> compositedPath -> rawPath`) tránh mất ảnh tại bước kết xuất cuối
                 const photoCandidates = photos
@@ -122,10 +234,6 @@ export default function ProcessingScreen() {
             }
 
             // ── BƯỚC 2: TỔ CHỨC LƯU ẢNH SESSION (RAW & FINAL) VÀ KÍCH HOẠT ĐẨY LÊN CLOUDFLARE R2 ──
-            const api = isBrowser ? mockApi : fotolismApi
-            const sessionId = formatLocalSessionFolder(
-                session?.pinCode || session?.sessionId
-            )
             const rawPin = extractRawPin(session?.pinCode || sessionId)
             const cmsUrl = cloudSyncService.getCmsUrl()
             const finalCompositeFileName = `${FILE_PREFIX_FINAL}_${selectedFrameSize}.jpg`

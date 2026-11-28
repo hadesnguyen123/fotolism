@@ -113,7 +113,7 @@ export const InteractiveStripPreview: React.FC<
     is2x6,
     frameSlots,
     photos,
-    slotOffsets,
+    slotOffsets: _slotOffsets,
     activeDragIndex,
     eventName,
     onPointerDown,
@@ -123,10 +123,6 @@ export const InteractiveStripPreview: React.FC<
 }) => {
         return (
             <div className="interactive-strip-preview-wrapper animate-pop">
-                <div className="strip-reposition-banner">
-                    <span>Chạm để kéo căn chỉnh vị trí ảnh</span>
-                </div>
-
                 <div
                     className={`interactive-strip-preview ${selectedFrameSize === '2x6'
                             ? 'strip-2x6-view'
@@ -159,12 +155,6 @@ export const InteractiveStripPreview: React.FC<
                             photo?.enhancedPath ||
                             photo?.rawPath ||
                             ''
-                        const offset = slotOffsets[idx] || { x: 0, y: 0, scale: 1.0 }
-                        const scaleVal = 1.0
-                        const zoom = scaleVal * 1.08
-                        const maxTranslatePercent = ((zoom - 1) / 2) * 100
-                        const clampedX = Math.max(-1, Math.min(1, offset.x || 0))
-                        const clampedY = Math.max(-1, Math.min(1, offset.y || 0))
 
                         return (
                             <div
@@ -178,8 +168,7 @@ export const InteractiveStripPreview: React.FC<
                                     height: `${slot.hPercent}%`,
                                     overflow: 'hidden',
                                     backgroundColor: '#141414',
-                                    cursor: 'grab',
-                                    touchAction: 'none',
+                                    cursor: 'default',
                                     userSelect: 'none',
                                 }}
                                 onPointerDown={(e) => onPointerDown(idx, e)}
@@ -205,12 +194,6 @@ export const InteractiveStripPreview: React.FC<
                                                         selectedFilter.cssFilter !== 'none'
                                                         ? selectedFilter.cssFilter
                                                         : undefined,
-                                                transform: `translate(${clampedX * maxTranslatePercent}%, ${clampedY * maxTranslatePercent}%) scale(${zoom})`,
-                                                transformOrigin: 'center center',
-                                                transition:
-                                                    activeDragIndex === idx
-                                                        ? 'none'
-                                                        : 'transform 0.12s ease-out',
                                             }}
                                         />
                                         {Boolean(selectedFilter?.hasGrain) && (

@@ -73,7 +73,14 @@ export async function checkCanonDaemon(): Promise<boolean> {
 export async function ensureCanonDaemon(): Promise<boolean> {
     const status = await queryCanonDaemonStatus()
     if (status.reachable && status.version === EXPECTED_CANON_DAEMON_VERSION) {
-        return status.connected
+        if (status.connected) return true
+        // Nếu daemon đã chạy nhưng máy ảnh đang trong quá trình tự kết nối lại (RECOVERING/CONNECTING),
+        // chờ tối đa ~2.5s thay vì báo lỗi ngay lập tức.
+        for (let wait = 0; wait < 10; wait++) {
+            await new Promise((r) => setTimeout(r, 250))
+            if (await checkCanonDaemon()) return true
+        }
+        return false
     }
 
     // Nếu tiến trình daemon bản cũ vẫn đang chạy nền sau khi cập nhật app -> tắt để khởi chạy bản mới

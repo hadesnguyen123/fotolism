@@ -98,7 +98,7 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
     })
 
     describe('2. Print Engine Scaling (preparePrintImageForDNP)', () => {
-        it('khổ 4x6 ở 100% xuất đúng canvas PR (4x6) 2478x3690 với vùng thiết kế 2376x3600 căn giữa (bleed 51px ngang, 45px dọc)', async () => {
+        it('khổ 4x6 ở 100% xuất đúng canvas PR (4x6) 2478x3690 với vùng thiết kế 2400x3600 căn giữa (bleed 39px ngang, 45px dọc)', async () => {
             const mock4x6 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...'
             const createdCanvases: any[] = []
             const mainDrawCalls: any[] = []
@@ -159,9 +159,9 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                 expect(mainCanvas.height).toBe(3690)
 
                 expect(mainDrawCalls).toHaveLength(1)
-                expect(mainDrawCalls[0][1]).toBe(51)
+                expect(mainDrawCalls[0][1]).toBe(39)
                 expect(mainDrawCalls[0][2]).toBe(45)
-                expect(mainDrawCalls[0][3]).toBe(2376)
+                expect(mainDrawCalls[0][3]).toBe(2400)
                 expect(mainDrawCalls[0][4]).toBe(3600)
             } finally {
                 ;(globalThis as any).document = prevDoc
@@ -229,7 +229,7 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             ;(globalThis as any).Image = MockImage
 
             try {
-                // Thu nhỏ thêm 99.00% so với vùng 2376x3600
+                // Thu nhỏ thêm 99.00% so với vùng 2400x3600
                 const res = await preparePrintImageForDNP(mockSrc, 99.0)
                 expect(res).toBe('data:image/jpeg;base64,/scaled_output')
 
@@ -238,7 +238,7 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                 expect(mainCanvas.height).toBe(3690)
 
                 const lastDraw = mainDrawCalls[0]
-                const expectedW = Math.round(2376 * 0.99)
+                const expectedW = Math.round(2400 * 0.99)
                 const expectedH = Math.round(3600 * 0.99)
                 const expectedOffsetX = Math.round((2478 - expectedW) / 2)
                 const expectedOffsetY = Math.round((3690 - expectedH) / 2)
@@ -321,20 +321,20 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                 expect(mainCanvas.width).toBe(2478)
                 expect(mainCanvas.height).toBe(3690)
 
-                // Tại 100% trên 2478x3690: mỗi dải 1188x3600; lề ngoài trái = 51, trục cắt giữa = 1239, lề trên/dưới = 45
+                // Tại 100% trên 2478x3690: mỗi dải 1200x3600; lề ngoài trái = 39, trục cắt giữa = 1239, lề trên/dưới = 45
                 expect(mainDrawCalls).toHaveLength(2)
                 const [leftStripCall, rightStripCall] = mainDrawCalls
 
-                // Dải 1: x=51..1239 (1188px), y=45..3645 (3600px)
-                expect(leftStripCall[1]).toBe(51)
+                // Dải 1: x=39..1239 (1200px), y=45..3645 (3600px)
+                expect(leftStripCall[1]).toBe(39)
                 expect(leftStripCall[2]).toBe(45)
-                expect(leftStripCall[3]).toBe(1188)
+                expect(leftStripCall[3]).toBe(1200)
                 expect(leftStripCall[4]).toBe(3600)
 
-                // Dải 2: x=1239..2427 (1188px), y=45..3645 (3600px)
+                // Dải 2: x=1239..2439 (1200px), y=45..3645 (3600px)
                 expect(rightStripCall[1]).toBe(1239)
                 expect(rightStripCall[2]).toBe(45)
-                expect(rightStripCall[3]).toBe(1188)
+                expect(rightStripCall[3]).toBe(1200)
                 expect(rightStripCall[4]).toBe(3600)
             } finally {
                 ;(globalThis as any).document = prevDoc

@@ -1179,8 +1179,10 @@ export default function CaptureScreen() {
                         console.warn(`Fallback enhance for slot ${i + 1}:`, enhErr)
                     }
 
-                    // Trước khi fallback về ảnh gốc, kiểm tra xem file enhance đích đã được Python ghi hợp lệ ra final/ chưa
+                    // Trước khi fallback về ảnh gốc, chờ ngắn 300ms (tránh Windows Defender/AV vừa khóa file)
+                    // rồi kiểm tra xem file enhance đích đã được Python ghi hợp lệ ra final/ chưa
                     try {
+                        await new Promise((r) => setTimeout(r, 300))
                         const diskCheck =
                             await api.storage.verifyFile(enhancedSavePath)
                         if (diskCheck?.success && diskCheck?.data?.exists) {
