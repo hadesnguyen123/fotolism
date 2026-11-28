@@ -26,6 +26,7 @@ export default function IdleScreen() {
         eventConfig,
         setCaptureMode,
         setCustomerInfo,
+        setSessionPayment,
     } = useAppStore()
 
     // Chế độ chụp đang được lựa chọn (mặc định là photobooth)
@@ -272,6 +273,16 @@ export default function IdleScreen() {
                         durationSeconds,
                         packageName: ticket.package_name || null,
                     })
+                    if (effectiveMode === 'selfbooth' && Number(ticket.amount) > 0) {
+                        setSessionPayment({
+                            paidAmount: Number(ticket.amount),
+                            paidCopies: 0,
+                            paymentMethod:
+                                ticket.payment_method === 'cash' ? 'cash' : 'vietqr',
+                            discountCodeUsed: ticket.coupon_code || null,
+                            discountAmount: 0,
+                        })
+                    }
 
                     if (effectiveMode === 'selfbooth') {
                         setScreen('selfbooth-setup')
