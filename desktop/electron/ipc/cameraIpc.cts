@@ -25,6 +25,34 @@ import {
 } from './common.cjs'
 
 let canonDaemonProc: ChildProcess | null = null
+const EXPECTED_CANON_DAEMON_VERSION = '2.3'
+
+/**
+ * Truy vấn trạng thái Canon EDSDK Daemon qua /status (kèm kiểm tra phiên bản daemon).
+ */
+async function queryCanonDaemonStatus(): Promise<{
+    reachable: boolean
+    connected: boolean
+    version?: string
+}> {
+    try {
+        const res = await fetch(`${CANON_DAEMON_URL}/status`, {
+            signal: AbortSignal.timeout(400),
+        })
+        if (res.ok) {
+            const data = (await res.json()) as any
+            return {
+                reachable: true,
+                connected: Boolean(data.connected),
+                version:
+                    typeof data.daemonVersion === 'string'
+                        ? data.daemonVersion
+                        : undefined,
+            }
+        }
+    } catch {}
+    return { reachable: false, connected: false }
+}
 
 /**
  * Kiểm tra trạng thái sẵn sàng kết nối của Canon EDSDK Daemon qua endpoint /status.
@@ -32,25 +60,34 @@ let canonDaemonProc: ChildProcess | null = null
  * @returns true nếu daemon đang chạy và máy ảnh Canon đã kết nối, ngược lại false.
  */
 export async function checkCanonDaemon(): Promise<boolean> {
-    try {
-        const res = await fetch(`${CANON_DAEMON_URL}/status`, {
-            signal: AbortSignal.timeout(400),
-        })
-        if (res.ok) {
-            const data = (await res.json()) as any
-            return Boolean(data.connected)
-        }
-    } catch {}
-    return false
+    const status = await queryCanonDaemonStatus()
+    return status.connected
 }
 
 /**
- * Đảm bảo Canon EDSDK Daemon đang chạy; tự khởi động file exe daemon nền nếu chưa kích hoạt.
+ * Đảm bảo Canon EDSDK Daemon đang chạy đúng phiên bản mới nhất;
+ * tự tắt daemon cũ còn sót sau Auto-Update và khởi chạy bản exe mới.
  *
  * @returns true nếu kết nối thành công tới daemon, ngược lại false.
  */
 export async function ensureCanonDaemon(): Promise<boolean> {
-    if (await checkCanonDaemon()) return true
+    const status = await queryCanonDaemonStatus()
+    if (status.reachable && status.version === EXPECTED_CANON_DAEMON_VERSION) {
+        return status.connected
+    }
+
+    // Nếu tiến trình daemon bản cũ vẫn đang chạy nền sau khi cập nhật app -> tắt để khởi chạy bản mới
+    if (status.reachable && status.version !== EXPECTED_CANON_DAEMON_VERSION) {
+        console.log(
+            `[Canon Daemon] Replacing outdated daemon (v${status.version || 'legacy'} -> v${EXPECTED_CANON_DAEMON_VERSION})`
+        )
+        try {
+            await fetch(`${CANON_DAEMON_URL}/quit`, {
+                signal: AbortSignal.timeout(600),
+            })
+        } catch {}
+        await new Promise((r) => setTimeout(r, 450))
+    }
 
     const daemonPaths = [
         ...(process.resourcesPath
@@ -464,8 +501,9 @@ export function registerCameraIpc(): void {
                     const DAEMON_CAPTURE_TIMEOUT_MS = 15000
                     let lastDaemonError = 'Máy ảnh Canon không phản hồi lệnh chụp.'
                     // Canon Daemon độc quyền EDSDK session: retry tối đa 2 lần trực tiếp trên Daemon
-                    // (không spawn fotolism_canon_capture.exe tranh chấp USB khi Daemon đang chạy).
+                    // nhưng TUYỆT ĐỐI không bắn cò lần 2 nếu lần 1 đã nổ màn trập (tránh camera tự chụp thêm phát nữa).
                     for (let attempt = 1; attempt <= 2; attempt++) {
+                        let shutterAlreadyFired = false
                         const attemptCaptureId =
                             attempt === 1
                                 ? captureId
@@ -485,6 +523,7 @@ export function registerCameraIpc(): void {
                                         captureId: attemptCaptureId,
                                         sessionId,
                                         slotIndex,
+                                        savePath: payload.savePath,
                                     }),
                                     signal: AbortSignal.timeout(
                                         DAEMON_CAPTURE_TIMEOUT_MS
@@ -574,8 +613,11 @@ export function registerCameraIpc(): void {
                                     }
                                 } else if (result.error) {
                                     lastDaemonError = String(result.error)
+                                    shutterAlreadyFired = Boolean(
+                                        result.shutterFired
+                                    )
                                     console.warn(
-                                        `[Canon Daemon] Daemon capture returned error (attempt ${attempt}/2):`,
+                                        `[Canon Daemon] Daemon capture returned error (attempt ${attempt}/2, shutterFired=${shutterAlreadyFired}):`,
                                         result.error
                                     )
                                     try {
@@ -601,6 +643,13 @@ export function registerCameraIpc(): void {
                                 `[Canon Daemon] POST /api/captures failed (attempt ${attempt}/2):`,
                                 lastDaemonError
                             )
+                        }
+
+                        if (shutterAlreadyFired) {
+                            console.warn(
+                                '[Canon Daemon] Shutter already fired on attempt 1; skipping second shutter trigger.'
+                            )
+                            break
                         }
 
                         if (attempt < 2) {

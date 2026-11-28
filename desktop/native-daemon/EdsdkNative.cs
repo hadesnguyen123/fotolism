@@ -30,6 +30,7 @@ namespace FotolismCanonDaemon {
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint EdsCameraStateEventHandler(uint inEvent, uint inParameter, IntPtr inContext);
 
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint EdsObjectEventHandler(uint inEvent, IntPtr inRef, IntPtr inContext);
 
     /// <summary>
@@ -122,6 +123,8 @@ namespace FotolismCanonDaemon {
         public static extern uint EdsDownload(IntPtr dirItem, ulong inReadSize, IntPtr outStream);
         [DllImport("EDSDK.dll")]
         public static extern uint EdsDownloadComplete(IntPtr dirItem);
+        [DllImport("EDSDK.dll")]
+        public static extern uint EdsDownloadCancel(IntPtr dirItem);
         [DllImport("EDSDK.dll")]
         public static extern uint EdsCreateMemoryStream(ulong inSize, out IntPtr outStream);
         [DllImport("EDSDK.dll")]

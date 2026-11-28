@@ -73,6 +73,7 @@ namespace FotolismCanonDaemon {
         public static uint EdsCreateFileStream(string inFileName, uint inCreateDisposition, uint inDesiredAccess, out IntPtr outStream) { return EdsdkNative.EdsCreateFileStream(inFileName, inCreateDisposition, inDesiredAccess, out outStream); }
         public static uint EdsDownload(IntPtr dirItem, ulong inReadSize, IntPtr outStream) { return EdsdkNative.EdsDownload(dirItem, inReadSize, outStream); }
         public static uint EdsDownloadComplete(IntPtr dirItem) { return EdsdkNative.EdsDownloadComplete(dirItem); }
+        public static uint EdsDownloadCancel(IntPtr dirItem) { return EdsdkNative.EdsDownloadCancel(dirItem); }
         public static uint EdsCreateMemoryStream(ulong inSize, out IntPtr outStream) { return EdsdkNative.EdsCreateMemoryStream(inSize, out outStream); }
         public static uint EdsCreateEvfImageRef(IntPtr inStream, out IntPtr outEvfImage) { return EdsdkNative.EdsCreateEvfImageRef(inStream, out outEvfImage); }
         public static uint EdsDownloadEvfImage(IntPtr cam, IntPtr evfImage) { return EdsdkNative.EdsDownloadEvfImage(cam, evfImage); }
@@ -122,6 +123,7 @@ namespace FotolismCanonDaemon {
         private static DateTime LastFpsCalculation = DateTime.Now;
 
         // Observability & Diagnostics
+        private const string DAEMON_VERSION = "2.3";
         private static long TotalCapturesCount = 0;
         private static long FailedCapturesCount = 0;
         private static long TotalCaptureLatencyMs = 0;
@@ -166,20 +168,31 @@ namespace FotolismCanonDaemon {
         /// Chạy bất đồng bộ từ luồng nội bộ của Canon SDK.
         /// </summary>
         public static uint HandleObjectEvent(uint inEvent, IntPtr inRef, IntPtr inContext) {
+            bool isTransferRequest = (inEvent == kEdsObjectEvent_DirItemRequestTransfer || inEvent == kEdsObjectEvent_DirItemRequestTransferDT);
+            bool transferAcked = false;
+            try {
             Log("DEBUG", "EDSDK_EVENT", string.Format("Event code 0x{0:X8}", inEvent));
-            if (inEvent == kEdsObjectEvent_DirItemRequestTransfer || inEvent == kEdsObjectEvent_DirItemCreated || inEvent == kEdsObjectEvent_DirItemRequestTransferDT) {
+            if (isTransferRequest || inEvent == kEdsObjectEvent_DirItemCreated) {
                 CaptureRecord job;
                 lock (ActiveCaptureLock) {
                     job = ActiveCapture;
                 }
 
                 if (job == null) {
-                    Log("WARN", "UNSOLICITED_TRANSFER", "Transfer event received but no active capture job");
+                    Log("WARN", "UNSOLICITED_TRANSFER", "Transfer event received but no active capture job. Cancelling transfer to unlock camera.");
+                    if (isTransferRequest && inRef != IntPtr.Zero) {
+                        EdsDownloadCancel(inRef);
+                        transferAcked = true;
+                    }
                     if (inRef != IntPtr.Zero) EdsRelease(inRef);
                     return 0;
                 }
 
                 if (job.Status == CaptureStatus.COMPLETED) {
+                    if (isTransferRequest && inRef != IntPtr.Zero) {
+                        EdsDownloadCancel(inRef);
+                        transferAcked = true;
+                    }
                     if (inRef != IntPtr.Zero) EdsRelease(inRef);
                     return 0;
                 }
@@ -207,6 +220,7 @@ namespace FotolismCanonDaemon {
                     if (stErr == 0) {
                         uint dlErr = EdsDownload(inRef, info.size, fileStream);
                         EdsDownloadComplete(inRef);
+                        transferAcked = true;
                         EdsRelease(fileStream);
 
                         if (dlErr == 0 && File.Exists(ActiveTmpPath) && new FileInfo(ActiveTmpPath).Length > 1000) {
@@ -220,6 +234,7 @@ namespace FotolismCanonDaemon {
                         if (memErr == 0) {
                             uint dlErr = EdsDownload(inRef, info.size, memStream);
                             EdsDownloadComplete(inRef);
+                            transferAcked = true;
                             if (dlErr == 0) {
                                 IntPtr ptr;
                                 EdsGetPointer(memStream, out ptr);
@@ -267,9 +282,27 @@ namespace FotolismCanonDaemon {
                     Log("ERROR", "DOWNLOAD_CORRUPTED", "Downloaded file failed JPEG validation or size check", job.SessionId, job.CaptureId);
                 }
 
+                if (isTransferRequest && !transferAcked && inRef != IntPtr.Zero) {
+                    try { EdsDownloadCancel(inRef); } catch {}
+                }
                 if (inRef != IntPtr.Zero) EdsRelease(inRef);
             } else if (inRef != IntPtr.Zero) {
                 EdsRelease(inRef);
+            }
+            } catch (Exception ex) {
+                CaptureRecord failedJob;
+                lock (ActiveCaptureLock) {
+                    failedJob = ActiveCapture;
+                }
+                if (failedJob != null) {
+                    failedJob.Status = CaptureStatus.FAILED;
+                    failedJob.ErrorMessage = "HandleObjectEvent exception: " + ex.Message;
+                }
+                Log("ERROR", "OBJECT_EVENT_EXCEPTION", ex.Message, failedJob != null ? failedJob.SessionId : null, failedJob != null ? failedJob.CaptureId : null);
+                if (isTransferRequest && !transferAcked && inRef != IntPtr.Zero) {
+                    try { EdsDownloadCancel(inRef); } catch {}
+                }
+                try { if (inRef != IntPtr.Zero) EdsRelease(inRef); } catch {}
             }
             return 0;
         }
@@ -328,8 +361,9 @@ namespace FotolismCanonDaemon {
             }
         }
 
+        [STAThread]
         static void Main(string[] args) {
-            Console.WriteLine("=== FOTOLISM 2.2 CANON EDSDK PERSISTENT DAEMON ===");
+            Console.WriteLine("=== FOTOLISM 2.3 CANON EDSDK PERSISTENT DAEMON (STA) ===");
             Log("INFO", "DAEMON_START", "Initializing Canon EDSDK subsystem...");
             EdsInitializeSDK();
 
@@ -507,6 +541,9 @@ namespace FotolismCanonDaemon {
             shutterSw.Stop();
             job.ShutterLatencyMs = shutterSw.ElapsedMilliseconds;
 
+            // Nhả nút chụp về OFF NGAY LẬP TỨC theo đúng vòng đời Canon EDSDK trước khi chờ sự kiện truyền file
+            EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
+
             // Wait for transfer event callback with timeout (5.5s < 9.5s HTTP wait so DoneEvent always fires first)
             int pollSteps = 110; // 110 * 50ms = 5500ms
             for (int i = 0; i < pollSteps; i++) {
@@ -515,10 +552,7 @@ namespace FotolismCanonDaemon {
                 Thread.Sleep(50);
             }
 
-            // ALWAYS Release Shutter Button to OFF according to Canon EDSDK Lifecycle
-            EdsSendCommand(CameraRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF);
-
-            // Light event pump after shutter release
+            // Light event pump after transfer
             for (int i = 0; i < 4; i++) {
                 EdsGetEvent();
                 Thread.Sleep(20);
@@ -591,10 +625,11 @@ namespace FotolismCanonDaemon {
                         ReconnectCount++;
                         backoffMs = 200; // Reset backoff
 
-                        uint saveTo = kEdsSaveTo_Both;
+                        // Ưu tiên lưu trực tiếp về máy tính (Host) để không bao giờ bị treo nếu thẻ SD đầy, khóa hoặc không gắn thẻ
+                        uint saveTo = kEdsSaveTo_Host;
                         uint stErr = EdsSetPropertyData(cam, kEdsPropID_SaveTo, 0, sizeof(uint), ref saveTo);
                         if (stErr != 0) {
-                            saveTo = kEdsSaveTo_Host;
+                            saveTo = kEdsSaveTo_Both;
                             EdsSetPropertyData(cam, kEdsPropID_SaveTo, 0, sizeof(uint), ref saveTo);
                         }
 
@@ -708,12 +743,13 @@ namespace FotolismCanonDaemon {
                     // Đọc hoàn toàn từ bộ đệm được cập nhật trên luồng STA chính, tuyệt đối không gọi EDSDK từ ThreadPool
                     bool isConn = (CameraRef != IntPtr.Zero && CurrentState != CameraState.DISCONNECTED && CurrentState != CameraState.CONNECTING && CurrentState != CameraState.ERROR && CurrentState != CameraState.RECOVERING);
                     string json = string.Format(
-                        "{{\"connected\":{0},\"evfReady\":{1},\"cameraState\":\"{2}\",\"aeMode\":{3},\"tv\":\"0x{4:X}\",\"av\":\"0x{5:X}\",\"iso\":\"0x{6:X}\",\"battery\":{7},\"fps\":{8:F1},\"latencyMs\":{9},\"reconnectCount\":{10}}}",
+                        "{{\"daemonVersion\":\"{11}\",\"connected\":{0},\"evfReady\":{1},\"cameraState\":\"{2}\",\"aeMode\":{3},\"tv\":\"0x{4:X}\",\"av\":\"0x{5:X}\",\"iso\":\"0x{6:X}\",\"battery\":{7},\"fps\":{8:F1},\"latencyMs\":{9},\"reconnectCount\":{10}}}",
                         isConn ? "true" : "false",
                         (LatestEvfFrame != null && isConn) ? "true" : "false",
                         CurrentState.ToString(),
                         CachedAeMode, CachedTv, CachedAv, CachedIso, CachedBattery,
-                        MeasuredEvfFps, MeasuredEvfLatencyMs, ReconnectCount
+                        MeasuredEvfFps, MeasuredEvfLatencyMs, ReconnectCount,
+                        DAEMON_VERSION
                     );
                     SendJson(ctx, json, isHead);
                     return;
@@ -817,6 +853,7 @@ namespace FotolismCanonDaemon {
 
                     string captureId = ExtractJsonString(bodyText, "captureId");
                     string sessionId = ExtractJsonString(bodyText, "sessionId");
+                    string requestedSavePath = ExtractJsonString(bodyText, "savePath");
                     int slotIndex = ExtractJsonInt(bodyText, "slotIndex", 0);
 
                     if (string.IsNullOrEmpty(captureId)) {
@@ -866,9 +903,23 @@ namespace FotolismCanonDaemon {
                         return;
                     }
 
-                    // New Capture Request: Sandboxed destination path
-                    string safeBaseDir = @"F:\Fotolism_image\sessions\" + SanitizePath(sessionId);
-                    string finalPath = Path.Combine(safeBaseDir, string.Format("raw_slot_{0}_{1}.jpg", slotIndex, SanitizePath(captureId)));
+                    // Chọn đường dẫn lưu hợp lệ: ưu tiên savePath từ Electron nếu ổ đĩa tồn tại, fallback về F:\ hoặc %LOCALAPPDATA%\Fotolism
+                    string finalPath = "";
+                    if (!string.IsNullOrEmpty(requestedSavePath)) {
+                        try {
+                            string reqRoot = Path.GetPathRoot(requestedSavePath);
+                            if (!string.IsNullOrEmpty(reqRoot) && Directory.Exists(reqRoot)) {
+                                finalPath = requestedSavePath;
+                            }
+                        } catch {}
+                    }
+                    if (string.IsNullOrEmpty(finalPath)) {
+                        string fallbackRoot = Directory.Exists(@"F:\")
+                            ? @"F:\Fotolism_image\sessions"
+                            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Fotolism", "sessions");
+                        string safeBaseDir = Path.Combine(fallbackRoot, SanitizePath(sessionId));
+                        finalPath = Path.Combine(safeBaseDir, string.Format("raw_slot_{0}_{1}.jpg", slotIndex, SanitizePath(captureId)));
+                    }
 
                     CaptureRecord newJob = new CaptureRecord {
                         CaptureId = captureId,
@@ -887,19 +938,22 @@ namespace FotolismCanonDaemon {
                     string responseJson;
                     if (finished && newJob.Status == CaptureStatus.COMPLETED) {
                         responseJson = string.Format(
-                            "{{\"success\":true,\"status\":\"COMPLETED\",\"idempotent\":false,\"captureId\":\"{0}\",\"sessionId\":\"{1}\",\"slotIndex\":{2},\"savedPath\":\"{3}\",\"sizeBytes\":{4},\"latencyMs\":{5},\"shutterMs\":{6},\"transferMs\":{7},\"source\":\"Canon EOS R100 (EDSDK Daemon 2.2)\",\"resolution\":\"24MP (Full Resolution)\"}}",
+                            "{{\"success\":true,\"status\":\"COMPLETED\",\"idempotent\":false,\"shutterFired\":true,\"captureId\":\"{0}\",\"sessionId\":\"{1}\",\"slotIndex\":{2},\"savedPath\":\"{3}\",\"sizeBytes\":{4},\"latencyMs\":{5},\"shutterMs\":{6},\"transferMs\":{7},\"source\":\"Canon EOS R100 (EDSDK Daemon {8})\",\"resolution\":\"24MP (Full Resolution)\"}}",
                             newJob.CaptureId, newJob.SessionId, newJob.SlotIndex,
                             newJob.FinalPath.Replace("\\", "\\\\"),
                             newJob.SizeBytes,
                             newJob.TotalLatencyMs,
                             newJob.ShutterLatencyMs,
-                            newJob.TransferLatencyMs
+                            newJob.TransferLatencyMs,
+                            DAEMON_VERSION
                         );
                     } else {
                         string err = finished ? (newJob.ErrorMessage ?? "Capture execution failed") : "Timeout: Camera daemon did not finish within 9500ms";
+                        bool shutterFired = (newJob.ShutterLatencyMs > 0);
                         responseJson = string.Format(
-                            "{{\"success\":false,\"status\":\"{0}\",\"idempotent\":false,\"captureId\":\"{1}\",\"error\":\"{2}\"}}",
-                            newJob.Status.ToString(), newJob.CaptureId, err.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                            "{{\"success\":false,\"status\":\"{0}\",\"idempotent\":false,\"shutterFired\":{3},\"captureId\":\"{1}\",\"error\":\"{2}\"}}",
+                            newJob.Status.ToString(), newJob.CaptureId, err.Replace("\\", "\\\\").Replace("\"", "\\\""),
+                            shutterFired ? "true" : "false"
                         );
                     }
 
@@ -966,8 +1020,8 @@ namespace FotolismCanonDaemon {
         }
 
         private static string ExtractJsonString(string json, string key) {
-            Match m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*\"([^\"]+)\"");
-            if (m.Success) return m.Groups[1].Value;
+            Match m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+            if (m.Success) return m.Groups[1].Value.Replace("\\\\", "\\").Replace("\\\"", "\"");
             return "";
         }
 
