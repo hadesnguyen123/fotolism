@@ -86,8 +86,8 @@ export const LS_EVENT_CONFIG_KEY = 'fotolism_event_config'
 /** LocalStorage key cho cấu hình Print Scale (bù trừ xén lẹm mép in) */
 export const LS_PRINT_SCALE_KEY = 'fotolism_print_scale'
 
-/** Tỉ lệ co dãn in ấn mặc định (95.50% - Chuẩn tối ưu thực tế bù trừ dao xén máy in DNP DS-RX1) */
-export const DEFAULT_PRINT_SCALE = 95.5
+/** Tỉ lệ co dãn in ấn mặc định (100.00% — canvas in đã bù sẵn đúng vùng overprint 2478x3690 của DNP DS-RX1 PR 4x6) */
+export const DEFAULT_PRINT_SCALE = 100
 
 // ── 4. VietQR & Banking Defaults ──
 /** Mã BIN ngân hàng mặc định (970415 = VietinBank) */

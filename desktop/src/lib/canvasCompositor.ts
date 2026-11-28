@@ -548,14 +548,21 @@ export function sampleImageEdgeColor(img: CanvasImageSource): string {
     }
 }
 
+// Kích thước pixel gốc @ 600 DPI của khổ `PR (4x6)` trên driver DNP DS-RX1 (PageBounds = 413 x 615 trăm-inch)
+const DNP_PR_4X6_W = 2478
+const DNP_PR_4X6_H = 3690
+// Vùng hiển thị thiết kế trên canvas 2478x3690:
+// - Ngang 2376px (mỗi dải 2x6 = 1188px) -> chừa 51px (~2.16mm) mỗi bên trái/phải (đã bù thêm +0.5mm/bên chống lẹm thực tế của DS-RX1)
+// - Dọc 3600px -> chừa 45px (~1.90mm) mỗi đầu trên/dưới
+const PHYSICAL_4X6_W = 2376
+const PHYSICAL_4X6_H = 3600
+
 /**
- * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng chuẩn khổ in 4x6 600 DPI:
- * - Nếu là ảnh dải đơn 2x6 (1200x3600): Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 tờ 4x6 đứng (2400 x 3600 px, 600 DPI) gồm 2 tấm 2x6 cạnh nhau.
- * - Nếu là ảnh khổ 4x6 (2400x3600 hoặc 3600x2400): Giữ nguyên kích thước canvas.
- * - Áp dụng Print Scale (90% - 100%, bước 0.25%):
- *   Thu nhỏ nội dung đồng đều theo tỉ lệ (preserving aspect ratio), căn giữa 2 chiều,
- *   lấp viền bằng màu mẫu góc/viền của ảnh để hạn chế viền trắng.
- *   Không thay đổi kích thước canvas đầu ra.
+ * Chuẩn hóa ảnh gửi tới máy in nhiệt DNP DS-RX1 / DS-RX1HS theo đúng kích thước pixel gốc
+ * của khổ `PR (4x6)` trên driver (2478 x 3690 px @ 600 DPI, tỉ lệ 1:1 với PageBounds 413 x 615):
+ * - Tự động đặt vùng ảnh thiết kế 2400 x 3600 (hoặc 2 dải 1200 x 3600 ghép đôi) vào chính giữa,
+ *   bọc sẵn đúng 39px trái/phải và 45px trên/dưới bằng màu mẫu viền để dao xén DNP cắt vừa khít (0 thừa, 0 lẹm).
+ * - Áp dụng thêm Print Scale (90% - 100%, mặc định 100%, bước 0.25%) nếu cần tinh chỉnh theo sai số cơ học từng máy.
  */
 export async function preparePrintImageForDNP(
     sourceDataUrl: string,
@@ -565,7 +572,7 @@ export async function preparePrintImageForDNP(
     const srcW = img.naturalWidth || img.width
     const srcH = img.naturalHeight || img.height
 
-    // Xác định tỉ lệ scale (mặc định DEFAULT_PRINT_SCALE = 95.50% nếu không truyền hoặc đọc từ localStorage)
+    // Xác định tỉ lệ scale (mặc định DEFAULT_PRINT_SCALE = 100.00% nếu không truyền hoặc đọc từ localStorage)
     let effectiveScale =
         typeof printScalePercent === 'number'
             ? printScalePercent
@@ -587,38 +594,34 @@ export async function preparePrintImageForDNP(
     effectiveScale = Math.min(100, Math.max(90, effectiveScale))
     const scaleFactor = effectiveScale / 100.0
 
-    // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, chuẩn 1200x3600 @ 600 DPI)
-    // Ghép 2 dải 2x6 song song đứng cạnh nhau thành 1 bản in khổ 4x6 (2400 x 3600 px @ 600 DPI)
+    // Trường hợp 1: Dải strip đơn 2x6 (tỉ lệ ~ 1:3, chuẩn 1200x3600 / 1200x3616 @ 600 DPI)
+    // Ghép 2 dải 2x6 song song vào chính giữa canvas driver PR (4x6) 2478 x 3690 px @ 600 DPI
     if (srcW < srcH && srcH / srcW >= 2.5) {
-        const pairedW = 2400
-        const pairedH = 3600
-        const stripW = pairedW / 2
         const canvas = document.createElement('canvas')
-        canvas.width = pairedW
-        canvas.height = pairedH
+        canvas.width = DNP_PR_4X6_W
+        canvas.height = DNP_PR_4X6_H
         const ctx = canvas.getContext('2d')
         if (!ctx) return sourceDataUrl
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
 
-        // Màu nền lấp viền lấy từ 4 góc ảnh
+        // Màu nền lấp vùng bleed 39px ngang / 45px dọc lấy từ 4 góc ảnh
         const bgColor = sampleImageEdgeColor(img)
         ctx.fillStyle = bgColor
-        ctx.fillRect(0, 0, pairedW, pairedH)
+        ctx.fillRect(0, 0, DNP_PR_4X6_W, DNP_PR_4X6_H)
 
-        // Ghép 2 dải 2x6 sát cạnh nhau tại trục cắt giữa x = 1200 TRƯỚC thành khối 4x6 (2400x3600),
-        // RỒI mới scale đồng đều cả khối 2400x3600 theo scaleFactor (căn giữa tại tâm 1200, 1800).
-        // Cách này đảm bảo 2 mép ngoài cùng (trái/phải) có đủ lề bù ~54px (ở 95.5%) giống hệt khổ 4x6 để tránh dao xén ngoài của DNP cắt lẹm,
-        // đồng thời đường cắt 2-inch ở giữa (x = 1200) không bị chừa rãnh viền thừa làm lệch tâm 2 dải.
-        const targetStripW = Math.round(stripW * scaleFactor)
-        const targetStripH = Math.round(pairedH * scaleFactor)
-        const offsetX = Math.round((pairedW - targetStripW * 2) / 2)
-        const offsetY = Math.round((pairedH - targetStripH) / 2)
+        // Tại 100%: mỗi dải rộng đúng 1200px, cao 3600px; đặt sát trục cắt 2-inch ở giữa (x = 1239),
+        // chừa đúng 39px mỗi mép ngoài trái/phải và 45px mỗi đầu trên/dưới khớp vùng dao xén DNP.
+        const centerX = DNP_PR_4X6_W / 2
+        const targetStripW = Math.round((PHYSICAL_4X6_W / 2) * scaleFactor)
+        const targetStripH = Math.round(PHYSICAL_4X6_H * scaleFactor)
+        const offsetX = Math.round(centerX - targetStripW)
+        const offsetY = Math.round((DNP_PR_4X6_H - targetStripH) / 2)
 
-        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 1200)
+        // Dải 1: Bên trái (mép phải chạm đúng trục cắt x = 1239)
         ctx.drawImage(img, offsetX, offsetY, targetStripW, targetStripH)
 
-        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 1200)
+        // Dải 2: Bên phải (mép trái chạm đúng trục cắt x = 1239)
         ctx.drawImage(
             img,
             offsetX + targetStripW,
@@ -627,17 +630,17 @@ export async function preparePrintImageForDNP(
             targetStripH
         )
 
-        // Đường chỉ dẫn cắt nhẹ ở vùng lề trên & dưới (không vẽ đè lên thân khung ảnh tránh vết chấm mực dọc cạnh cắt)
+        // Đường chỉ dẫn cắt nhẹ ở vùng lề trên & dưới (nằm trong phần bleed sẽ bị dao ngoài cắt)
         if (offsetY > 4) {
             ctx.save()
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)'
             ctx.lineWidth = 2
             ctx.setLineDash([8, 8])
             ctx.beginPath()
-            ctx.moveTo(stripW, 0)
-            ctx.lineTo(stripW, offsetY)
-            ctx.moveTo(stripW, offsetY + targetStripH)
-            ctx.lineTo(stripW, pairedH)
+            ctx.moveTo(centerX, 0)
+            ctx.lineTo(centerX, offsetY)
+            ctx.moveTo(centerX, offsetY + targetStripH)
+            ctx.lineTo(centerX, DNP_PR_4X6_H)
             ctx.stroke()
             ctx.restore()
         }
@@ -645,16 +648,17 @@ export async function preparePrintImageForDNP(
         return canvas.toDataURL('image/jpeg', 0.98)
     }
 
-    // Trường hợp 2: Khổ 4x6 hoặc tự do (2400x3600, 3600x2400...)
-    // 100% giữ nguyên hành vi in hiện tại
-    if (scaleFactor >= 0.9999) {
-        return sourceDataUrl
-    }
+    // Trường hợp 2: Khổ 4x6 (2400x3600 / 2400x3616 dọc hoặc 3600x2400 ngang)
+    // Xuất đúng kích thước driver PR (4x6) 2478 x 3690 (hoặc 3690 x 2478 nếu ngang) với vùng thiết kế 2400 x 3600 căn giữa
+    const isLandscape = srcW > srcH
+    const outW = isLandscape ? DNP_PR_4X6_H : DNP_PR_4X6_W
+    const outH = isLandscape ? DNP_PR_4X6_W : DNP_PR_4X6_H
+    const baseContentW = isLandscape ? PHYSICAL_4X6_H : PHYSICAL_4X6_W
+    const baseContentH = isLandscape ? PHYSICAL_4X6_W : PHYSICAL_4X6_H
 
-    // Scale < 100%: Căn giữa, không biến dạng, giữ nguyên kích thước canvas
     const canvas = document.createElement('canvas')
-    canvas.width = srcW
-    canvas.height = srcH
+    canvas.width = outW
+    canvas.height = outH
     const ctx = canvas.getContext('2d')
     if (!ctx) return sourceDataUrl
     ctx.imageSmoothingEnabled = true
@@ -662,12 +666,12 @@ export async function preparePrintImageForDNP(
 
     const bgColor = sampleImageEdgeColor(img)
     ctx.fillStyle = bgColor
-    ctx.fillRect(0, 0, srcW, srcH)
+    ctx.fillRect(0, 0, outW, outH)
 
-    const targetW = Math.round(srcW * scaleFactor)
-    const targetH = Math.round(srcH * scaleFactor)
-    const offsetX = Math.round((srcW - targetW) / 2)
-    const offsetY = Math.round((srcH - targetH) / 2)
+    const targetW = Math.round(baseContentW * scaleFactor)
+    const targetH = Math.round(baseContentH * scaleFactor)
+    const offsetX = Math.round((outW - targetW) / 2)
+    const offsetY = Math.round((outH - targetH) / 2)
 
     ctx.drawImage(img, offsetX, offsetY, targetW, targetH)
     return canvas.toDataURL('image/jpeg', 0.98)

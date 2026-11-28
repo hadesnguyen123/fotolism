@@ -44,11 +44,18 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
     })
 
     describe('1. Cấu hình & Lưu trữ bền vững (Persistence)', () => {
-        it('mặc định trả về 95.50% (Chuẩn DNP) khi chưa có cấu hình lưu', () => {
-            expect(DEFAULT_PRINT_SCALE).toBe(95.5)
+        it('mặc định trả về 100.00% (Chuẩn DNP 2478x3690) khi chưa có cấu hình lưu', () => {
+            expect(DEFAULT_PRINT_SCALE).toBe(100)
             mockStorage.clear()
-            expect(loadSavedPrintScale()).toBe(95.5)
-            expect(useAppStore.getState().printScale).toBe(95.5)
+            expect(loadSavedPrintScale()).toBe(100)
+            expect(useAppStore.getState().printScale).toBe(100)
+        })
+
+        it('tự động chuyển đổi cấu hình cũ 95.50% sang 100.00% lần đầu nâng cấp', () => {
+            mockStorage.clear()
+            mockStorage.setItem(LS_PRINT_SCALE_KEY, '95.5')
+            expect(loadSavedPrintScale()).toBe(100)
+            expect(mockStorage.getItem(LS_PRINT_SCALE_KEY)).toBe('100')
         })
 
         it('tự động lưu khi thay đổi và định dạng chính xác 2 chữ số thập phân (e.g. 99.75%)', () => {
@@ -83,25 +90,58 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             expect(useAppStore.getState().printScale).toBe(90)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, '120')
-            expect(loadSavedPrintScale()).toBe(95.5)
+            expect(loadSavedPrintScale()).toBe(100)
 
             mockStorage.setItem(LS_PRINT_SCALE_KEY, 'invalid')
-            expect(loadSavedPrintScale()).toBe(95.5)
+            expect(loadSavedPrintScale()).toBe(100)
         })
     })
 
     describe('2. Print Engine Scaling (preparePrintImageForDNP)', () => {
-        it('100% giữ nguyên chính xác hành vi in hiện tại', async () => {
+        it('khổ 4x6 ở 100% xuất đúng canvas PR (4x6) 2478x3690 với vùng thiết kế 2376x3600 căn giữa (bleed 51px ngang, 45px dọc)', async () => {
             const mock4x6 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...'
-            
+            const createdCanvases: any[] = []
+            const mainDrawCalls: any[] = []
+
+            const mockDocument = {
+                createElement: (tagName: string) => {
+                    if (tagName === 'canvas') {
+                        const canvasIndex = createdCanvases.length
+                        const canvas = {
+                            width: 0,
+                            height: 0,
+                            getContext: () => ({
+                                fillStyle: '',
+                                fillRect: () => {},
+                                drawImage: (...args: any[]) => {
+                                    if (canvasIndex === 0) {
+                                        mainDrawCalls.push(args)
+                                    }
+                                },
+                                getImageData: () => ({
+                                    data: [255, 255, 255, 255],
+                                }),
+                            }),
+                            toDataURL: () =>
+                                'data:image/jpeg;base64,/dnp_pr_4x6_100',
+                        }
+                        createdCanvases.push(canvas)
+                        return canvas
+                    }
+                    return {}
+                },
+            }
+            const prevDoc = (globalThis as any).document
+            ;(globalThis as any).document = mockDocument
+
             const originalImage = (globalThis as any).Image
             class MockImage {
                 onload: (() => void) | null = null
                 src = ''
                 naturalWidth = 2400
-                naturalHeight = 3600
+                naturalHeight = 3616
                 width = 2400
-                height = 3600
+                height = 3616
                 constructor() {
                     setTimeout(() => {
                         if (this.onload) this.onload()
@@ -112,20 +152,32 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
 
             try {
                 const result = await preparePrintImageForDNP(mock4x6, 100.0)
-                expect(result).toBe(mock4x6)
+                expect(result).toBe('data:image/jpeg;base64,/dnp_pr_4x6_100')
+
+                const mainCanvas = createdCanvases[0]
+                expect(mainCanvas.width).toBe(2478)
+                expect(mainCanvas.height).toBe(3690)
+
+                expect(mainDrawCalls).toHaveLength(1)
+                expect(mainDrawCalls[0][1]).toBe(51)
+                expect(mainDrawCalls[0][2]).toBe(45)
+                expect(mainDrawCalls[0][3]).toBe(2376)
+                expect(mainDrawCalls[0][4]).toBe(3600)
             } finally {
+                ;(globalThis as any).document = prevDoc
                 ;(globalThis as any).Image = originalImage
             }
         })
 
-        it('áp dụng thu nhỏ nội dung đồng đều, căn giữa và giữ nguyên kích thước canvas', async () => {
+        it('áp dụng thu nhỏ thêm khi scale < 100% và vẫn giữ nguyên canvas 2478x3690 chuẩn driver', async () => {
             const mockSrc = 'data:image/jpeg;base64,/sample'
             const createdCanvases: any[] = []
-            const drawnImageParams: any[] = []
+            const mainDrawCalls: any[] = []
 
             const mockDocument = {
                 createElement: (tagName: string) => {
                     if (tagName === 'canvas') {
+                        const canvasIndex = createdCanvases.length
                         const canvas = {
                             width: 0,
                             height: 0,
@@ -133,7 +185,9 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                                 fillStyle: '',
                                 fillRect: () => {},
                                 drawImage: (...args: any[]) => {
-                                    drawnImageParams.push(args)
+                                    if (canvasIndex === 0) {
+                                        mainDrawCalls.push(args)
+                                    }
                                 },
                                 getImageData: () => ({
                                     data: [255, 255, 255, 255],
@@ -162,10 +216,10 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             class MockImage {
                 onload: (() => void) | null = null
                 src = ''
-                naturalWidth = 2480
-                naturalHeight = 3688
-                width = 2480
-                height = 3688
+                naturalWidth = 2400
+                naturalHeight = 3600
+                width = 2400
+                height = 3600
                 constructor() {
                     setTimeout(() => {
                         if (this.onload) this.onload()
@@ -175,21 +229,19 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             ;(globalThis as any).Image = MockImage
 
             try {
-                // Thu nhỏ 99.75%
-                const res = await preparePrintImageForDNP(mockSrc, 99.75)
+                // Thu nhỏ thêm 99.00% so với vùng 2376x3600
+                const res = await preparePrintImageForDNP(mockSrc, 99.0)
                 expect(res).toBe('data:image/jpeg;base64,/scaled_output')
 
-                // Giữ nguyên kích thước canvas gốc (2480 x 3688 @ 600 DPI) ở canvas đầu ra chính
                 const mainCanvas = createdCanvases[0]
-                expect(mainCanvas.width).toBe(2480)
-                expect(mainCanvas.height).toBe(3688)
+                expect(mainCanvas.width).toBe(2478)
+                expect(mainCanvas.height).toBe(3690)
 
-                // Căn giữa theo cả 2 chiều và không biến dạng
-                const lastDraw = drawnImageParams[drawnImageParams.length - 1]
-                const expectedW = Math.round(2480 * 0.9975)
-                const expectedH = Math.round(3688 * 0.9975)
-                const expectedOffsetX = Math.round((2480 - expectedW) / 2)
-                const expectedOffsetY = Math.round((3688 - expectedH) / 2)
+                const lastDraw = mainDrawCalls[0]
+                const expectedW = Math.round(2376 * 0.99)
+                const expectedH = Math.round(3600 * 0.99)
+                const expectedOffsetX = Math.round((2478 - expectedW) / 2)
+                const expectedOffsetY = Math.round((3690 - expectedH) / 2)
 
                 expect(lastDraw[3]).toBe(expectedW)
                 expect(lastDraw[4]).toBe(expectedH)
@@ -201,7 +253,7 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             }
         })
 
-        it('với dải đơn 2x6 (1200x3600), ghép 2 dải sát trục giữa x=1200 trước rồi mới scale 95.50% cả khối 4x6 (2400x3600 @ 600 DPI)', async () => {
+        it('với dải đơn 2x6 (1200x3616) ở 100%, ghép 2 dải 1200x3600 sát trục cắt x=1239 trên canvas 2478x3690', async () => {
             const mockStrip = 'data:image/jpeg;base64,/strip_2x6'
             const createdCanvases: any[] = []
             const mainDrawCalls: any[] = []
@@ -217,7 +269,7 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                                 fillStyle: '',
                                 fillRect: () => {},
                                 drawImage: (...args: any[]) => {
-                                    // Canvas 0 là mainCanvas (2400x3600), canvas 1 là sampleCanvas
+                                    // Canvas 0 là mainCanvas (2478x3690), canvas 1 là sampleCanvas
                                     if (canvasIndex === 0) {
                                         mainDrawCalls.push(args)
                                     }
@@ -250,9 +302,9 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
                 onload: (() => void) | null = null
                 src = ''
                 naturalWidth = 1200
-                naturalHeight = 3600
+                naturalHeight = 3616
                 width = 1200
-                height = 3600
+                height = 3616
                 constructor() {
                     setTimeout(() => {
                         if (this.onload) this.onload()
@@ -262,28 +314,28 @@ describe('Fotolism Kiosk — Print Scale Feature Suite', () => {
             ;(globalThis as any).Image = MockStripImage
 
             try {
-                const res = await preparePrintImageForDNP(mockStrip, 95.5)
+                const res = await preparePrintImageForDNP(mockStrip, 100)
                 expect(res).toBe('data:image/jpeg;base64,/paired_4x6_scaled')
 
                 const mainCanvas = createdCanvases[0]
-                expect(mainCanvas.width).toBe(2400)
-                expect(mainCanvas.height).toBe(3600)
+                expect(mainCanvas.width).toBe(2478)
+                expect(mainCanvas.height).toBe(3690)
 
-                // Tại 95.5% ở 600 DPI: mỗi dải rộng 1146, cao 3438; lề ngoài trái = 54, trục cắt giữa = 1200, lề trên = 81
+                // Tại 100% trên 2478x3690: mỗi dải 1188x3600; lề ngoài trái = 51, trục cắt giữa = 1239, lề trên/dưới = 45
                 expect(mainDrawCalls).toHaveLength(2)
                 const [leftStripCall, rightStripCall] = mainDrawCalls
 
-                // Dải 1: x=54..1200 (1146px), y=81..3519 (3438px)
-                expect(leftStripCall[1]).toBe(54)
-                expect(leftStripCall[2]).toBe(81)
-                expect(leftStripCall[3]).toBe(1146)
-                expect(leftStripCall[4]).toBe(3438)
+                // Dải 1: x=51..1239 (1188px), y=45..3645 (3600px)
+                expect(leftStripCall[1]).toBe(51)
+                expect(leftStripCall[2]).toBe(45)
+                expect(leftStripCall[3]).toBe(1188)
+                expect(leftStripCall[4]).toBe(3600)
 
-                // Dải 2: x=1200..2346 (1146px), y=81..3519 (3438px)
-                expect(rightStripCall[1]).toBe(1200)
-                expect(rightStripCall[2]).toBe(81)
-                expect(rightStripCall[3]).toBe(1146)
-                expect(rightStripCall[4]).toBe(3438)
+                // Dải 2: x=1239..2427 (1188px), y=45..3645 (3600px)
+                expect(rightStripCall[1]).toBe(1239)
+                expect(rightStripCall[2]).toBe(45)
+                expect(rightStripCall[3]).toBe(1188)
+                expect(rightStripCall[4]).toBe(3600)
             } finally {
                 ;(globalThis as any).document = prevDoc
                 ;(globalThis as any).Image = originalImage

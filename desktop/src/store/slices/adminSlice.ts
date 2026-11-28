@@ -232,6 +232,8 @@ export function loadSavedEventConfig(): Partial<EventConfig> {
     return {}
 }
 
+const LS_PRINT_SCALE_MIGRATED_KEY = 'fotolism_print_scale_v2_migrated'
+
 export function loadSavedPrintScale(): number {
     try {
         if (typeof window !== 'undefined') {
@@ -239,7 +241,17 @@ export function loadSavedPrintScale(): number {
             if (raw !== null) {
                 const parsed = parseFloat(raw)
                 if (!isNaN(parsed) && parsed >= 90 && parsed <= 100) {
-                    return Math.round(parsed * 100) / 100
+                    const rounded = Math.round(parsed * 100) / 100
+                    // Tự động chuyển đổi 1 lần từ chuẩn cũ 95.5% sang 100% khi nâng cấp lên canvas 2478x3690
+                    if (
+                        rounded === 95.5 &&
+                        !localStorage.getItem(LS_PRINT_SCALE_MIGRATED_KEY)
+                    ) {
+                        localStorage.setItem(LS_PRINT_SCALE_KEY, String(DEFAULT_PRINT_SCALE))
+                        localStorage.setItem(LS_PRINT_SCALE_MIGRATED_KEY, '1')
+                        return DEFAULT_PRINT_SCALE
+                    }
+                    return rounded
                 }
             }
         }
@@ -311,6 +323,7 @@ export const createAdminSlice: StateCreator<
         try {
             if (typeof window !== 'undefined') {
                 localStorage.setItem(LS_PRINT_SCALE_KEY, clamped.toString())
+                localStorage.setItem(LS_PRINT_SCALE_MIGRATED_KEY, '1')
             }
         } catch (err) {
             console.warn('Failed to persist printScale to localStorage:', err)
